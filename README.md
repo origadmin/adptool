@@ -12,8 +12,8 @@ can automate the creation of type aliases, function proxies, and method adapters
 
 ## Core Concepts
 
-The core idea behind `adptool` is **"Comments as Directives"**. You can guide `adptool` on how to generate adapter code
-by adding specially formatted comments to your Go source code.
+The core idea behind `adptool` is **"Comments as Directives"** combined with **external configuration**. You define what
+to adapt using simple Go comments, and how to adapt it using flexible YAML/JSON configuration files.
 
 ## Installation
 
@@ -26,7 +26,7 @@ go install github.com/origadmin/adptool/cmd/adptool@latest
 ## Usage
 
 `adptool` scans your specified Go files, parses the comment directives within them, and generates adapter code based on
-these directives.
+these directives and external configuration.
 
 ### 1. Define Directive Files
 
@@ -44,125 +44,159 @@ For example, create a `my_adapters_directives.go` file:
 
 package mypackage
 
-// --- Global Directives ---
-//go:adapter:prefix:global K # Adds "K" prefix to all types and functions not explicitly prefixed
+import (
+	// Import the third-party libraries or modules you wish to adapt
+	// adptool will automatically parse these import statements to identify source packages.
+	kratosconfig "github.com/go-kratos/kratos/v2/config"
+	mylib "github.com/your-org/your-lib"
+)
+
+// --- Package Adaptation Directives ---
+// Use this directive to tell adptool which source package to adapt.
+// The detailed adaptation rules (e.g., prefixes, explicit names) for this package
+// are defined in external configuration files (adptool.yaml or file-level config).
+//go:adapter:package github.com/go-kratos/kratos/v2/config
+
+//go:adapter:package github.com/your-org/your-lib
 
 // --- Type Adaptation Directives ---
-//go:adapter:type:name OriginalType as MyCustomType # Explicitly specifies the generated type name
-type OriginalType struct{} // This is a placeholder; adptool will process the actual OriginalType
-
-//go:adapter:type:prefix My # Adds "My" prefix to the immediately following type
-type AnotherType struct{}
-
-// Generates: type MyAnotherType struct{}
-
-//go:adapter:type OriginalStruct # Generates an adapter for OriginalStruct
-//go:adapter:method OriginalStruct.MethodA as AdapterMethodA # Generates an adapter method for OriginalStruct.MethodA
-//go:adapter:method OriginalStruct.MethodB # Generates an adapter method for OriginalStruct.MethodB, using default naming
+// Use this directive to mark a type from the source package for adaptation.
+// The actual type definition is in the source package (e.g., kratosconfig).
+// The generated name and other rules are defined in external configuration.
+//go:adapter:type Config # Refers to kratosconfig.Config
+//go:adapter:type Decoder # Refers to kratosconfig.Decoder
 
 // --- Function Adaptation Directives ---
-//go:adapter:func:name OriginalFunc as MyCustomFunc # Explicitly specifies the generated function name
-func OriginalFunc() {} // This is a placeholder
+// Use this directive to mark a function from the source package for adaptation.
+// The generated name and other rules are defined in external configuration.
+//go:adapter:func New # Refers to kratosconfig.New
+//go:adapter:func WithSource # Refers to kratosconfig.WithSource
 
-//go:adapter:func:prefix Adapter # Adds "Adapter" prefix to the immediately following function
-func AnotherFunc() {}
-
-// Generates: func AdapterAnotherFunc() {}
+// --- Method Adaptation Directives ---
+// Use this directive to mark a method of a type from the source package for adaptation.
+// The type must also be marked with //go:adapter:type.
+// The generated name and other rules are defined in external configuration.
+//go:adapter:method Config.Load # Refers to kratosconfig.Config.Load
+//go:adapter:method Config.Scan # Refers to kratosconfig.Config.Scan
 
 // --- Ignore Directives ---
-//go:adapter:ignore DeprecatedFunc # Instructs adptool to ignore this function, no adapter will be generated
-func DeprecatedFunc() {}
-
+// Use this directive to explicitly ignore a type, function, or method from adaptation.
+// This overrides any rules defined in external configuration.
+//go:adapter:ignore DeprecatedFunc # Instructs adptool to ignore this function
 ```
 
-### 2. Run `adptool`
+### 2. Define Configuration Files
 
-From your project root directory or the directory containing your directive files, run the `adptool` command:
+`adptool` uses a layered configuration system to define how adapters are generated.
+
+- **Project-level Global Configuration (`adptool.yaml`)**:
+    * **Location**: Typically placed in your project's root directory.
+    * **Purpose**: Defines default adaptation rules for your entire project.
+    * **Example (`adptool.yaml`)**:
+      ```yaml
+      # adptool.yaml (Project Root)
+
+      # Global default prefix for all types and functions
+      global_prefix: "K"
+
+      # Package-specific rules (override global_prefix and default_rules)
+      packages:
+        "github.com/go-kratos/kratos/v2/config":
+          alias: "kratosconfig" # Optional: specify an import alias for the source package
+          global_prefix: "Kratos" # Overrides project-level global_prefix for this package
+          types:
+            Config:
+              name: KratosConfig # Explicitly names the generated type, highest precedence
+            Decoder: {} # Will be generated as KratosDecoder (due to package-level global_prefix)
+          functions:
+            New: KratosNew # Explicitly names the generated function
+            WithSource: {} # Will be generated as KratosWithSource
+          ignore:
+            - DeprecatedKratosFunc # Ignores this specific function from this package
+        "github.com/your-org/your-lib":
+          alias: "mylib"
+          global_prefix: "MyLib"
+          # ... other rules for this package
+      ```
+
+- **File-level Configuration (e.g., `my_file_config.yaml`)**:
+    * **Loading**: Loaded via the `-f` command-line flag (e.g., `adptool generate -f my_file_config.yaml ...`).
+    * **Purpose**: Provides a way to override or extend the project-level configuration for a specific `adptool` run.
+    * **Behavior**: If specified, this file's rules **completely replace** the `adptool.yaml` rules for that run.
+
+### 3. Run `adptool`
+
+From your project root directory, run the `adptool` command:
 
 ```sh
+# Basic usage: scans directive files and uses adptool.yaml (if present)
+adptool generate ./my_adapters_directives.go
+# Output will be generated to ./my_adapters_directives.adapter.go by default.
+
+# Specify output file explicitly:
 adptool generate -o ./generated/adapters.go ./my_adapters_directives.go
+
+# With a specific file-level configuration:
+adptool generate -o ./generated/adapters.go -f ./my_file_config.yaml ./my_adapters_directives.go
+
+# Scan multiple directive files or directories:
+adptool generate -o ./generated/adapters.go ./my_adapters_directives.go ./another_directives.go
+adptool generate -o ./generated/adapters.go ./my_directives_dir/...
 ```
 
 - `generate`: The generation subcommand for `adptool`.
-- `-o ./generated/adapters.go`: Specifies the output file path for the generated adapter code.
-- `./my_adapters_directives.go`: Specifies the Go file containing the directive comments. You can specify multiple files
-  or use wildcards (e.g., `./...`).
+- `-o <output_file_path>`: Optional. Specifies the output file path for the generated adapter code. If not provided, the
+  output file name defaults to `<input_file_name>.adapter.go` for single input files. For multiple inputs, `-o` is
+  required.
+- `-f <file_level_config.yaml>`: Optional. Specifies a file-level configuration that completely replaces the
+  project-level `adptool.yaml`.
+- `<directive_files_or_dirs>`: Specifies the Go files or directories containing the directive comments.
 
-### 3. Inspect Generated Code
+### 4. Inspect Generated Code
 
-`adptool` will generate Go adapter code in the specified output file based on your directives. Please inspect the
-generated file and make any necessary adjustments.
+`adptool` will generate Go adapter code in the specified output file based on your directives and configuration. Please
+inspect the generated file and make any necessary adjustments.
 
 ## Directive Comment Syntax
 
-`adptool`'s directive comments follow the `//go:adapter:<category>:<property> <value>` format.
+`adptool`'s directive comments follow the `//go:adapter:<category> <value>` format.
 
-### Global Directives
+- **`//go:adapter:package <import_path>`**
+    * **Description**: Specifies a source Go package whose types, functions, and methods are to be adapted. `adptool`
+      will automatically parse the `import` statements in the directive file to identify the source package's alias (if
+      any).
+    * **Example**: `//go:adapter:package github.com/go-kratos/kratos/v2/config`
 
-These directives are typically placed at the top of a directive file and affect the generation behavior for the entire
-file.
+- **`//go:adapter:type <OriginalType>`**
+    * **Description**: Marks a specific type from the source package for adaptation. Adaptation rules (e.g., naming,
+      methods to include) are defined in external configuration.
+    * **Example**: `//go:adapter:type Config` (refers to `kratosconfig.Config` if `kratosconfig` is imported)
 
-- `//go:adapter:prefix:global <prefix>`
-    * **Description**: Sets a global default prefix to be applied to all types and functions not explicitly prefixed.
-    * **Example**: `//go:adapter:prefix:global K`
+- **`//go:adapter:func <OriginalFunc>`**
+    * **Description**: Marks a specific function from the source package for adaptation. Adaptation rules are defined in
+      external configuration.
+    * **Example**: `//go:adapter:func New` (refers to `kratosconfig.New`)
 
-### Type Adaptation Directives
+- **`//go:adapter:method <OriginalType>.<OriginalMethod>`**
+    * **Description**: Marks a specific method of a type from the source package for adaptation. The type must also be
+      marked with `//go:adapter:type`. Adaptation rules are defined in external configuration.
+    * **Example**: `//go:adapter:method Config.Load` (refers to `kratosconfig.Config.Load`)
 
-These directives guide `adptool` on how to generate adapters for Go types (structs, interfaces, etc.). They are usually
-placed immediately after `import` statements or before type definitions.
-
-- `//go:adapter:type <OriginalType>`
-    * **Description**: Instructs `adptool` to generate a type alias or adapter for `<OriginalType>`.
-    * **Example**: `//go:adapter:type Config`
-- `//go:adapter:type:name <OriginalType> as <GeneratedName>`
-    * **Description**: Explicitly specifies the generated name for `<OriginalType>`, taking the highest precedence.
-    * **Example**: `//go:adapter:type:name Decoder as MyCustomDecoder`
-- `//go:adapter:type:prefix <prefix>`
-    * **Description**: Sets a local prefix for the immediately following type, overriding any global prefix.
-    * **Example**: `//go:adapter:type:prefix My`
-
-### Function Adaptation Directives
-
-These directives guide `adptool` on how to generate proxies or adapters for Go functions. They are usually placed
-immediately after `import` statements or before function definitions.
-
-- `//go:adapter:func <OriginalFunc>`
-    * **Description**: Instructs `adptool` to generate a function proxy for `<OriginalFunc>`.
-    * **Example**: `//go:adapter:func New`
-- `//go:adapter:func:name <OriginalFunc> as <GeneratedName>`
-    * **Description**: Explicitly specifies the generated name for `<OriginalFunc>`, taking the highest precedence.
-    * **Example**: `//go:adapter:func:name WithSource as SetSource`
-- `//go:adapter:func:prefix <prefix>`
-    * **Description**: Sets a local prefix for the immediately following function, overriding any global prefix.
-    * **Example**: `//go:adapter:func:prefix Adapter`
-
-### Method Adaptation Directives
-
-These directives guide `adptool` on how to generate adapters for methods of Go types. They are usually placed
-immediately after type definitions or before method definitions.
-
-- `//go:adapter:method <OriginalType>.<OriginalMethod>`
-    * **Description**: Instructs `adptool` to generate a method adapter for `<OriginalType>`'s `<OriginalMethod>`.
-    * **Example**: `//go:adapter:method Config.Load`
-- `//go:adapter:method:name <OriginalType>.<OriginalMethod> as <GeneratedName>`
-    * **Description**: Explicitly specifies the generated name for `<OriginalMethod>`, taking the highest precedence.
-    * **Example**: `//go:adapter:method:name Config.Scan as ConfigScanValues`
-- `//go:adapter:method:prefix <prefix>`
-    * **Description**: Sets a local prefix for the immediately following method, overriding any global prefix.
-    * **Example**: `//go:adapter:method:prefix Adapter`
-
-### Ignore Directives
-
-- `//go:adapter:ignore <OriginalName>`
-    * **Description**: Instructs `adptool` to ignore `<OriginalName>` (which can be a type, function, or method), and
-      not generate any adapter for it.
+- **`//go:adapter:ignore <OriginalName>`**
+    * **Description**: Explicitly instructs `adptool` to ignore `<OriginalName>` (which can be a type, function, or
+      method), overriding any rules defined in external configuration.
     * **Example**: `//go:adapter:ignore DeprecatedFunc`
 
-### External Configuration Anchor
+## Configuration Priority
 
-- `//go:adapter:config <path/to/config.yaml>`
-    * **Description**: Instructs `adptool` to load more complex generation rules from the specified YAML/JSON file.
-    * **Example**: `//go:adapter:config kratos_config_rules.yaml`
+`adptool` applies configuration rules with the following priority (highest to lowest):
+
+1. **`//go:adapter:ignore` directives**: These always take precedence and prevent any adaptation.
+2. **Rules from File-level Configuration (`-f` flag)**: If a file-level config is provided, its rules completely replace
+   the project-level `adptool.yaml`.
+3. **Rules from Project-level Global Configuration (`adptool.yaml`)**: Default rules for the entire project.
+4. **`adptool`'s Built-in Defaults**: If no configuration is provided, `adptool` uses its internal default behavior (
+   e.g., no prefixes, direct naming).
 
 ## Contributing
 
