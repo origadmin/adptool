@@ -47,7 +47,7 @@ package mypackage
 import (
 	// Import the third-party libraries or modules you wish to adapt
 	// adptool will automatically parse these import statements to identify source packages.
-	kratosconfig "github.com/go-kratos/kratos/v2/config"
+	yourlib "github.com/your-org/your-library/your-package"
 	mylib "github.com/your-org/your-lib"
 )
 
@@ -55,29 +55,29 @@ import (
 // Use this directive to tell adptool which source package to adapt.
 // The detailed adaptation rules (e.g., prefixes, explicit names) for this package
 // are defined in external configuration files (adptool.yaml or file-level config).
-//go:adapter:package github.com/go-kratos/kratos/v2/config
+//go:adapter:package github.com/your-org/your-library/your-package
 
 //go:adapter:package github.com/your-org/your-lib
 
 // --- Type Adaptation Directives ---
 // Use this directive to mark a type from the source package for adaptation.
-// The actual type definition is in the source package (e.g., kratosconfig).
+// The actual type definition is in the source package (e.g., yourlib).
 // The generated name and other rules are defined in external configuration.
-//go:adapter:type Config # Refers to kratosconfig.Config
-//go:adapter:type Decoder # Refers to kratosconfig.Decoder
+//go:adapter:type Config # Refers to yourlib.Config
+//go:adapter:type Decoder # Refers to yourlib.Decoder
 
 // --- Function Adaptation Directives ---
 // Use this directive to mark a function from the source package for adaptation.
 // The generated name and other rules are defined in external configuration.
-//go:adapter:func New # Refers to kratosconfig.New
-//go:adapter:func WithSource # Refers to kratosconfig.WithSource
+//go:adapter:func New # Refers to yourlib.New
+//go:adapter:func WithSource # Refers to yourlib.WithSource
 
 // --- Method Adaptation Directives ---
 // Use this directive to mark a method of a type from the source package for adaptation.
 // The type must also be marked with //go:adapter:type.
 // The generated name and other rules are defined in external configuration.
-//go:adapter:method Config.Load # Refers to kratosconfig.Config.Load
-//go:adapter:method Config.Scan # Refers to kratosconfig.Config.Scan
+//go:adapter:method Config.Load # Refers to yourlib.Config.Load
+//go:adapter:method Config.Scan # Refers to yourlib.Config.Scan
 
 // --- Ignore Directives ---
 // Use this directive to explicitly ignore a type, function, or method from adaptation.
@@ -101,19 +101,19 @@ import (
 
       # Package-specific rules (override global_prefix and default_rules)
       packages:
-        "github.com/go-kratos/kratos/v2/config":
-          alias: "kratosconfig" # Optional: specify an import alias for the source package
-          global_prefix: "Kratos" # Overrides project-level global_prefix for this package
+        "github.com/your-org/your-library/your-package": # Corrected: Key is quoted
+          alias: "yourlib" # Optional: specify an import alias for the source package
+          global_prefix: "YourLib" # Overrides project-level global_prefix for this package
           types:
             Config:
-              name: KratosConfig # Explicitly names the generated type, highest precedence
-            Decoder: {} # Will be generated as KratosDecoder (due to package-level global_prefix)
+              name: YourLibConfig # Explicitly names the generated type, highest precedence
+            Decoder: {} # Will be generated as YourLibDecoder (due to package-level global_prefix)
           functions:
-            New: KratosNew # Explicitly names the generated function
-            WithSource: {} # Will be generated as KratosWithSource
+            New: YourLibNew # Explicitly names the generated function
+            WithSource: {} # Will be generated as YourLibWithSource
           ignore:
-            - DeprecatedKratosFunc # Ignores this specific function from this package
-        "github.com/your-org/your-lib":
+            - DeprecatedYourLibFunc # Ignores this specific function from this package
+        "github.com/your-org/your-lib": # Corrected: Key is quoted
           alias: "mylib"
           global_prefix: "MyLib"
           # ... other rules for this package
@@ -165,22 +165,22 @@ inspect the generated file and make any necessary adjustments.
     * **Description**: Specifies a source Go package whose types, functions, and methods are to be adapted. `adptool`
       will automatically parse the `import` statements in the directive file to identify the source package's alias (if
       any).
-    * **Example**: `//go:adapter:package github.com/go-kratos/kratos/v2/config`
+    * **Example**: `//go:adapter:package github.com/your-org/your-library/your-package`
 
 - **`//go:adapter:type <OriginalType>`**
     * **Description**: Marks a specific type from the source package for adaptation. Adaptation rules (e.g., naming,
       methods to include) are defined in external configuration.
-    * **Example**: `//go:adapter:type Config` (refers to `kratosconfig.Config` if `kratosconfig` is imported)
+    * **Example**: `//go:adapter:type Config` (refers to `yourlib.Config` if `yourlib` is imported)
 
 - **`//go:adapter:func <OriginalFunc>`**
     * **Description**: Marks a specific function from the source package for adaptation. Adaptation rules are defined in
       external configuration.
-    * **Example**: `//go:adapter:func New` (refers to `kratosconfig.New`)
+    * **Example**: `//go:adapter:func New` (refers to `yourlib.New`)
 
 - **`//go:adapter:method <OriginalType>.<OriginalMethod>`**
     * **Description**: Marks a specific method of a type from the source package for adaptation. The type must also be
       marked with `//go:adapter:type`. Adaptation rules are defined in external configuration.
-    * **Example**: `//go:adapter:method Config.Load` (refers to `kratosconfig.Config.Load`)
+    * **Example**: `//go:adapter:method Config.Load` (refers to `yourlib.Config.Load`)
 
 - **`//go:adapter:ignore <OriginalName>`**
     * **Description**: Explicitly instructs `adptool` to ignore `<OriginalName>` (which can be a type, function, or
