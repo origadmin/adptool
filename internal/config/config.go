@@ -67,6 +67,19 @@ type PackageConfig struct {
 	Path   string `mapstructure:"path,omitempty"`
 	Alias  string `mapstructure:"alias,omitempty"`
 
+	Prefix   string            `mapstructure:"prefix,omitempty"`
+	Suffix   string            `mapstructure:"suffix,omitempty"`
+	Explicit map[string]string `mapstructure:"explicit,omitempty"`
+	Regex    []RegexRule       `mapstructure:"regex,omitempty"`
+	Ignore   []string          `mapstructure:"ignore,omitempty"`
+
+	// Inheritance flags for global rules
+	InheritPrefix   bool `mapstructure:"inherit_prefix,omitempty"`
+	InheritSuffix   bool `mapstructure:"inherit_suffix,omitempty"`
+	InheritExplicit bool `mapstructure:"inherit_explicit,omitempty"`
+	InheritRegex    bool `mapstructure:"inherit_regex,omitempty"`
+	InheritIgnore   bool `mapstructure:"inherit_ignore,omitempty"`
+
 	// User-facing fields
 	Types     CategoryConfig `mapstructure:"types,omitempty"`
 	Functions CategoryConfig `mapstructure:"functions,omitempty"`
@@ -95,6 +108,49 @@ type RenameRule struct {
 	Replace string // For "regex"
 }
 
+func DefaultConfig() *Config {
+	return &Config{
+		Prefix:          "",
+		Suffix:          "",
+		Explicit:        make(map[string]string),
+		Regex:           []RegexRule{},
+		Ignore:          []string{},
+		InheritPrefix:   false,
+		InheritSuffix:   false,
+		InheritExplicit: false,
+		InheritRegex:    false,
+		InheritIgnore:   false,
+		Types: CategoryConfig{
+			Explicit: make(map[string]string),
+			Regex:    []RegexRule{},
+			Ignore:   []string{},
+		},
+		Functions: CategoryConfig{
+			Explicit: make(map[string]string),
+			Regex:    []RegexRule{},
+			Ignore:   []string{},
+		},
+		Methods: CategoryConfig{
+			Explicit: make(map[string]string),
+			Regex:    []RegexRule{},
+			Ignore:   []string{},
+		},
+		CompiledTypes: CompiledCategoryRules{
+			Rules:  nil,
+			Ignore: nil,
+		},
+		CompiledFunctions: CompiledCategoryRules{
+			Rules:  nil,
+			Ignore: nil,
+		},
+		CompiledMethods: CompiledCategoryRules{
+			Rules:  nil,
+			Ignore: nil,
+		},
+		Packages: nil,
+	}
+}
+
 // LoadConfig loads and compiles the user-facing configuration into a set of
 // internal, prioritized RenameRule objects.
 func LoadConfig(fileConfigPath string) (*Config, error) {
@@ -107,17 +163,39 @@ func LoadConfig(fileConfigPath string) (*Config, error) {
 		v.AddConfigPath("./configs")
 	}
 
+	// Unmarshal the user-facing configuration.
+	// Initialize cfg with default values
+	cfg := &Config{
+		Explicit: make(map[string]string),
+		Regex:    []RegexRule{},
+		Ignore:   []string{},
+		Types: CategoryConfig{
+			Explicit: make(map[string]string),
+			Regex:    []RegexRule{},
+			Ignore:   []string{},
+		},
+		Functions: CategoryConfig{
+			Explicit: make(map[string]string),
+			Regex:    []RegexRule{},
+			Ignore:   []string{},
+		},
+		Methods: CategoryConfig{
+			Explicit: make(map[string]string),
+			Regex:    []RegexRule{},
+			Ignore:   []string{},
+		},
+	}
+
 	if err := v.ReadInConfig(); err != nil {
 		if fileConfigPath != "" || !errors.As(err, &viper.ConfigFileNotFoundError{}) {
 			return nil, fmt.Errorf("error reading config: %w", err)
 		}
-		log.Println("Project-level .adptool.yaml not found, proceeding with empty config.") // Updated log message
+		log.Println("Project-level .adptool.yaml not found, proceeding with default config.") // Updated log message
 	} else {
 		log.Printf("Config loaded successfully. Settings: %+v", v.AllSettings())
 	}
 
 	// Unmarshal the user-facing configuration.
-	cfg := &Config{}
 	if err := v.Unmarshal(cfg); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
@@ -135,12 +213,20 @@ func mergeCategoryConfig(globalCfg, pkgCfg CategoryConfig) CategoryConfig {
 	effective := pkgCfg // Start with package-specific config
 
 	// Handle Prefix
-	if effective.Prefix == "" { // If package-level prefix is not set, inherit from global
+	if pkgCfg.InheritPrefix {
+		if pkgCfg.Prefix == "" {
+			effective.Prefix = globalCfg.Prefix
+		}
+	} else if pkgCfg.Prefix == "" { // If not inheriting and package prefix is empty, use global
 		effective.Prefix = globalCfg.Prefix
 	}
 
 	// Handle Suffix
-	if effective.Suffix == "" { // If package-level suffix is not set, inherit from global
+	if pkgCfg.InheritSuffix {
+		if pkgCfg.Suffix == "" {
+			effective.Suffix = globalCfg.Suffix
+		}
+	} else if pkgCfg.Suffix == "" { // If not inheriting and package suffix is empty, use global
 		effective.Suffix = globalCfg.Suffix
 	}
 
