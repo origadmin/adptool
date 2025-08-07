@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/origadmin/adptool/internal/config"
+	"github.com/origadmin/adptool/internal/generator"
 )
 
 func main() {
@@ -28,8 +29,6 @@ func main() {
 		fmt.Printf("Error loading config: %v\n", err)
 		os.Exit(1)
 	}
-
-	fmt.Printf("Loaded config: %+v\n", cfg)
 
 	// Collect all Go files to process
 	var filesToProcess []string
@@ -84,11 +83,11 @@ func main() {
 		}
 	}
 
-	fmt.Printf("Processing %d files. Output to: %s\n", len(filesToProcess), finalOutputFile)
-
-	// TODO: Implement code generation logic here
-	// For now, just print the paths
-	for _, file := range filesToProcess {
-		fmt.Printf("  Input file: %s\n", file)
+	// Call the generator
+	if err := generator.Generate(cfg, filesToProcess, finalOutputFile); err != nil {
+		fmt.Printf("Error generating adapters: %v\n", err)
+		os.Exit(1)
 	}
+
+	fmt.Printf("Successfully generated adapters to %s\n", finalOutputFile)
 }
