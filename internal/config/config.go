@@ -4,18 +4,17 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"sort"
 
 	"github.com/spf13/viper"
 )
 
 // CategoryConfig defines renaming rules for a specific category (e.g., types, functions, methods).
 type CategoryConfig struct {
-	Prefix   string            `mapstructure:"prefix,omitempty"`
-	Suffix   string            `mapstructure:"suffix,omitempty"`
-	Explicit map[string]string `mapstructure:"explicit,omitempty"`
-	Regex    []RegexRule       `mapstructure:"regex,omitempty"`
-	Ignore   []string          `mapstructure:"ignore,omitempty"`
+	Prefix   string         `mapstructure:"prefix,omitempty"`
+	Suffix   string         `mapstructure:"suffix,omitempty"`
+	Explicit []ExplicitRule `mapstructure:"explicit,omitempty"`
+	Regex    []RegexRule    `mapstructure:"regex,omitempty"`
+	Ignore   []string       `mapstructure:"ignore,omitempty"`
 
 	// Inheritance flags for global rules
 	InheritPrefix   bool `mapstructure:"inherit_prefix,omitempty"`
@@ -34,11 +33,11 @@ type CompiledCategoryRules struct {
 // Config represents the user-facing configuration.
 // It is compiled into a set of internal RenameRule objects.
 type Config struct {
-	Prefix   string            `mapstructure:"prefix,omitempty"`
-	Suffix   string            `mapstructure:"suffix,omitempty"`
-	Explicit map[string]string `mapstructure:"explicit,omitempty"`
-	Regex    []RegexRule       `mapstructure:"regex,omitempty"`
-	Ignore   []string          `mapstructure:"ignore,omitempty"`
+	Prefix   string         `mapstructure:"prefix,omitempty"`
+	Suffix   string         `mapstructure:"suffix,omitempty"`
+	Explicit []ExplicitRule `mapstructure:"explicit,omitempty"`
+	Regex    []RegexRule    `mapstructure:"regex,omitempty"`
+	Ignore   []string       `mapstructure:"ignore,omitempty"`
 
 	// Inheritance flags for global rules
 	InheritPrefix   bool `mapstructure:"inherit_prefix,omitempty"`
@@ -67,11 +66,11 @@ type PackageConfig struct {
 	Path   string `mapstructure:"path,omitempty"`
 	Alias  string `mapstructure:"alias,omitempty"`
 
-	Prefix   string            `mapstructure:"prefix,omitempty"`
-	Suffix   string            `mapstructure:"suffix,omitempty"`
-	Explicit map[string]string `mapstructure:"explicit,omitempty"`
-	Regex    []RegexRule       `mapstructure:"regex,omitempty"`
-	Ignore   []string          `mapstructure:"ignore,omitempty"`
+	Prefix   string         `mapstructure:"prefix,omitempty"`
+	Suffix   string         `mapstructure:"suffix,omitempty"`
+	Explicit []ExplicitRule `mapstructure:"explicit,omitempty"`
+	Regex    []RegexRule    `mapstructure:"regex,omitempty"`
+	Ignore   []string       `mapstructure:"ignore,omitempty"`
 
 	// Inheritance flags for global rules
 	InheritPrefix   bool `mapstructure:"inherit_prefix,omitempty"`
@@ -91,6 +90,11 @@ type PackageConfig struct {
 	CompiledMethods   CompiledCategoryRules `mapstructure:"-"`
 }
 
+type ExplicitRule struct {
+	From string `mapstructure:"from"`
+	To   string `mapstructure:"to"`
+}
+
 // RegexRule is a user-facing struct for regex renaming.
 type RegexRule struct {
 	Pattern string `mapstructure:"pattern"`
@@ -108,9 +112,38 @@ type RenameRule struct {
 	Replace string // For "regex"
 }
 
-func DefaultConfig() *Config {
-	return &Config{
-		Explicit:        make(map[string]string),
+// defaultSearchPaths stores the default path for the viper lookup profile.
+// This is a package-level variable that can be modified by the SetDefaultConfigSearchPaths function.
+var defaultSearchPaths = []string{".", "./configs"}
+
+// SetSearchPaths allows overriding the default configured search path.
+// This function is mainly used for testing or specific application settings.
+func SetSearchPaths(paths ...string) {
+	defaultSearchPaths = paths
+}
+
+func AppendSearchPath(path string) {
+	defaultSearchPaths = append(defaultSearchPaths, path)
+}
+
+func newCategoryConfig() CategoryConfig {
+	return CategoryConfig{
+		Explicit: []ExplicitRule{},
+		Regex:    []RegexRule{},
+		Ignore:   []string{},
+	}
+}
+
+func newCompiledCategoryRules() CompiledCategoryRules {
+	return CompiledCategoryRules{
+		Rules:  nil,
+		Ignore: nil,
+	}
+}
+
+func newPackageConfig() PackageConfig {
+	return PackageConfig{
+		Explicit:        []ExplicitRule{},
 		Regex:           []RegexRule{},
 		Ignore:          []string{},
 		InheritPrefix:   false,
@@ -118,34 +151,25 @@ func DefaultConfig() *Config {
 		InheritExplicit: false,
 		InheritRegex:    false,
 		InheritIgnore:   false,
-		Types: CategoryConfig{
-			Explicit: make(map[string]string),
-			Regex:    []RegexRule{},
-			Ignore:   []string{},
-		},
-		Functions: CategoryConfig{
-			Explicit: make(map[string]string),
-			Regex:    []RegexRule{},
-			Ignore:   []string{},
-		},
-		Methods: CategoryConfig{
-			Explicit: make(map[string]string),
-			Regex:    []RegexRule{},
-			Ignore:   []string{},
-		},
-		CompiledTypes: CompiledCategoryRules{
-			Rules:  nil,
-			Ignore: nil,
-		},
-		CompiledFunctions: CompiledCategoryRules{
-			Rules:  nil,
-			Ignore: nil,
-		},
-		CompiledMethods: CompiledCategoryRules{
-			Rules:  nil,
-			Ignore: nil,
-		},
-		Packages: nil,
+	}
+}
+func DefaultConfig() *Config {
+	return &Config{
+		Explicit:          nil,
+		Regex:             nil,
+		Ignore:            nil,
+		InheritPrefix:     false,
+		InheritSuffix:     false,
+		InheritExplicit:   false,
+		InheritRegex:      false,
+		InheritIgnore:     false,
+		Types:             newCategoryConfig(),
+		Functions:         newCategoryConfig(),
+		Methods:           newCategoryConfig(),
+		CompiledTypes:     newCompiledCategoryRules(),
+		CompiledFunctions: newCompiledCategoryRules(),
+		CompiledMethods:   newCompiledCategoryRules(),
+		Packages:          nil,
 	}
 }
 
@@ -153,10 +177,13 @@ func DefaultConfig() *Config {
 // internal, prioritized RenameRule objects.
 func LoadConfig(fileConfigPath string) (*Config, error) {
 	v := viper.New()
+	v.SetConfigName(".adptool") // Changed from "adptool" to ".adptool"
 	if fileConfigPath != "" {
 		v.SetConfigFile(fileConfigPath)
 	} else {
-		v.SetConfigName(".adptool") // Changed from "adptool" to ".adptool"
+		for _, path := range defaultSearchPaths {
+			v.AddConfigPath(path)
+		}
 		v.AddConfigPath(".")
 		v.AddConfigPath("./configs")
 	}
@@ -189,75 +216,73 @@ func LoadConfig(fileConfigPath string) (*Config, error) {
 // mergeCategoryConfig merges a package-specific CategoryConfig with a global one,
 // respecting inheritance flags.
 func mergeCategoryConfig(globalCfg, pkgCfg CategoryConfig) CategoryConfig {
-	effective := CategoryConfig{ // Initialize with zero values
-		Explicit: make(map[string]string),
-		Regex:    []RegexRule{},
-		Ignore:   []string{},
-	}
+	effective := newCategoryConfig()
 
 	// Handle Prefix
-	if pkgCfg.Prefix != "" { // If package-level prefix is explicitly set
-		effective.Prefix = pkgCfg.Prefix
-	} else if pkgCfg.InheritPrefix { // If package-level prefix is empty and inheritance is true
-		effective.Prefix = globalCfg.Prefix
-	} else { // If package-level prefix is empty and inheritance is false (explicit clear)
-		effective.Prefix = ""
-	}
-
+	//if pkgCfg.Prefix != "" { // If package-level prefix is explicitly set
+	//	effective.Prefix = pkgCfg.Prefix
+	//} else if pkgCfg.InheritPrefix { // If package-level prefix is empty and inheritance is true
+	//	effective.Prefix = globalCfg.Prefix
+	//} else { // If package-level prefix is empty and inheritance is false (explicit clear)
+	//	effective.Prefix = ""
+	//}
+	effective.Prefix = mergeStringField(pkgCfg.Prefix, globalCfg.Prefix, pkgCfg.InheritPrefix)
 	// Handle Suffix
-	if pkgCfg.Suffix != "" { // If package-level suffix is explicitly set
-		effective.Suffix = pkgCfg.Suffix
-	} else if pkgCfg.InheritSuffix { // If package-level suffix is empty and inheritance is true
-		effective.Suffix = globalCfg.Suffix
-	} else { // If package-level suffix is empty and inheritance is false (explicit clear)
-		effective.Suffix = ""
-	}
+	//if pkgCfg.Suffix != "" { // If package-level suffix is explicitly set
+	//	effective.Suffix = pkgCfg.Suffix
+	//} else if pkgCfg.InheritSuffix { // If package-level suffix is empty and inheritance is true
+	//	effective.Suffix = globalCfg.Suffix
+	//} else { // If package-level suffix is empty and inheritance is false (explicit clear)
+	//	effective.Suffix = ""
+	//}
+	effective.Suffix = mergeStringField(pkgCfg.Suffix, globalCfg.Suffix, pkgCfg.InheritSuffix)
 
-	// Handle Explicit map
-	if pkgCfg.Explicit != nil && len(pkgCfg.Explicit) > 0 { // If package-level explicit is explicitly set and not empty
-		if pkgCfg.InheritExplicit { // If inheriting, merge
-			for k, v := range globalCfg.Explicit {
-				effective.Explicit[k] = v
-			}
-			for k, v := range pkgCfg.Explicit {
-				effective.Explicit[k] = v
-			}
-		} else { // If not inheriting, use package-level explicit only
-			effective.Explicit = pkgCfg.Explicit
-		}
-	} else if pkgCfg.InheritExplicit { // If package-level explicit is empty/nil and inheritance is true
-		effective.Explicit = globalCfg.Explicit
-	} else { // If package-level explicit is empty/nil and inheritance is false (explicit clear)
-		effective.Explicit = make(map[string]string) // Ensure it's an empty map
-	}
-
+	// Handle Explicit rules
+	//if pkgCfg.Explicit != nil && len(pkgCfg.Explicit) > 0 { // If package-level explicit is explicitly set and not empty
+	//	if pkgCfg.InheritExplicit { // If inheriting, merge
+	//		for k, v := range globalCfg.Explicit {
+	//			effective.Explicit[k] = v
+	//		}
+	//		for k, v := range pkgCfg.Explicit {
+	//			effective.Explicit[k] = v
+	//		}
+	//	} else { // If not inheriting, use package-level explicit only
+	//		effective.Explicit = pkgCfg.Explicit
+	//	}
+	//} else if pkgCfg.InheritExplicit { // If package-level explicit is empty/nil and inheritance is true
+	//	effective.Explicit = globalCfg.Explicit
+	//} else { // If package-level explicit is empty/nil and inheritance is false (explicit clear)
+	//	effective.Explicit = nil // Ensure it's an empty map
+	//}
+	effective.Explicit = mergeSliceField(pkgCfg.Explicit, globalCfg.Explicit, pkgCfg.InheritExplicit, pkgCfg.InheritExplicit)
 	// Handle Regex rules
-	if pkgCfg.Regex != nil && len(pkgCfg.Regex) > 0 { // If package-level regex is explicitly set and not empty
-		if pkgCfg.InheritRegex { // If inheriting, append
-			effective.Regex = append(effective.Regex, globalCfg.Regex...)
-			effective.Regex = append(effective.Regex, pkgCfg.Regex...)
-		} else { // If not inheriting, use package-level regex only
-			effective.Regex = pkgCfg.Regex
-		}
-	} else if pkgCfg.InheritRegex { // If package-level regex is empty/nil and inheritance is true
-		effective.Regex = globalCfg.Regex
-	} else { // If package-level regex is empty/nil and inheritance is false (explicit clear)
-		effective.Regex = []RegexRule{} // Ensure it's an empty slice
-	}
-
+	//if pkgCfg.Regex != nil && len(pkgCfg.Regex) > 0 { // If package-level regex is explicitly set and not empty
+	//	if pkgCfg.InheritRegex { // If inheriting, append
+	//		effective.Regex = append(effective.Regex, globalCfg.Regex...)
+	//		effective.Regex = append(effective.Regex, pkgCfg.Regex...)
+	//	} else { // If not inheriting, use package-level regex only
+	//		effective.Regex = pkgCfg.Regex
+	//	}
+	//} else if pkgCfg.InheritRegex { // If package-level regex is empty/nil and inheritance is true
+	//	effective.Regex = globalCfg.Regex
+	//} else { // If package-level regex is empty/nil and inheritance is false (explicit clear)
+	//	effective.Regex = nil // Ensure it's an empty slice
+	//}
+	effective.Regex = mergeSliceField(pkgCfg.Regex, globalCfg.Regex, pkgCfg.InheritRegex, pkgCfg.InheritRegex)
 	// Handle Ignore rules
-	if pkgCfg.Ignore != nil && len(pkgCfg.Ignore) > 0 { // If package-level ignore is explicitly set and not empty
-		if pkgCfg.InheritIgnore { // If inheriting, append
-			effective.Ignore = append(effective.Ignore, globalCfg.Ignore...)
-			effective.Ignore = append(effective.Ignore, pkgCfg.Ignore...)
-		} else { // If not inheriting, use package-level ignore only
-			effective.Ignore = pkgCfg.Ignore
-		}
-	} else if pkgCfg.InheritIgnore { // If package-level ignore is empty/nil and inheritance is true
-		effective.Ignore = globalCfg.Ignore
-	} else { // If package-level ignore is empty/nil and inheritance is false (explicit clear)
-		effective.Ignore = []string{} // Ensure it's an empty slice
-	}
+	//if pkgCfg.Ignore != nil && len(pkgCfg.Ignore) > 0 { // If package-level ignore is explicitly set and not empty
+	//	if pkgCfg.InheritIgnore { // If inheriting, append
+	//		effective.Ignore = append(effective.Ignore, globalCfg.Ignore...)
+	//		effective.Ignore = append(effective.Ignore, pkgCfg.Ignore...)
+	//	} else { // If not inheriting, use package-level ignore only
+	//		effective.Ignore = pkgCfg.Ignore
+	//	}
+	//} else if pkgCfg.InheritIgnore { // If package-level ignore is empty/nil and inheritance is true
+	//	effective.Ignore = globalCfg.Ignore
+	//} else { // If package-level ignore is empty/nil and inheritance is false (explicit clear)
+	//	effective.Ignore = nil // Ensure it's an empty slice
+	//}
+	effective.Ignore = mergeSliceField(pkgCfg.Ignore, globalCfg.Ignore, pkgCfg.InheritIgnore, pkgCfg.InheritIgnore)
 
 	// Copy inheritance flags from pkgCfg to effective
 	effective.InheritPrefix = pkgCfg.InheritPrefix
@@ -267,6 +292,46 @@ func mergeCategoryConfig(globalCfg, pkgCfg CategoryConfig) CategoryConfig {
 	effective.InheritIgnore = pkgCfg.InheritIgnore
 
 	return effective
+}
+
+// Helper function to check if slice is explicitly set (not nil and not empty)
+func isSliceExplicitlySet[T any](s []T) bool {
+	return s != nil && len(s) > 0
+}
+
+// mergeStringField handles inheritance logic for string-based fields.
+// It returns the effective value based on package config, global config, and inheritance flag.
+func mergeStringField(pkgVal, globalVal string, inherit bool) string {
+	if pkgVal != "" {
+		// If package-level value is explicitly set, use it
+		return pkgVal
+	} else if inherit {
+		// If package-level value is empty and inheritance is true, use global value
+		return globalVal
+	}
+	// If package-level value is empty and inheritance is false (explicit clear)
+	return ""
+}
+
+// mergeSliceField handles inheritance logic for slice-based fields.
+// It returns the effective value based on package config, global config, and inheritance flag.
+func mergeSliceField[T any](pkgVal, globalVal []T, pkgSet bool, inherit bool) []T {
+	if pkgSet && len(pkgVal) > 0 {
+		if inherit {
+			// If inheriting, append global rules before package rules
+			merged := make([]T, 0, len(globalVal)+len(pkgVal))
+			merged = append(merged, globalVal...)
+			merged = append(merged, pkgVal...)
+			return merged
+		}
+		// If not inheriting, use package-level value only
+		return pkgVal
+	} else if inherit {
+		// If package-level value is empty/nil and inheritance is true, use global value
+		return globalVal
+	}
+	// If package-level value is empty/nil and inheritance is false (explicit clear)
+	return []T{}
 }
 
 // compileRules processes the entire config tree and compiles the user-facing
@@ -331,18 +396,13 @@ func compileRules(cfg *Config) {
 
 // compileRuleSet is the core compilation logic.
 // It takes user-facing rules and creates a prioritized, internal list of RenameRule objects.
-func compileRuleSet(prefix, suffix string, explicit map[string]string, regexRules []RegexRule) []RenameRule {
+func compileRuleSet(prefix, suffix string, explicit []ExplicitRule, regexRules []RegexRule) []RenameRule {
 	var compiledRules []RenameRule
 
 	// Priority 1: Explicit
 	if len(explicit) > 0 {
-		keys := make([]string, 0, len(explicit))
-		for k := range explicit {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys) // Ensure deterministic order
-		for _, from := range keys {
-			compiledRules = append(compiledRules, RenameRule{Type: "explicit", From: from, To: explicit[from]})
+		for _, e := range explicit {
+			compiledRules = append(compiledRules, RenameRule{Type: "explicit", From: e.From, To: e.To})
 		}
 	}
 
