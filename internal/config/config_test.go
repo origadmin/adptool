@@ -19,10 +19,15 @@ func setupTestConfigFile(t *testing.T, dir, filename string, content []byte) str
 
 func TestLoadConfig(t *testing.T) {
 	// Save current working directory and restore it after tests
-	wd, _ := os.Getwd()
-	defer os.Chdir(wd)
+	// Removed: wd, _ := os.Getwd()
+	// Removed: defer os.Chdir(wd)
 
 	t.Run("DefaultConfigWhenNoFileExists", func(t *testing.T) {
+		currentWd, _ := os.Getwd()
+		tmpDir := t.TempDir()
+		os.Chdir(tmpDir)
+		defer os.Chdir(currentWd)
+
 		cfg, err := LoadConfig("")
 		assert.NoError(t, err)
 		assert.NotNil(t, cfg)
@@ -62,11 +67,13 @@ func TestLoadConfig(t *testing.T) {
 	})
 
 	t.Run("TopLevelGlobalConfig", func(t *testing.T) {
-		wd, _ := os.Getwd()
+		currentWd, _ := os.Getwd()
 		tmpDir := t.TempDir()
-		t.Logf("Using temporary directory: %s, original working directory: %s", tmpDir, wd)
-		SetSearchPaths(tmpDir)
 		os.Chdir(tmpDir)
+		defer os.Chdir(currentWd)
+
+		t.Logf("Using temporary directory: %s, original working directory: %s", tmpDir, currentWd)
+		SetSearchPaths(tmpDir)
 		configContent := []byte(`
 prefix: "Global"
 suffix: "All"
@@ -78,6 +85,12 @@ regex:
     replace: "GlobalReplacement"
 ignore:
   - "GlobalIgnored"
+types: # Explicitly enable inheritance for types
+  inherit_explicit: true
+  inherit_regex: true
+  inherit_ignore: true
+  inherit_prefix: true
+  inherit_suffix: true
 `)
 
 		setupTestConfigFile(t, tmpDir, ".adptool.yaml", configContent)
@@ -85,6 +98,9 @@ ignore:
 		cfg, err := LoadConfig("")
 		assert.NoError(t, err)
 		assert.NotNil(t, cfg)
+
+		// Add this assertion to verify inherit_explicit flag
+		assert.True(t, cfg.Types.InheritExplicit, "cfg.Types.InheritExplicit should be true after unmarshalling")
 
 		// Verify top-level fields
 		assert.Equal(t, "Global", cfg.Prefix)
@@ -98,19 +114,27 @@ ignore:
 		assert.Equal(t, "GlobalIgnored", cfg.Ignore[0])
 
 		// Verify compiled rules for types (should inherit from top-level)
-		assert.Equal(t, "Global", cfg.CompiledTypes.Rules[0].Value)         // Prefix
-		assert.Equal(t, "All", cfg.CompiledTypes.Rules[1].Value)            // Suffix
-		assert.Equal(t, "GlobalNew", cfg.CompiledTypes.Rules[2].To)         // Explicit
+		assert.Equal(t, "GlobalNew", cfg.CompiledTypes.Rules[0].To)         // Explicit
+		assert.Equal(t, "Global", cfg.CompiledTypes.Rules[1].Value)         // Prefix
+		assert.Equal(t, "All", cfg.CompiledTypes.Rules[2].Value)            // Suffix
 		assert.Equal(t, "GlobalRegex$", cfg.CompiledTypes.Rules[3].Pattern) // Regex
 		assert.Equal(t, "GlobalIgnored", cfg.CompiledTypes.Ignore[0])       // Ignore
 	})
 
 	t.Run("CategorySpecificConfigOverridesGlobal", func(t *testing.T) {
+		currentWd, _ := os.Getwd()
 		tmpDir := t.TempDir()
 		os.Chdir(tmpDir)
+		defer os.Chdir(currentWd)
+
 		configContent := []byte(`
 prefix: "Global"
 types:
+  inherit_explicit: true
+  inherit_regex: true
+  inherit_ignore: true
+  inherit_prefix: true
+  inherit_suffix: true
   prefix: "TypeSpecific"
   explicit:
     - from: TypeOld
@@ -136,8 +160,11 @@ types:
 	})
 
 	t.Run("PackageSpecificConfigOverridesCategory", func(t *testing.T) {
+		currentWd, _ := os.Getwd()
 		tmpDir := t.TempDir()
 		os.Chdir(tmpDir)
+		defer os.Chdir(currentWd)
+
 		configContent := []byte(`
 types:
   prefix: "GlobalType"
@@ -171,8 +198,11 @@ packages:
 	})
 
 	t.Run("InheritExplicitTrueMerge", func(t *testing.T) {
+		currentWd, _ := os.Getwd()
 		tmpDir := t.TempDir()
 		os.Chdir(tmpDir)
+		defer os.Chdir(currentWd)
+
 		configContent := []byte(`
 explicit:
   - from: GlobalA
@@ -208,8 +238,11 @@ types:
 	})
 
 	t.Run("InheritExplicitFalseOverride", func(t *testing.T) {
+		currentWd, _ := os.Getwd()
 		tmpDir := t.TempDir()
 		os.Chdir(tmpDir)
+		defer os.Chdir(currentWd)
+
 		configContent := []byte(`
 explicit:
   - from: GlobalA
@@ -239,8 +272,11 @@ types:
 	})
 
 	t.Run("InheritExplicitFalseClear", func(t *testing.T) {
+		currentWd, _ := os.Getwd()
 		tmpDir := t.TempDir()
 		os.Chdir(tmpDir)
+		defer os.Chdir(currentWd)
+
 		configContent := []byte(`
 explicit:
   - from: GlobalA
@@ -261,8 +297,11 @@ types:
 	})
 
 	t.Run("InheritRegexTrueAppend", func(t *testing.T) {
+		currentWd, _ := os.Getwd()
 		tmpDir := t.TempDir()
 		os.Chdir(tmpDir)
+		defer os.Chdir(currentWd)
+
 		configContent := []byte(`
 regex:
   - pattern: "GlobalR1"
@@ -296,8 +335,11 @@ types:
 	})
 
 	t.Run("InheritRegexFalseOverride", func(t *testing.T) {
+		currentWd, _ := os.Getwd()
 		tmpDir := t.TempDir()
 		os.Chdir(tmpDir)
+		defer os.Chdir(currentWd)
+
 		configContent := []byte(`
 regex:
   - pattern: "GlobalR1"
@@ -327,8 +369,11 @@ types:
 	})
 
 	t.Run("InheritRegexFalseClear", func(t *testing.T) {
+		currentWd, _ := os.Getwd()
 		tmpDir := t.TempDir()
 		os.Chdir(tmpDir)
+		defer os.Chdir(currentWd)
+
 		configContent := []byte(`
 regex:
   - pattern: "GlobalR1"
@@ -349,8 +394,11 @@ types:
 	})
 
 	t.Run("InheritIgnoreTrueAppend", func(t *testing.T) {
+		currentWd, _ := os.Getwd()
 		tmpDir := t.TempDir()
 		os.Chdir(tmpDir)
+		defer os.Chdir(currentWd)
+
 		configContent := []byte(`
 ignore:
   - "GlobalIgnore1"
@@ -371,8 +419,11 @@ types:
 	})
 
 	t.Run("InheritIgnoreFalseOverride", func(t *testing.T) {
+		currentWd, _ := os.Getwd()
 		tmpDir := t.TempDir()
 		os.Chdir(tmpDir)
+		defer os.Chdir(currentWd)
+
 		configContent := []byte(`
 ignore:
   - "GlobalIgnore1"
@@ -392,8 +443,11 @@ types:
 	})
 
 	t.Run("InheritIgnoreFalseClear", func(t *testing.T) {
+		currentWd, _ := os.Getwd()
 		tmpDir := t.TempDir()
 		os.Chdir(tmpDir)
+		defer os.Chdir(currentWd)
+
 		configContent := []byte(`
 ignore:
   - "GlobalIgnore1"
@@ -411,8 +465,11 @@ types:
 	})
 
 	t.Run("PrefixSuffixInheritanceLogic", func(t *testing.T) {
+		currentWd, _ := os.Getwd()
 		tmpDir := t.TempDir()
 		os.Chdir(tmpDir)
+		defer os.Chdir(currentWd)
+
 		configContent := []byte(`
 prefix: "GlobalP"
 suffix: "GlobalS"
@@ -454,8 +511,11 @@ methods:
 	})
 
 	t.Run("FileLevelConfigOverridesProjectLevel", func(t *testing.T) {
+		currentWd, _ := os.Getwd()
 		tmpDir := t.TempDir()
 		os.Chdir(tmpDir)
+		defer os.Chdir(currentWd)
+
 		setupTestConfigFile(t, tmpDir, ".adptool.yaml", []byte(`prefix: "ProjectLevel"`))
 
 		fileConfigContent := []byte(`prefix: "FileLevel"`)
@@ -468,8 +528,11 @@ methods:
 	})
 
 	t.Run("ErrorOnInvalidYAML", func(t *testing.T) {
+		currentWd, _ := os.Getwd()
 		tmpDir := t.TempDir()
 		os.Chdir(tmpDir)
+		defer os.Chdir(currentWd)
+
 		fileConfigPath := setupTestConfigFile(t, tmpDir, "invalid.yaml", []byte(`prefix: [invalid`))
 
 		_, err := LoadConfig(fileConfigPath)
@@ -477,8 +540,11 @@ methods:
 	})
 
 	t.Run("ErrorOnSpecifiedFileNotFound", func(t *testing.T) {
+		currentWd, _ := os.Getwd()
 		tmpDir := t.TempDir()
 		os.Chdir(tmpDir)
+		defer os.Chdir(currentWd)
+
 		_, err := LoadConfig("nonexistent.yaml")
 		assert.Error(t, err)
 	})
