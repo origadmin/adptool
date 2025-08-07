@@ -110,8 +110,6 @@ type RenameRule struct {
 
 func DefaultConfig() *Config {
 	return &Config{
-		Prefix:          "",
-		Suffix:          "",
 		Explicit:        make(map[string]string),
 		Regex:           []RegexRule{},
 		Ignore:          []string{},
@@ -191,65 +189,82 @@ func LoadConfig(fileConfigPath string) (*Config, error) {
 // mergeCategoryConfig merges a package-specific CategoryConfig with a global one,
 // respecting inheritance flags.
 func mergeCategoryConfig(globalCfg, pkgCfg CategoryConfig) CategoryConfig {
-	effective := pkgCfg // Start with package-specific config
+	effective := CategoryConfig{ // Initialize with zero values
+		Explicit: make(map[string]string),
+		Regex:    []RegexRule{},
+		Ignore:   []string{},
+	}
 
 	// Handle Prefix
-	if pkgCfg.InheritPrefix {
-		if pkgCfg.Prefix == "" {
-			effective.Prefix = globalCfg.Prefix
-		}
-	} else if pkgCfg.Prefix == "" { // If not inheriting and package prefix is empty, use global
+	if pkgCfg.Prefix != "" { // If package-level prefix is explicitly set
+		effective.Prefix = pkgCfg.Prefix
+	} else if pkgCfg.InheritPrefix { // If package-level prefix is empty and inheritance is true
 		effective.Prefix = globalCfg.Prefix
+	} else { // If package-level prefix is empty and inheritance is false (explicit clear)
+		effective.Prefix = ""
 	}
 
 	// Handle Suffix
-	if pkgCfg.InheritSuffix {
-		if pkgCfg.Suffix == "" {
-			effective.Suffix = globalCfg.Suffix
-		}
-	} else if pkgCfg.Suffix == "" { // If not inheriting and package suffix is empty, use global
+	if pkgCfg.Suffix != "" { // If package-level suffix is explicitly set
+		effective.Suffix = pkgCfg.Suffix
+	} else if pkgCfg.InheritSuffix { // If package-level suffix is empty and inheritance is true
 		effective.Suffix = globalCfg.Suffix
+	} else { // If package-level suffix is empty and inheritance is false (explicit clear)
+		effective.Suffix = ""
 	}
 
 	// Handle Explicit map
-	if effective.InheritExplicit {
-		mergedExplicit := make(map[string]string)
-		for k, v := range globalCfg.Explicit {
-			mergedExplicit[k] = v
+	if pkgCfg.Explicit != nil && len(pkgCfg.Explicit) > 0 { // If package-level explicit is explicitly set and not empty
+		if pkgCfg.InheritExplicit { // If inheriting, merge
+			for k, v := range globalCfg.Explicit {
+				effective.Explicit[k] = v
+			}
+			for k, v := range pkgCfg.Explicit {
+				effective.Explicit[k] = v
+			}
+		} else { // If not inheriting, use package-level explicit only
+			effective.Explicit = pkgCfg.Explicit
 		}
-		for k, v := range pkgCfg.Explicit {
-			mergedExplicit[k] = v
-		}
-		effective.Explicit = mergedExplicit
-	} else {
-		if pkgCfg.Explicit == nil {
-			effective.Explicit = globalCfg.Explicit
-		}
+	} else if pkgCfg.InheritExplicit { // If package-level explicit is empty/nil and inheritance is true
+		effective.Explicit = globalCfg.Explicit
+	} else { // If package-level explicit is empty/nil and inheritance is false (explicit clear)
+		effective.Explicit = make(map[string]string) // Ensure it's an empty map
 	}
 
 	// Handle Regex rules
-	if effective.InheritRegex {
-		mergedRegex := make([]RegexRule, len(globalCfg.Regex))
-		copy(mergedRegex, globalCfg.Regex)
-		mergedRegex = append(mergedRegex, pkgCfg.Regex...)
-		effective.Regex = mergedRegex
-	} else {
-		if pkgCfg.Regex == nil {
-			effective.Regex = globalCfg.Regex
+	if pkgCfg.Regex != nil && len(pkgCfg.Regex) > 0 { // If package-level regex is explicitly set and not empty
+		if pkgCfg.InheritRegex { // If inheriting, append
+			effective.Regex = append(effective.Regex, globalCfg.Regex...)
+			effective.Regex = append(effective.Regex, pkgCfg.Regex...)
+		} else { // If not inheriting, use package-level regex only
+			effective.Regex = pkgCfg.Regex
 		}
+	} else if pkgCfg.InheritRegex { // If package-level regex is empty/nil and inheritance is true
+		effective.Regex = globalCfg.Regex
+	} else { // If package-level regex is empty/nil and inheritance is false (explicit clear)
+		effective.Regex = []RegexRule{} // Ensure it's an empty slice
 	}
 
 	// Handle Ignore rules
-	if effective.InheritIgnore {
-		mergedIgnore := make([]string, len(globalCfg.Ignore))
-		copy(mergedIgnore, globalCfg.Ignore)
-		mergedIgnore = append(mergedIgnore, pkgCfg.Ignore...)
-		effective.Ignore = mergedIgnore
-	} else {
-		if pkgCfg.Ignore == nil {
-			effective.Ignore = globalCfg.Ignore
+	if pkgCfg.Ignore != nil && len(pkgCfg.Ignore) > 0 { // If package-level ignore is explicitly set and not empty
+		if pkgCfg.InheritIgnore { // If inheriting, append
+			effective.Ignore = append(effective.Ignore, globalCfg.Ignore...)
+			effective.Ignore = append(effective.Ignore, pkgCfg.Ignore...)
+		} else { // If not inheriting, use package-level ignore only
+			effective.Ignore = pkgCfg.Ignore
 		}
+	} else if pkgCfg.InheritIgnore { // If package-level ignore is empty/nil and inheritance is true
+		effective.Ignore = globalCfg.Ignore
+	} else { // If package-level ignore is empty/nil and inheritance is false (explicit clear)
+		effective.Ignore = []string{} // Ensure it's an empty slice
 	}
+
+	// Copy inheritance flags from pkgCfg to effective
+	effective.InheritPrefix = pkgCfg.InheritPrefix
+	effective.InheritSuffix = pkgCfg.InheritSuffix
+	effective.InheritExplicit = pkgCfg.InheritExplicit
+	effective.InheritRegex = pkgCfg.InheritRegex
+	effective.InheritIgnore = pkgCfg.InheritIgnore
 
 	return effective
 }
@@ -257,7 +272,24 @@ func mergeCategoryConfig(globalCfg, pkgCfg CategoryConfig) CategoryConfig {
 // compileRules processes the entire config tree and compiles the user-facing
 // rules into the internal CompiledCategoryRules for the generator to use.
 func compileRules(cfg *Config) {
-	// Compile global rules for each category
+	// Create a temporary CategoryConfig for the top-level global rules
+	globalCategoryConfig := CategoryConfig{
+		Prefix:   cfg.Prefix,
+		Suffix:   cfg.Suffix,
+		Explicit: cfg.Explicit,
+		Regex:    cfg.Regex,
+		Ignore:   cfg.Ignore,
+		// Top-level global rules don't inherit from anything above them,
+		// so their Inherit flags are effectively always false for their own compilation.
+		// However, they act as 'globalCfg' for the next level (Types, Functions, Methods).
+	}
+
+	// Compile global rules for each category, merging with top-level global rules
+	// The 'globalCategoryConfig' acts as the 'globalCfg' for these category-level compilations.
+	cfg.Types = mergeCategoryConfig(globalCategoryConfig, cfg.Types)
+	cfg.Functions = mergeCategoryConfig(globalCategoryConfig, cfg.Functions)
+	cfg.Methods = mergeCategoryConfig(globalCategoryConfig, cfg.Methods)
+
 	cfg.CompiledTypes = CompiledCategoryRules{
 		Rules:  compileRuleSet(cfg.Types.Prefix, cfg.Types.Suffix, cfg.Types.Explicit, cfg.Types.Regex),
 		Ignore: cfg.Types.Ignore,
@@ -276,6 +308,7 @@ func compileRules(cfg *Config) {
 		pkgCfg := &cfg.Packages[i] // Get a pointer to modify the original struct in the slice
 
 		// Merge package-specific category configs with global ones to get effective configs
+		// The 'cfg.Types', 'cfg.Functions', 'cfg.Methods' now hold the effective global category rules
 		effectiveTypes := mergeCategoryConfig(cfg.Types, pkgCfg.Types)
 		effectiveFunctions := mergeCategoryConfig(cfg.Functions, pkgCfg.Functions)
 		effectiveMethods := mergeCategoryConfig(cfg.Methods, pkgCfg.Methods)
