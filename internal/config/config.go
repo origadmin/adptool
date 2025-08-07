@@ -1,7 +1,9 @@
 package config
 
 import (
+	"errors"
 	"fmt"
+	"log"
 
 	"github.com/spf13/viper"
 )
@@ -64,31 +66,34 @@ func LoadConfig(fileConfigPath string) (*Config, error) {
 	v.AddConfigPath(".")         // path to look for the config file in the current directory
 	v.AddConfigPath("./configs") // optionally add a configs directory
 
-	// Set default config values if any
-	// v.SetDefault("global_prefix", "")
-
+	log.Printf("Attempting to load project config from: %s", v.ConfigFileUsed())
 	// Read project-level global config (adptool.yaml)
 	if err := v.ReadInConfig(); err != nil {
-		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
+		var configFileNotFoundError viper.ConfigFileNotFoundError
+		if errors.As(err, &configFileNotFoundError) {
 			// Config file not found; ignore error
-			fmt.Println("Project-level adptool.yaml not found, proceeding without it.")
-		} else {
-			return nil, fmt.Errorf("failed to read project config: %w", err)
+			log.Println("Project-level adptool.yaml not found, proceeding without it.")
 		}
 	}
 
+	log.Printf("Project config loaded. Settings: %+v", v.AllSettings())
+
 	// Load file-level config (if provided), which completely replaces project config
 	if fileConfigPath != "" {
+		log.Printf("Attempting to load file-level config from: %s", fileConfigPath)
 		v.SetConfigFile(fileConfigPath)
 		if err := v.ReadInConfig(); err != nil {
 			return nil, fmt.Errorf("failed to read file-level config %s: %w", fileConfigPath, err)
 		}
+		log.Printf("File-level config loaded. Settings: %+v", v.AllSettings())
 	}
 
 	cfg := &Config{}
 	if err := v.Unmarshal(cfg); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
+
+	log.Printf("Final unmarshaled config: %+v", cfg)
 
 	return cfg, nil
 }
