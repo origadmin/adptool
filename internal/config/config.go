@@ -165,26 +165,7 @@ func LoadConfig(fileConfigPath string) (*Config, error) {
 
 	// Unmarshal the user-facing configuration.
 	// Initialize cfg with default values
-	cfg := &Config{
-		Explicit: make(map[string]string),
-		Regex:    []RegexRule{},
-		Ignore:   []string{},
-		Types: CategoryConfig{
-			Explicit: make(map[string]string),
-			Regex:    []RegexRule{},
-			Ignore:   []string{},
-		},
-		Functions: CategoryConfig{
-			Explicit: make(map[string]string),
-			Regex:    []RegexRule{},
-			Ignore:   []string{},
-		},
-		Methods: CategoryConfig{
-			Explicit: make(map[string]string),
-			Regex:    []RegexRule{},
-			Ignore:   []string{},
-		},
-	}
+	cfg := DefaultConfig()
 
 	if err := v.ReadInConfig(); err != nil {
 		if fileConfigPath != "" || !errors.As(err, &viper.ConfigFileNotFoundError{}) {
