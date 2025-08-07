@@ -92,25 +92,36 @@ in a file named `adptool.yaml`.
 
 #### Configuration Structure
 
-The configuration is straightforward. Rules at the top level apply globally, while rules inside a `packages` entry apply
-to a specific package.
+The configuration is now structured to allow specific rules for `types`, `functions`, and `methods`. Rules at the top
+level apply globally, while rules inside a `packages` entry apply to a specific package.
 
-- **`prefix`**: A string added to the beginning of all generated names.
-- **`suffix`**: A string added to the end of all generated names.
-- **`explicit`**: A map to explicitly rename a specific type or function. This has the highest priority.
+Each category (`types`, `functions`, `methods`) can have the following rules:
+
+- **`prefix`**: A string added to the beginning of all generated names within this category.
+- **`suffix`**: A string added to the end of all generated names within this category.
+- **`explicit`**: A map to explicitly rename a specific item. This has the highest priority.
 - **`regex`**: A list of regular expression rules for more complex renaming.
-- **`ignore`**: A list of names to exclude from adaptation.
-- **`packages`**: A list of package-specific configurations. Each entry in the list requires an `import` path and can
-  override any of the global rules.
+- **`ignore`**: A list of names to exclude from adaptation within this category.
+- **`inherit_explicit`**: (Boolean, default `false`) If `true`, package-specific `explicit` rules will be merged with
+  global `explicit` rules for this category. Package rules override global rules on conflict. If `false`,
+  package-specific `explicit` rules completely replace global ones (unless empty, then global is used as fallback).
+- **`inherit_regex`**: (Boolean, default `false`) If `true`, package-specific `regex` rules will be appended to global
+  `regex` rules for this category.
+- **`inherit_ignore`**: (Boolean, default `false`) If `true`, package-specific `ignore` rules will be appended to global
+  `ignore` rules for this category.
+
+The top-level `adptool.yaml` can define global rules for `types`, `functions`, and `methods`. The `packages` entry
+allows overriding these global rules for specific imported packages.
 
 #### Rule Priority
 
 For each name, `adptool` applies the renaming rules in a strict order:
 
-1. **`explicit`** rules are checked first. If a name matches, it is renamed and no other rules are applied.
-2. **`prefix`** is added.
-3. **`suffix`** is added.
-4. **`regex`** rules are applied in the order they are defined.
+1. **`//go:adapter:ignore` directives**: These always take precedence and prevent any adaptation.
+2. **`explicit`** rules are checked first. If a name matches, it is renamed and no other rules are applied.
+3. **`prefix`** is added.
+4. **`suffix`** is added.
+5. **`regex`** rules are applied in the order they are defined.
 
 #### Example (`adptool.yaml`)
 
@@ -119,22 +130,53 @@ For each name, `adptool` applies the renaming rules in a strict order:
 
 # Global rules that apply to all packages unless overridden.
 
-# Explicitly rename `OldType` to `NewType` everywhere.
-explicit:
-  OldType: NewType
+types:
+  # Explicitly rename `OldType` to `NewType` everywhere.
+  explicit:
+    OldType: NewType
+  # Add "K" to the beginning of every generated type name.
+  prefix: "K"
+  # Add "Adapter" to the end of every generated type name.
+  suffix: "Adapter"
+  # Apply regex rules after all other rules for types.
+  regex:
+    - pattern: "Type$"
+      replace: "TypeV2"
+  # Ignore specific types from adaptation.
+  ignore:
+    - "DeprecatedType"
 
-# Add "K" to the beginning of every name.
-prefix: "K"
+functions:
+  # Explicitly rename `OldFunc` to `NewFunc` everywhere.
+  explicit:
+    OldFunc: NewFunc
+  # Add "Func" to the beginning of every generated function name.
+  prefix: "Func"
+  # Add "Wrapper" to the end of every generated function name.
+  suffix: "Wrapper"
+  # Apply regex rules after all other rules for functions.
+  regex:
+    - pattern: "Service$"
+      replace: "ServiceV2"
+  # Ignore specific functions from adaptation.
+  ignore:
+    - "InternalFunc"
 
-# Add "Adapter" to the end of every name.
-suffix: "Adapter"
-
-# Apply regex rules after all other rules.
-regex:
-  - pattern: "Service$"
-    replace: "ServiceV2"
-  - pattern: "Impl$"
-    replace: ""
+methods:
+  # Explicitly rename `Config.Load` to `ConfigLoad` everywhere.
+  explicit:
+    Config.Load: ConfigLoad
+  # Add "Method" to the beginning of every generated method name.
+  prefix: "Method"
+  # Add "Impl" to the end of every generated method name.
+  suffix: "Impl"
+  # Apply regex rules after all other rules for methods.
+  regex:
+    - pattern: "Scan$"
+      replace: "ScanResult"
+  # Ignore specific methods from adaptation.
+  ignore:
+    - "Config.DeprecatedMethod"
 
 # --- Package-Specific Overrides ---
 packages:
@@ -146,23 +188,28 @@ packages:
     path: "./vendor/github.com/your-org/your-lib"
     alias: "yourlib"
 
-    # Override global rules for this package only.
-    prefix: "YourLib"
-    suffix: "Wrapper"
+    # Override global rules for types in this package only.
+    types:
+      prefix: "YourLibType"
+      # Example: Merge package-specific explicit rules with global ones.
+      # If not set or false, package explicit rules replace global ones.
+      inherit_explicit: true
+      explicit:
+        AnotherType: MyAnotherType
+      ignore:
+        - "PackageSpecificTypeToIgnore"
 
-    # Explicitly rename `yourlib.OldFunc` to `NewFunc`.
-    explicit:
-      OldFunc: NewFunc
+    # Override global rules for functions in this package only.
+    functions:
+      prefix: "YourLibFunc"
+      explicit:
+        YourLib.OldFunc: YourLib.NewFunc
 
-    # Ignore specific items from this package.
-    ignore:
-      - "DeprecatedFunc"
-      - "InternalType"
-
-  # Rules for another package
-  - import: "github.com/another-org/another-lib"
-    alias: "another"
-    prefix: "Another"
+    # Override global rules for methods in this package only.
+    methods:
+      prefix: "YourLibMethod"
+      explicit:
+        YourLib.Config.Load: YourLib.ConfigLoad
 ```
 
 #### Configuration Loading
@@ -170,14 +217,14 @@ packages:
 - **Project-level (`adptool.yaml`)**: `adptool` automatically searches for and loads `adptool.yaml` from the current
   directory or a `./configs` subdirectory.
 - **File-level (`-f` flag)**: You can provide a specific configuration file using the `-f` flag (e.g.,
-  `adptool generate -f my_config.yaml ...`). If specified, this file's configuration **completely replaces** any
+  `adptool generate -f my_config.yaml ...`). If specified, this file\'s configuration **completely replaces** any
   project-level `adptool.yaml`.
 
 ### 3. Run `adptool`
 
 From your project root directory, run the `adptool` command:
 
-```sh
+```bash
 # Basic usage: scans directive files and uses adptool.yaml (if present)
 adptool generate ./my_adapters_directives.go
 # Output will be generated to ./my_adapters_directives.adapter.go by default.
@@ -208,11 +255,11 @@ inspect the generated file and make any necessary adjustments.
 
 ## Directive Comment Syntax
 
-`adptool`'s directive comments follow the `//go:adapter:<category> <value>` format.
+`adptool`\'s directive comments follow the `//go:adapter:<category> <value>` format.
 
 - **`//go:adapter:package <import_path>`**
     * **Description**: Specifies a source Go package whose types, functions, and methods are to be adapted. `adptool`
-      will automatically parse the `import` statements in the directive file to identify the source package's alias (if
+      will automatically parse the `import` statements in the directive file to identify the source package\'s alias (if
       any).
     * **Example**: `//go:adapter:package github.com/your-org/your-library/your-package`
 
@@ -251,5 +298,3 @@ inspect the generated file and make any necessary adjustments.
 
 Contributions to `adptool` are welcome! If you have any questions, suggestions, or find bugs, feel free to submit an
 Issue or Pull Request.
-
----
