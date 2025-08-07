@@ -1,0 +1,105 @@
+# .adptool.yaml.example
+
+# Top-level global rules. These apply to all adaptable items (types, functions, methods)
+# unless overridden by more specific category or package rules.
+prefix: "Global"
+suffix: "All"
+explicit:
+  GlobalOldName: GlobalNewName
+regex:
+  - pattern: "GlobalPattern$"
+    replace: "GlobalReplacement"
+ignore:
+  - "GlobalIgnoredItem"
+
+# Inheritance flags for top-level global rules.
+# If true, category-specific rules will merge with these top-level global rules.
+# If false (default), category-specific rules will replace top-level global rules (unless empty, then global is fallback).
+inherit_prefix: true
+inherit_suffix: true
+inherit_explicit: true
+inherit_regex: true
+inherit_ignore: true
+
+# Category-specific rules for Types.
+# These rules apply only to types. They can inherit from or override top-level global rules.
+types:
+  prefix: "Type"
+  suffix: "Adapter"
+  explicit:
+    MyOldType: MyNewType
+  regex:
+    - pattern: "Model$"
+      replace: "Entity"
+  ignore:
+    - "DeprecatedType"
+  # Inheritance flags for this category.
+  # If true, this category's rules will merge with the top-level global rules.
+  inherit_prefix: true # Merge with top-level "Global" prefix -> "GlobalType"
+  inherit_suffix: true # Merge with top-level "All" suffix -> "AdapterAll"
+  inherit_explicit: true
+  inherit_regex: true
+  inherit_ignore: true
+
+# Category-specific rules for Functions.
+functions:
+  prefix: "Func"
+  suffix: "Proxy"
+  explicit:
+    OldFunction: NewFunction
+  regex:
+    - pattern: "Service$"
+      replace: "ServiceHandler"
+  ignore:
+    - "InternalFunction"
+  inherit_prefix: true
+  inherit_suffix: true
+  inherit_explicit: true
+  inherit_regex: true
+  inherit_ignore: true
+
+# Category-specific rules for Methods.
+methods:
+  prefix: "Method"
+  suffix: "Wrapper"
+  explicit:
+    MyStruct.OldMethod: MyStruct.NewMethod
+  regex:
+    - pattern: "Exec$"
+      replace: "Execute"
+  ignore:
+    - "MyStruct.DeprecatedMethod"
+  inherit_prefix: true
+  inherit_suffix: true
+  inherit_explicit: true
+  inherit_regex: true
+  inherit_ignore: true
+
+# Package-specific overrides.
+# Rules defined here apply only to the specified package and override global/category rules.
+packages:
+  - import: "github.com/example/mylib"
+    path: "./vendor/github.com/example/mylib" # Optional: local path to source
+    alias: "lib" # Optional: alias used in directive files
+
+    # Package-specific rules for Types within mylib.
+    types:
+      prefix: "LibType"
+      # Example: This package's explicit rules for types will merge with global type explicit rules.
+      inherit_explicit: true
+      explicit:
+        LibSpecificType: CustomLibType
+      ignore:
+        - "LibInternalType"
+
+    # Package-specific rules for Functions within mylib.
+    functions:
+      prefix: "LibFunc"
+      explicit:
+        LibSpecificFunc: CustomLibFunc
+
+    # Package-specific rules for Methods within mylib.
+    methods:
+      prefix: "LibMethod"
+      explicit:
+        LibStruct.LibMethod: CustomLibMethod

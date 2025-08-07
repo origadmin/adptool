@@ -1,0 +1,113 @@
+{
+  "prefix": "Global",
+  "suffix": "All",
+  "explicit": {
+    "GlobalOldName": "GlobalNewName"
+  },
+  "regex": [
+    {
+      "pattern": "GlobalPattern$",
+      "replace": "GlobalReplacement"
+    }
+  ],
+  "ignore": [
+    "GlobalIgnoredItem"
+  ],
+  "inherit_prefix": true,
+  "inherit_suffix": true,
+  "inherit_explicit": true,
+  "inherit_regex": true,
+  "inherit_ignore": true,
+  "types": {
+    "prefix": "Type",
+    "suffix": "Adapter",
+    "explicit": {
+      "MyOldType": "MyNewType"
+    },
+    "regex": [
+      {
+        "pattern": "Model$",
+        "replace": "Entity"
+      }
+    ],
+    "ignore": [
+      "DeprecatedType"
+    ],
+    "inherit_prefix": true,
+    "inherit_suffix": true,
+    "inherit_explicit": true,
+    "inherit_regex": true,
+    "inherit_ignore": true
+  },
+  "functions": {
+    "prefix": "Func",
+    "suffix": "Proxy",
+    "explicit": {
+      "OldFunction": "NewFunction"
+    },
+    "regex": [
+      {
+        "pattern": "Service$",
+        "replace": "ServiceHandler"
+      }
+    ],
+    "ignore": [
+      "InternalFunction"
+    ],
+    "inherit_prefix": true,
+    "inherit_suffix": true,
+    "inherit_explicit": true,
+    "inherit_regex": true,
+    "inherit_ignore": true
+  },
+  "methods": {
+    "prefix": "Method",
+    "suffix": "Wrapper",
+    "explicit": {
+      "MyStruct.OldMethod": "MyStruct.NewMethod"
+    },
+    "regex": [
+      {
+        "pattern": "Exec$",
+        "replace": "Execute"
+      }
+    ],
+    "ignore": [
+      "MyStruct.DeprecatedMethod"
+    ],
+    "inherit_prefix": true,
+    "inherit_suffix": true,
+    "inherit_explicit": true,
+    "inherit_regex": true,
+    "inherit_ignore": true
+  },
+  "packages": [
+    {
+      "import": "github.com/example/mylib",
+      "path": "./vendor/github.com/example/mylib",
+      "alias": "lib",
+      "types": {
+        "prefix": "LibType",
+        "inherit_explicit": true,
+        "explicit": {
+          "LibSpecificType": "CustomLibType"
+        },
+        "ignore": [
+          "LibInternalType"
+        ]
+      },
+      "functions": {
+        "prefix": "LibFunc",
+        "explicit": {
+          "LibSpecificFunc": "CustomLibFunc"
+        }
+      },
+      "methods": {
+        "prefix": "LibMethod",
+        "explicit": {
+          "LibStruct.LibMethod": "CustomLibMethod"
+        }
+      }
+    }
+  ]
+}
