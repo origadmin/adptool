@@ -23,9 +23,6 @@ func TestLoadConfig(t *testing.T) {
 	defer os.Chdir(wd)
 
 	t.Run("DefaultConfigWhenNoFileExists", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		os.Chdir(tmpDir) // Change to a temporary directory where no config file exists
-
 		cfg, err := LoadConfig("")
 		assert.NoError(t, err)
 		assert.NotNil(t, cfg)
@@ -65,19 +62,24 @@ func TestLoadConfig(t *testing.T) {
 	})
 
 	t.Run("TopLevelGlobalConfig", func(t *testing.T) {
+		wd, _ := os.Getwd()
 		tmpDir := t.TempDir()
+		t.Logf("Using temporary directory: %s, original working directory: %s", tmpDir, wd)
+		SetSearchPaths(tmpDir)
 		os.Chdir(tmpDir)
 		configContent := []byte(`
 prefix: "Global"
 suffix: "All"
 explicit:
-  GlobalOld: GlobalNew
+  - from: GlobalOld
+    to: GlobalNew
 regex:
   - pattern: "GlobalRegex$"
     replace: "GlobalReplacement"
 ignore:
   - "GlobalIgnored"
 `)
+
 		setupTestConfigFile(t, tmpDir, ".adptool.yaml", configContent)
 
 		cfg, err := LoadConfig("")
@@ -87,7 +89,9 @@ ignore:
 		// Verify top-level fields
 		assert.Equal(t, "Global", cfg.Prefix)
 		assert.Equal(t, "All", cfg.Suffix)
-		assert.Equal(t, "GlobalNew", cfg.Explicit["GlobalOld"])
+		assert.Len(t, cfg.Explicit, 1)
+		assert.Equal(t, "GlobalOld", cfg.Explicit[0].From)
+		assert.Equal(t, "GlobalNew", cfg.Explicit[0].To)
 		assert.Len(t, cfg.Regex, 1)
 		assert.Equal(t, "GlobalRegex$", cfg.Regex[0].Pattern)
 		assert.Len(t, cfg.Ignore, 1)
@@ -109,7 +113,8 @@ prefix: "Global"
 types:
   prefix: "TypeSpecific"
   explicit:
-    TypeOld: TypeNew
+    - from: TypeOld
+      to: TypeNew
 `)
 		setupTestConfigFile(t, tmpDir, ".adptool.yaml", configContent)
 
@@ -121,7 +126,9 @@ types:
 
 		// Verify types category uses its own prefix and explicit
 		assert.Equal(t, "TypeSpecific", cfg.Types.Prefix)
-		assert.Equal(t, "TypeNew", cfg.Types.Explicit["TypeOld"])
+		assert.Len(t, cfg.Types.Explicit, 1)
+		assert.Equal(t, "TypeOld", cfg.Types.Explicit[0].From)
+		assert.Equal(t, "TypeNew", cfg.Types.Explicit[0].To)
 
 		// Verify compiled types rules reflect category-specific overrides
 		assert.Equal(t, "TypeNew", cfg.CompiledTypes.Rules[0].To)
@@ -139,7 +146,8 @@ packages:
     types:
       prefix: "Pkg1Type"
       explicit:
-        Pkg1Old: Pkg1New
+        - from: Pkg1Old
+          to: Pkg1New
 `)
 		setupTestConfigFile(t, tmpDir, ".adptool.yaml", configContent)
 
@@ -153,7 +161,9 @@ packages:
 		assert.Len(t, cfg.Packages, 1)
 		pkg1 := cfg.Packages[0]
 		assert.Equal(t, "Pkg1Type", pkg1.Types.Prefix)
-		assert.Equal(t, "Pkg1New", pkg1.Types.Explicit["Pkg1Old"])
+		assert.Len(t, pkg1.Types.Explicit, 1)
+		assert.Equal(t, "Pkg1Old", pkg1.Types.Explicit[0].From)
+		assert.Equal(t, "Pkg1New", pkg1.Types.Explicit[0].To)
 
 		// Verify compiled rules for package types reflect package-specific overrides
 		assert.Equal(t, "Pkg1New", pkg1.CompiledTypes.Rules[0].To)
@@ -165,13 +175,17 @@ packages:
 		os.Chdir(tmpDir)
 		configContent := []byte(`
 explicit:
-  GlobalA: GlobalA_New
-  GlobalB: GlobalB_New
+  - from: GlobalA
+    to: GlobalA_New
+  - from: GlobalB
+    to: GlobalB_New
 types:
   inherit_explicit: true
   explicit:
-    TypeC: TypeC_New
-    GlobalA: TypeA_Override # Should override GlobalA
+    - from: TypeC
+      to: TypeC_New
+    - from: GlobalA
+      to: TypeA_Override # Should override GlobalA
 `)
 		setupTestConfigFile(t, tmpDir, ".adptool.yaml", configContent)
 
@@ -198,11 +212,13 @@ types:
 		os.Chdir(tmpDir)
 		configContent := []byte(`
 explicit:
-  GlobalA: GlobalA_New
+  - from: GlobalA
+    to: GlobalA_New
 types:
   inherit_explicit: false # Explicitly do not inherit
   explicit:
-    TypeA: TypeA_New # Only this should be present
+    - from: TypeA
+      to: TypeA_New # Only this should be present
 `)
 		setupTestConfigFile(t, tmpDir, ".adptool.yaml", configContent)
 
@@ -227,10 +243,11 @@ types:
 		os.Chdir(tmpDir)
 		configContent := []byte(`
 explicit:
-  GlobalA: GlobalA_New
+  - from: GlobalA
+    to: GlobalA_New
 types:
   inherit_explicit: false # Explicitly do not inherit
-  explicit: {} # Explicitly empty
+  explicit: [] # Explicitly empty
 `)
 		setupTestConfigFile(t, tmpDir, ".adptool.yaml", configContent)
 
