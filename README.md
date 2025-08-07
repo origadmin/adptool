@@ -54,7 +54,7 @@ import (
 // --- Package Adaptation Directives ---
 // Use this directive to tell adptool which source package to adapt.
 // The detailed adaptation rules (e.g., prefixes, explicit names) for this package
-// are defined in external configuration files (adptool.yaml or file-level config).
+// are defined in external configuration files (.adptool.yaml or file-level config).
 //go:adapter:package github.com/your-org/your-library/your-package
 
 //go:adapter:package github.com/your-org/your-lib
@@ -88,47 +88,99 @@ import (
 ### 2. Define Configuration Files
 
 `adptool` uses a simple, layered configuration system to define how adapters are generated. The configuration is defined
-in a file named `adptool.yaml`.
+in a file named `.adptool.yaml`.
 
 #### Configuration Structure
 
-The configuration is now structured to allow specific rules for `types`, `functions`, and `methods`. Rules at the top
-level apply globally, while rules inside a `packages` entry apply to a specific package.
+The configuration now supports a hierarchical structure, allowing for global rules, category-specific rules (for
+`types`, `functions`, and `methods`), and package-specific overrides.
 
-Each category (`types`, `functions`, `methods`) can have the following rules:
+**Top-level Global Rules:**
+You can define global rules directly at the top level of `.adptool.yaml`. These rules apply to all adaptable items (
+types, functions, methods) unless overridden by more specific rules.
+
+- **`prefix`**: A string added to the beginning of all generated names.
+- **`suffix`**: A string added to the end of all generated names.
+- **`explicit`**: A map to explicitly rename a specific item. This has the highest priority.
+- **`regex`**: A list of regular expression rules for more complex renaming.
+- **`ignore`**: A list of names to exclude from adaptation.
+- **`inherit_prefix`**: (Boolean, default `false`) If `true`, category-specific `prefix` rules will be merged with this
+  global `prefix`.
+- **`inherit_suffix`**: (Boolean, default `false`) If `true`, category-specific `suffix` rules will be merged with this
+  global `suffix`.
+- **`inherit_explicit`**: (Boolean, default `false`) If `true`, category-specific `explicit` rules will be merged with
+  this global `explicit` rules. Category rules override global rules on conflict.
+- **`inherit_regex`**: (Boolean, default `false`) If `true`, category-specific `regex` rules will be appended to this
+  global `regex` rules.
+- **`inherit_ignore`**: (Boolean, default `false`) If `true`, category-specific `ignore` rules will be appended to this
+  global `ignore` rules.
+
+**Category-Specific Rules (`types`, `functions`, `methods`):**
+Within the `types`, `functions`, and `methods` sections, you can define rules that apply only to that specific category.
+These rules can inherit from or override the top-level global rules.
 
 - **`prefix`**: A string added to the beginning of all generated names within this category.
 - **`suffix`**: A string added to the end of all generated names within this category.
-- **`explicit`**: A map to explicitly rename a specific item. This has the highest priority.
-- **`regex`**: A list of regular expression rules for more complex renaming.
+- **`explicit`**: A map to explicitly rename a specific item within this category.
+- **`regex`**: A list of regular expression rules for more complex renaming within this category.
 - **`ignore`**: A list of names to exclude from adaptation within this category.
-- **`inherit_explicit`**: (Boolean, default `false`) If `true`, package-specific `explicit` rules will be merged with
-  global `explicit` rules for this category. Package rules override global rules on conflict. If `false`,
-  package-specific `explicit` rules completely replace global ones (unless empty, then global is used as fallback).
-- **`inherit_regex`**: (Boolean, default `false`) If `true`, package-specific `regex` rules will be appended to global
-  `regex` rules for this category.
-- **`inherit_ignore`**: (Boolean, default `false`) If `true`, package-specific `ignore` rules will be appended to global
-  `ignore` rules for this category.
+- **`inherit_prefix`**: (Boolean, default `false`) If `true`, this category's `prefix` will be merged with the top-level
+  global `prefix`.
+- **`inherit_suffix`**: (Boolean, default `false`) If `true`, this category's `suffix` will be merged with the top-level
+  global `suffix`.
+- **`inherit_explicit`**: (Boolean, default `false`) If `true`, this category's `explicit` rules will be merged with the
+  top-level global `explicit` rules. Category rules override global rules on conflict.
+- **`inherit_regex`**: (Boolean, default `false`) If `true`, this category's `regex` rules will be appended to the
+  top-level global `regex` rules.
+- **`inherit_ignore`**: (Boolean, default `false`) If `true`, this category's `ignore` rules will be appended to the
+  top-level global `ignore` rules.
 
-The top-level `adptool.yaml` can define global rules for `types`, `functions`, and `methods`. The `packages` entry
-allows overriding these global rules for specific imported packages.
+**Package-Specific Overrides (`packages`):**
+The `packages` entry allows overriding global and category-specific rules for specific imported packages. Each package
+entry can define its own `types`, `functions`, and `methods` sections, which follow the same structure as the global
+category-specific rules.
 
 #### Rule Priority
 
-For each name, `adptool` applies the renaming rules in a strict order:
+`adptool` applies configuration rules with the following priority (highest to lowest):
 
 1. **`//go:adapter:ignore` directives**: These always take precedence and prevent any adaptation.
-2. **`explicit`** rules are checked first. If a name matches, it is renamed and no other rules are applied.
-3. **`prefix`** is added.
-4. **`suffix`** is added.
-5. **`regex`** rules are applied in the order they are defined.
+2. **Package-specific category rules**: Rules defined within a `packages` entry for a specific category (e.g.,
+   `packages[i].types`).
+3. **Global category rules**: Rules defined at the top level under `types`, `functions`, or `methods`.
+4. **Top-level global rules**: Rules defined directly at the root of `.adptool.yaml`.
+5. **`adptool`'s Built-in Defaults**: If no configuration is provided, `adptool` uses its internal default behavior (
+   e.g., no prefixes, direct naming).
 
-#### Example (`adptool.yaml`)
+Within each level (package-specific, global category, top-level global), the order of rule application is:
+
+1. **`explicit`** rules are checked first. If a name matches, it is renamed and no other rules are applied.
+2. **`prefix`** is added.
+3. **`suffix`** is added.
+4. **`regex`** rules are applied in the order they are defined.
+5. **`ignore`** rules are applied to exclude items.
+
+#### Example (`.adptool.yaml`)
 
 ```yaml
-# adptool.yaml (Project Root)
+# .adptool.yaml (Project Root)
 
-# Global rules that apply to all packages unless overridden.
+# Top-level global rules that apply to all categories unless overridden.
+# These can be inherited by 'types', 'functions', and 'methods' sections.
+prefix: "Global"
+suffix: "All"
+explicit:
+  GlobalOld: GlobalNew
+regex:
+  - pattern: "Global$"
+    replace: "GlobalV2"
+ignore:
+  - "GlobalIgnored"
+inherit_prefix: false # Category-specific prefixes will not merge with this global prefix by default
+inherit_suffix: false
+inherit_explicit: false
+inherit_regex: false
+inherit_ignore: false
 
 types:
   # Explicitly rename `OldType` to `NewType` everywhere.
@@ -145,6 +197,9 @@ types:
   # Ignore specific types from adaptation.
   ignore:
     - "DeprecatedType"
+  # Example: Merge category-specific explicit rules with top-level global ones.
+  inherit_explicit: true
+  inherit_prefix: true # This category's prefix will merge with the top-level global prefix
 
 functions:
   # Explicitly rename `OldFunc` to `NewFunc` everywhere.
@@ -161,6 +216,7 @@ functions:
   # Ignore specific functions from adaptation.
   ignore:
     - "InternalFunc"
+  inherit_prefix: true # This category's prefix will merge with the top-level global prefix
 
 methods:
   # Explicitly rename `Config.Load` to `ConfigLoad` everywhere.
@@ -177,6 +233,8 @@ methods:
   # Ignore specific methods from adaptation.
   ignore:
     - "Config.DeprecatedMethod"
+  inherit_prefix: true # This category's prefix will merge with the top-level global prefix
+
 
 # --- Package-Specific Overrides ---
 packages:
@@ -190,7 +248,7 @@ packages:
 
     # Override global rules for types in this package only.
     types:
-      prefix: "YourLibType"
+      prefix: "LibType"
       # Example: Merge package-specific explicit rules with global ones.
       # If not set or false, package explicit rules replace global ones.
       inherit_explicit: true
@@ -201,31 +259,31 @@ packages:
 
     # Override global rules for functions in this package only.
     functions:
-      prefix: "YourLibFunc"
+      prefix: "LibFunc"
       explicit:
         YourLib.OldFunc: YourLib.NewFunc
 
     # Override global rules for methods in this package only.
     methods:
-      prefix: "YourLibMethod"
+      prefix: "LibMethod"
       explicit:
         YourLib.Config.Load: YourLib.ConfigLoad
 ```
 
 #### Configuration Loading
 
-- **Project-level (`adptool.yaml`)**: `adptool` automatically searches for and loads `adptool.yaml` from the current
+- **Project-level (`.adptool.yaml`)**: `adptool` automatically searches for and loads `.adptool.yaml` from the current
   directory or a `./configs` subdirectory.
 - **File-level (`-f` flag)**: You can provide a specific configuration file using the `-f` flag (e.g.,
-  `adptool generate -f my_config.yaml ...`). If specified, this file\'s configuration **completely replaces** any
-  project-level `adptool.yaml`.
+  `adptool generate -f my_config.yaml ...`). If specified, this file's configuration **completely replaces** any
+  project-level `.adptool.yaml`.
 
 ### 3. Run `adptool`
 
 From your project root directory, run the `adptool` command:
 
 ```bash
-# Basic usage: scans directive files and uses adptool.yaml (if present)
+# Basic usage: scans directive files and uses .adptool.yaml (if present)
 adptool generate ./my_adapters_directives.go
 # Output will be generated to ./my_adapters_directives.adapter.go by default.
 
@@ -245,7 +303,7 @@ adptool generate -o ./generated/adapters.go ./my_directives_dir/...
   output file name defaults to `<input_file_name>.adapter.go` for single input files. For multiple inputs, `-o` is
   required.
 - `-f <file_level_config.yaml>`: Optional. Specifies a file-level configuration that completely replaces the
-  project-level `adptool.yaml`.
+  project-level `.adptool.yaml`.
 - `<directive_files_or_dirs>`: Specifies the Go files or directories containing the directive comments.
 
 ### 4. Inspect Generated Code
@@ -255,11 +313,11 @@ inspect the generated file and make any necessary adjustments.
 
 ## Directive Comment Syntax
 
-`adptool`\'s directive comments follow the `//go:adapter:<category> <value>` format.
+`adptool`'s directive comments follow the `//go:adapter:<category> <value>` format.
 
 - **`//go:adapter:package <import_path>`**
     * **Description**: Specifies a source Go package whose types, functions, and methods are to be adapted. `adptool`
-      will automatically parse the `import` statements in the directive file to identify the source package\'s alias (if
+      will automatically parse the `import` statements in the directive file to identify the source package's alias (if
       any).
     * **Example**: `//go:adapter:package github.com/your-org/your-library/your-package`
 
@@ -289,8 +347,8 @@ inspect the generated file and make any necessary adjustments.
 
 1. **`//go:adapter:ignore` directives**: These always take precedence and prevent any adaptation.
 2. **Rules from File-level Configuration (`-f` flag)**: If a file-level config is provided, its rules completely replace
-   the project-level `adptool.yaml`.
-3. **Rules from Project-level Global Configuration (`adptool.yaml`)**: Default rules for the entire project.
+   the project-level `.adptool.yaml`.
+3. **Rules from Project-level Global Configuration (`.adptool.yaml`)**: Default rules for the entire project.
 4. **`adptool`'s Built-in Defaults**: If no configuration is provided, `adptool` uses its internal default behavior (
    e.g., no prefixes, direct naming).
 
