@@ -87,42 +87,91 @@ import (
 
 ### 2. Define Configuration Files
 
-`adptool` uses a layered configuration system to define how adapters are generated.
+`adptool` uses a simple, layered configuration system to define how adapters are generated. The configuration is defined
+in a file named `adptool.yaml`.
 
-- **Project-level Global Configuration (`adptool.yaml`)**:
-    * **Location**: Typically placed in your project's root directory.
-    * **Purpose**: Defines default adaptation rules for your entire project.
-    * **Example (`adptool.yaml`)**:
-      ```yaml
-      # adptool.yaml (Project Root)
+#### Configuration Structure
 
-      # Global default prefix for all types and functions
-      global_prefix: "K"
+The configuration is straightforward. Rules at the top level apply globally, while rules inside a `packages` entry apply
+to a specific package.
 
-      # Package-specific rules (override global_prefix and default_rules)
-      packages:
-        "github.com/your-org/your-library/your-package": # Corrected: Key is quoted
-          alias: "yourlib" # Optional: specify an import alias for the source package
-          global_prefix: "YourLib" # Overrides project-level global_prefix for this package
-          types:
-            Config:
-              name: YourLibConfig # Explicitly names the generated type, highest precedence
-            Decoder: {} # Will be generated as YourLibDecoder (due to package-level global_prefix)
-          functions:
-            New: YourLibNew # Explicitly names the generated function
-            WithSource: {} # Will be generated as YourLibWithSource
-          ignore:
-            - DeprecatedYourLibFunc # Ignores this specific function from this package
-        "github.com/your-org/your-lib": # Corrected: Key is quoted
-          alias: "mylib"
-          global_prefix: "MyLib"
-          # ... other rules for this package
-      ```
+- **`prefix`**: A string added to the beginning of all generated names.
+- **`suffix`**: A string added to the end of all generated names.
+- **`explicit`**: A map to explicitly rename a specific type or function. This has the highest priority.
+- **`regex`**: A list of regular expression rules for more complex renaming.
+- **`ignore`**: A list of names to exclude from adaptation.
+- **`packages`**: A list of package-specific configurations. Each entry in the list requires an `import` path and can
+  override any of the global rules.
 
-- **File-level Configuration (e.g., `my_file_config.yaml`)**:
-    * **Loading**: Loaded via the `-f` command-line flag (e.g., `adptool generate -f my_file_config.yaml ...`).
-    * **Purpose**: Provides a way to override or extend the project-level configuration for a specific `adptool` run.
-    * **Behavior**: If specified, this file's rules **completely replace** the `adptool.yaml` rules for that run.
+#### Rule Priority
+
+For each name, `adptool` applies the renaming rules in a strict order:
+
+1. **`explicit`** rules are checked first. If a name matches, it is renamed and no other rules are applied.
+2. **`prefix`** is added.
+3. **`suffix`** is added.
+4. **`regex`** rules are applied in the order they are defined.
+
+#### Example (`adptool.yaml`)
+
+```yaml
+# adptool.yaml (Project Root)
+
+# Global rules that apply to all packages unless overridden.
+
+# Explicitly rename `OldType` to `NewType` everywhere.
+explicit:
+  OldType: NewType
+
+# Add "K" to the beginning of every name.
+prefix: "K"
+
+# Add "Adapter" to the end of every name.
+suffix: "Adapter"
+
+# Apply regex rules after all other rules.
+regex:
+  - pattern: "Service$"
+    replace: "ServiceV2"
+  - pattern: "Impl$"
+    replace: ""
+
+# --- Package-Specific Overrides ---
+packages:
+  # Rules for the "github.com/your-org/your-lib" package
+  - import: "github.com/your-org/your-lib"
+    # path is optional. If provided, adptool will load the source code
+    # from this local directory, which is useful for vendored modules
+    # or projects in a monorepo.
+    path: "./vendor/github.com/your-org/your-lib"
+    alias: "yourlib"
+
+    # Override global rules for this package only.
+    prefix: "YourLib"
+    suffix: "Wrapper"
+
+    # Explicitly rename `yourlib.OldFunc` to `NewFunc`.
+    explicit:
+      OldFunc: NewFunc
+
+    # Ignore specific items from this package.
+    ignore:
+      - "DeprecatedFunc"
+      - "InternalType"
+
+  # Rules for another package
+  - import: "github.com/another-org/another-lib"
+    alias: "another"
+    prefix: "Another"
+```
+
+#### Configuration Loading
+
+- **Project-level (`adptool.yaml`)**: `adptool` automatically searches for and loads `adptool.yaml` from the current
+  directory or a `./configs` subdirectory.
+- **File-level (`-f` flag)**: You can provide a specific configuration file using the `-f` flag (e.g.,
+  `adptool generate -f my_config.yaml ...`). If specified, this file's configuration **completely replaces** any
+  project-level `adptool.yaml`.
 
 ### 3. Run `adptool`
 
