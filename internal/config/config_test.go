@@ -1,80 +1,57 @@
 package config
 
 import (
-	"os"
-	"path/filepath"
 	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
-// setupTestConfigFile creates a temporary config file for testing.
-func setupTestConfigFile(t *testing.T, dir, filename string, content []byte) string {
-	path := filepath.Join(dir, filename)
-	err := os.WriteFile(path, content, 0644)
-	assert.NoError(t, err)
-	return path
-}
-
 func TestLoadConfig(t *testing.T) {
-	// Save current working directory and restore it after tests
-	// Removed: wd, _ := os.Getwd()
-	// Removed: defer os.Chdir(wd)
-
 	t.Run("DefaultConfigWhenNoFileExists", func(t *testing.T) {
-		currentWd, _ := os.Getwd()
-		tmpDir := t.TempDir()
-		os.Chdir(tmpDir)
-		defer os.Chdir(currentWd)
+		runInTempDir(t, func(tmpDir string) {
+			cfg, err := LoadConfig("")
+			assert.NoError(t, err)
+			assert.NotNil(t, cfg)
 
-		cfg, err := LoadConfig("")
-		assert.NoError(t, err)
-		assert.NotNil(t, cfg)
+			// Verify that all fields have their default zero-values.
+			assert.Equal(t, "", cfg.Prefix)
+			assert.Equal(t, "", cfg.Suffix)
+			assert.Empty(t, cfg.Explicit)
+			assert.Empty(t, cfg.Regex)
+			assert.Empty(t, cfg.Ignore)
+			assert.False(t, cfg.InheritPrefix)
+			assert.False(t, cfg.InheritSuffix)
+			assert.False(t, cfg.InheritExplicit)
+			assert.False(t, cfg.InheritRegex)
+			assert.False(t, cfg.InheritIgnore)
 
-		// Verify top-level defaults
-		assert.Equal(t, "", cfg.Prefix)
-		assert.Equal(t, "", cfg.Suffix)
-		assert.Empty(t, cfg.Explicit)
-		assert.Empty(t, cfg.Regex)
-		assert.Empty(t, cfg.Ignore)
-		assert.False(t, cfg.InheritPrefix)
-		assert.False(t, cfg.InheritSuffix)
-		assert.False(t, cfg.InheritExplicit)
-		assert.False(t, cfg.InheritRegex)
-		assert.False(t, cfg.InheritIgnore)
+			// Verify category-specific defaults are also zero-valued.
+			assert.Equal(t, "", cfg.Types.Prefix)
+			assert.Equal(t, "", cfg.Types.Suffix)
+			assert.Empty(t, cfg.Types.Explicit)
+			assert.Empty(t, cfg.Types.Regex)
+			assert.Empty(t, cfg.Types.Ignore)
+			assert.False(t, cfg.Types.InheritPrefix)
+			assert.False(t, cfg.Types.InheritSuffix)
+			assert.False(t, cfg.Types.InheritExplicit)
+			assert.False(t, cfg.Types.InheritRegex)
+			assert.False(t, cfg.Types.InheritIgnore)
 
-		// Verify category-specific defaults
-		assert.Equal(t, "", cfg.Types.Prefix)
-		assert.Equal(t, "", cfg.Types.Suffix)
-		assert.Empty(t, cfg.Types.Explicit)
-		assert.Empty(t, cfg.Types.Regex)
-		assert.Empty(t, cfg.Types.Ignore)
-		assert.False(t, cfg.Types.InheritPrefix)
-		assert.False(t, cfg.Types.InheritSuffix)
-		assert.False(t, cfg.Types.InheritExplicit)
-		assert.False(t, cfg.Types.InheritRegex)
-		assert.False(t, cfg.Types.InheritIgnore)
-
-		// Verify compiled rules are empty
-		assert.Empty(t, cfg.CompiledTypes.Rules)
-		assert.Empty(t, cfg.CompiledTypes.Ignore)
-		assert.Empty(t, cfg.CompiledFunctions.Rules)
-		assert.Empty(t, cfg.CompiledFunctions.Ignore)
-		assert.Empty(t, cfg.CompiledMethods.Rules)
-		assert.Empty(t, cfg.CompiledMethods.Ignore)
-		assert.Empty(t, cfg.Packages)
+			// Verify compiled rules are empty, ensuring no hidden defaults.
+			assert.Empty(t, cfg.CompiledTypes.Rules)
+			assert.Empty(t, cfg.CompiledTypes.Ignore)
+			assert.Empty(t, cfg.CompiledFunctions.Rules)
+			assert.Empty(t, cfg.CompiledFunctions.Ignore)
+			assert.Empty(t, cfg.CompiledMethods.Rules)
+			assert.Empty(t, cfg.CompiledMethods.Ignore)
+			assert.Empty(t, cfg.Packages)
+		})
 	})
 
 	t.Run("TopLevelGlobalConfig", func(t *testing.T) {
-		currentWd, _ := os.Getwd()
-		tmpDir := t.TempDir()
-		os.Chdir(tmpDir)
-		defer os.Chdir(currentWd)
-
-		t.Logf("Using temporary directory: %s, original working directory: %s", tmpDir, currentWd)
-		SetSearchPaths(tmpDir)
-		configContent := []byte(`
+		runInTempDir(t, func(tmpDir string) {
+			configContent := []byte(`
 prefix: "Global"
 suffix: "All"
 explicit:
@@ -92,42 +69,38 @@ types: # Explicitly enable inheritance for types
   inherit_prefix: true
   inherit_suffix: true
 `)
+			setupTestConfigFile(t, tmpDir, ".adptool.yaml", configContent)
 
-		setupTestConfigFile(t, tmpDir, ".adptool.yaml", configContent)
+			cfg, err := LoadConfig("")
+			assert.NoError(t, err)
+			assert.NotNil(t, cfg)
 
-		cfg, err := LoadConfig("")
-		assert.NoError(t, err)
-		assert.NotNil(t, cfg)
+			// Verify top-level fields are correctly loaded.
+			assert.Equal(t, "Global", cfg.Prefix)
+			assert.Equal(t, "All", cfg.Suffix)
+			assert.Len(t, cfg.Explicit, 1)
+			assert.Equal(t, "GlobalOld", cfg.Explicit[0].From)
+			assert.Equal(t, "GlobalNew", cfg.Explicit[0].To)
+			assert.Len(t, cfg.Regex, 1)
+			assert.Equal(t, "GlobalRegex$", cfg.Regex[0].Pattern)
+			assert.Len(t, cfg.Ignore, 1)
+			assert.Equal(t, "GlobalIgnored", cfg.Ignore[0])
 
-		// Add this assertion to verify inherit_explicit flag
-		assert.True(t, cfg.Types.InheritExplicit, "cfg.Types.InheritExplicit should be true after unmarshalling")
+			// Verify that inheritance flags are correctly unmarshalled.
+			assert.True(t, cfg.Types.InheritExplicit, "cfg.Types.InheritExplicit should be true")
 
-		// Verify top-level fields
-		assert.Equal(t, "Global", cfg.Prefix)
-		assert.Equal(t, "All", cfg.Suffix)
-		assert.Len(t, cfg.Explicit, 1)
-		assert.Equal(t, "GlobalOld", cfg.Explicit[0].From)
-		assert.Equal(t, "GlobalNew", cfg.Explicit[0].To)
-		assert.Len(t, cfg.Regex, 1)
-		assert.Equal(t, "GlobalRegex$", cfg.Regex[0].Pattern)
-		assert.Len(t, cfg.Ignore, 1)
-		assert.Equal(t, "GlobalIgnored", cfg.Ignore[0])
-
-		// Verify compiled rules for types (should inherit from top-level)
-		assert.Equal(t, "GlobalNew", cfg.CompiledTypes.Rules[0].To)         // Explicit
-		assert.Equal(t, "Global", cfg.CompiledTypes.Rules[1].Value)         // Prefix
-		assert.Equal(t, "All", cfg.CompiledTypes.Rules[2].Value)            // Suffix
-		assert.Equal(t, "GlobalRegex$", cfg.CompiledTypes.Rules[3].Pattern) // Regex
-		assert.Equal(t, "GlobalIgnored", cfg.CompiledTypes.Ignore[0])       // Ignore
+			// Verify compiled rules for types inherit from top-level settings.
+			assert.Contains(t, cfg.CompiledTypes.Rules, &RenameRule{Type: "explicit", From: "GlobalOld", To: "GlobalNew"})
+			assert.Contains(t, cfg.CompiledTypes.Rules, &RenameRule{Type: "prefix", Value: "Global"})
+			assert.Contains(t, cfg.CompiledTypes.Rules, &RenameRule{Type: "suffix", Value: "All"})
+			assert.Contains(t, cfg.CompiledTypes.Rules, &RenameRule{Type: "regex", Pattern: "GlobalRegex$", Replace: "GlobalReplacement"})
+			assert.Contains(t, cfg.CompiledTypes.Ignore, "GlobalIgnored")
+		})
 	})
 
 	t.Run("CategorySpecificConfigOverridesGlobal", func(t *testing.T) {
-		currentWd, _ := os.Getwd()
-		tmpDir := t.TempDir()
-		os.Chdir(tmpDir)
-		defer os.Chdir(currentWd)
-
-		configContent := []byte(`
+		runInTempDir(t, func(tmpDir string) {
+			configContent := []byte(`
 prefix: "Global"
 types:
   inherit_explicit: true
@@ -140,32 +113,29 @@ types:
     - from: TypeOld
       to: TypeNew
 `)
-		setupTestConfigFile(t, tmpDir, ".adptool.yaml", configContent)
+			setupTestConfigFile(t, tmpDir, ".adptool.yaml", configContent)
 
-		cfg, err := LoadConfig("")
-		assert.NoError(t, err)
+			cfg, err := LoadConfig("")
+			assert.NoError(t, err)
 
-		// Verify top-level prefix is still "Global"
-		assert.Equal(t, "Global", cfg.Prefix)
+			// Verify top-level prefix remains unchanged.
+			assert.Equal(t, "Global", cfg.Prefix)
 
-		// Verify types category uses its own prefix and explicit
-		assert.Equal(t, "TypeSpecific", cfg.Types.Prefix)
-		assert.Len(t, cfg.Types.Explicit, 1)
-		assert.Equal(t, "TypeOld", cfg.Types.Explicit[0].From)
-		assert.Equal(t, "TypeNew", cfg.Types.Explicit[0].To)
+			// Verify types category uses its own specific settings.
+			assert.Equal(t, "TypeSpecific", cfg.Types.Prefix)
+			assert.Len(t, cfg.Types.Explicit, 1)
+			assert.Equal(t, "TypeOld", cfg.Types.Explicit[0].From)
+			assert.Equal(t, "TypeNew", cfg.Types.Explicit[0].To)
 
-		// Verify compiled types rules reflect category-specific overrides
-		assert.Equal(t, "TypeNew", cfg.CompiledTypes.Rules[0].To)
-		assert.Equal(t, "TypeSpecific", cfg.CompiledTypes.Rules[1].Value)
+			// Verify compiled types rules reflect category-specific overrides.
+			assert.Contains(t, cfg.CompiledTypes.Rules, &RenameRule{Type: "explicit", From: "TypeOld", To: "TypeNew"})
+			assert.Contains(t, cfg.CompiledTypes.Rules, &RenameRule{Type: "prefix", Value: "TypeSpecific"})
+		})
 	})
 
 	t.Run("PackageSpecificConfigOverridesCategory", func(t *testing.T) {
-		currentWd, _ := os.Getwd()
-		tmpDir := t.TempDir()
-		os.Chdir(tmpDir)
-		defer os.Chdir(currentWd)
-
-		configContent := []byte(`
+		runInTempDir(t, func(tmpDir string) {
+			configContent := []byte(`
 types:
   prefix: "GlobalType"
 packages:
@@ -176,34 +146,31 @@ packages:
         - from: Pkg1Old
           to: Pkg1New
 `)
-		setupTestConfigFile(t, tmpDir, ".adptool.yaml", configContent)
+			setupTestConfigFile(t, tmpDir, ".adptool.yaml", configContent)
 
-		cfg, err := LoadConfig("")
-		assert.NoError(t, err)
+			cfg, err := LoadConfig("")
+			assert.NoError(t, err)
 
-		// Verify global type prefix
-		assert.Equal(t, "GlobalType", cfg.Types.Prefix)
+			// Verify global type prefix is correctly loaded.
+			assert.Equal(t, "GlobalType", cfg.Types.Prefix)
 
-		// Verify package-specific type prefix
-		assert.Len(t, cfg.Packages, 1)
-		pkg1 := cfg.Packages[0]
-		assert.Equal(t, "Pkg1Type", pkg1.Types.Prefix)
-		assert.Len(t, pkg1.Types.Explicit, 1)
-		assert.Equal(t, "Pkg1Old", pkg1.Types.Explicit[0].From)
-		assert.Equal(t, "Pkg1New", pkg1.Types.Explicit[0].To)
+			// Verify package-specific settings override category settings.
+			assert.Len(t, cfg.Packages, 1)
+			pkg1 := cfg.Packages[0]
+			assert.Equal(t, "Pkg1Type", pkg1.Types.Prefix)
+			assert.Len(t, pkg1.Types.Explicit, 1)
+			assert.Equal(t, "Pkg1Old", pkg1.Types.Explicit[0].From)
+			assert.Equal(t, "Pkg1New", pkg1.Types.Explicit[0].To)
 
-		// Verify compiled rules for package types reflect package-specific overrides
-		assert.Equal(t, "Pkg1New", pkg1.CompiledTypes.Rules[0].To)
-		assert.Equal(t, "Pkg1Type", pkg1.CompiledTypes.Rules[1].Value)
+			// Verify compiled rules for the package reflect package-specific overrides.
+			assert.Contains(t, pkg1.CompiledTypes.Rules, &RenameRule{Type: "explicit", From: "Pkg1Old", To: "Pkg1New"})
+			assert.Contains(t, pkg1.CompiledTypes.Rules, &RenameRule{Type: "prefix", Value: "Pkg1Type"})
+		})
 	})
 
-	t.Run("InheritExplicitTrueMerge", func(t *testing.T) {
-		currentWd, _ := os.Getwd()
-		tmpDir := t.TempDir()
-		os.Chdir(tmpDir)
-		defer os.Chdir(currentWd)
-
-		configContent := []byte(`
+	t.Run("InheritExplicitTrueWithOverride", func(t *testing.T) {
+		runInTempDir(t, func(tmpDir string) {
+			configContent := []byte(`
 explicit:
   - from: GlobalA
     to: GlobalA_New
@@ -214,95 +181,86 @@ types:
   explicit:
     - from: TypeC
       to: TypeC_New
-    - from: GlobalA
-      to: TypeA_Override # Should override GlobalA
+    - from: GlobalA # This should override the global setting for GlobalA
+      to: TypeA_Override
 `)
-		setupTestConfigFile(t, tmpDir, ".adptool.yaml", configContent)
+			setupTestConfigFile(t, tmpDir, ".adptool.yaml", configContent)
 
-		cfg, err := LoadConfig("")
-		assert.NoError(t, err)
+			cfg, err := LoadConfig("")
+			assert.NoError(t, err)
 
-		// Verify compiled types explicit rules are merged
-		expectedExplicit := map[string]string{
-			"GlobalA": "TypeA_Override",
-			"GlobalB": "GlobalB_New",
-			"TypeC":   "TypeC_New",
-		}
-		compiledExplicitMap := make(map[string]string)
-		for _, rule := range cfg.CompiledTypes.Rules {
-			if rule.Type == "explicit" {
-				compiledExplicitMap[rule.From] = rule.To
+			// Verify that compiled explicit rules are correctly merged and overridden.
+			expectedExplicit := map[string]string{
+				"GlobalA": "TypeA_Override", // Overridden by type-specific config
+				"GlobalB": "GlobalB_New",    // Inherited from global
+				"TypeC":   "TypeC_New",      // Defined in type-specific config
 			}
-		}
-		assert.True(t, reflect.DeepEqual(expectedExplicit, compiledExplicitMap))
+			compiledExplicitMap := make(map[string]string)
+			for _, rule := range cfg.CompiledTypes.Rules {
+				if rule.Type == "explicit" {
+					compiledExplicitMap[rule.From] = rule.To
+				}
+			}
+			assert.True(t, reflect.DeepEqual(expectedExplicit, compiledExplicitMap))
+		})
 	})
 
-	t.Run("InheritExplicitFalseOverride", func(t *testing.T) {
-		currentWd, _ := os.Getwd()
-		tmpDir := t.TempDir()
-		os.Chdir(tmpDir)
-		defer os.Chdir(currentWd)
-
-		configContent := []byte(`
+	t.Run("InheritExplicitFalseDisablesMerge", func(t *testing.T) {
+		runInTempDir(t, func(tmpDir string) {
+			configContent := []byte(`
 explicit:
   - from: GlobalA
     to: GlobalA_New
 types:
-  inherit_explicit: false # Explicitly do not inherit
+  inherit_explicit: false # Explicitly disable inheritance
   explicit:
     - from: TypeA
-      to: TypeA_New # Only this should be present
+      to: TypeA_New # Only this rule should be present
 `)
-		setupTestConfigFile(t, tmpDir, ".adptool.yaml", configContent)
+			setupTestConfigFile(t, tmpDir, ".adptool.yaml", configContent)
 
-		cfg, err := LoadConfig("")
-		assert.NoError(t, err)
+			cfg, err := LoadConfig("")
+			assert.NoError(t, err)
 
-		// Verify compiled types explicit rules are only from category
-		expectedExplicit := map[string]string{
-			"TypeA": "TypeA_New",
-		}
-		compiledExplicitMap := make(map[string]string)
-		for _, rule := range cfg.CompiledTypes.Rules {
-			if rule.Type == "explicit" {
-				compiledExplicitMap[rule.From] = rule.To
+			// Verify that only category-specific explicit rules are present.
+			expectedExplicit := map[string]string{
+				"TypeA": "TypeA_New",
 			}
-		}
-		assert.True(t, reflect.DeepEqual(expectedExplicit, compiledExplicitMap))
+			compiledExplicitMap := make(map[string]string)
+			for _, rule := range cfg.CompiledTypes.Rules {
+				if rule.Type == "explicit" {
+					compiledExplicitMap[rule.From] = rule.To
+				}
+			}
+			assert.True(t, reflect.DeepEqual(expectedExplicit, compiledExplicitMap))
+		})
 	})
 
-	t.Run("InheritExplicitFalseClear", func(t *testing.T) {
-		currentWd, _ := os.Getwd()
-		tmpDir := t.TempDir()
-		os.Chdir(tmpDir)
-		defer os.Chdir(currentWd)
-
-		configContent := []byte(`
+	t.Run("InheritExplicitFalseWithEmptyListClearsRules", func(t *testing.T) {
+		runInTempDir(t, func(tmpDir string) {
+			configContent := []byte(`
 explicit:
   - from: GlobalA
     to: GlobalA_New
 types:
-  inherit_explicit: false # Explicitly do not inherit
-  explicit: [] # Explicitly empty
+  inherit_explicit: false # Disable inheritance
+  explicit: [] # Explicitly empty list
 `)
-		setupTestConfigFile(t, tmpDir, ".adptool.yaml", configContent)
+			setupTestConfigFile(t, tmpDir, ".adptool.yaml", configContent)
 
-		cfg, err := LoadConfig("")
-		assert.NoError(t, err)
+			cfg, err := LoadConfig("")
+			assert.NoError(t, err)
 
-		// Verify compiled types explicit rules are empty
-		for _, rule := range cfg.CompiledTypes.Rules {
-			assert.NotEqual(t, "explicit", rule.Type)
-		}
+			// Verify that no explicit rules are present in the compiled types rules.
+			for _, rule := range cfg.CompiledTypes.Rules {
+				assert.NotEqual(t, "explicit", rule.Type)
+			}
+		})
 	})
 
-	t.Run("InheritRegexTrueAppend", func(t *testing.T) {
-		currentWd, _ := os.Getwd()
-		tmpDir := t.TempDir()
-		os.Chdir(tmpDir)
-		defer os.Chdir(currentWd)
-
-		configContent := []byte(`
+	t.Run("InheritRegexTrueAppendsRules", func(t *testing.T) {
+		runInTempDir(t, func(tmpDir string) {
+			configContent := []byte(`
 regex:
   - pattern: "GlobalR1"
     replace: "G1"
@@ -314,33 +272,21 @@ types:
     - pattern: "TypeR3"
       replace: "T3"
 `)
-		setupTestConfigFile(t, tmpDir, ".adptool.yaml", configContent)
+			setupTestConfigFile(t, tmpDir, ".adptool.yaml", configContent)
 
-		cfg, err := LoadConfig("")
-		assert.NoError(t, err)
+			cfg, err := LoadConfig("")
+			assert.NoError(t, err)
 
-		// Verify compiled types regex rules are appended
-		expectedRegex := []RegexRule{
-			{Pattern: "GlobalR1", Replace: "G1"},
-			{Pattern: "GlobalR2", Replace: "G2"},
-			{Pattern: "TypeR3", Replace: "T3"},
-		}
-		compiledRegex := []RegexRule{} // Initialize as empty slice
-		for _, rule := range cfg.CompiledTypes.Rules {
-			if rule.Type == "regex" {
-				compiledRegex = append(compiledRegex, RegexRule{Pattern: rule.Pattern, Replace: rule.Replace})
-			}
-		}
-		assert.True(t, reflect.DeepEqual(expectedRegex, compiledRegex))
+			// Verify that regex rules from both global and category are present.
+			assert.Contains(t, cfg.CompiledTypes.Rules, &RenameRule{Type: "regex", Pattern: "GlobalR1", Replace: "G1"})
+			assert.Contains(t, cfg.CompiledTypes.Rules, &RenameRule{Type: "regex", Pattern: "GlobalR2", Replace: "G2"})
+			assert.Contains(t, cfg.CompiledTypes.Rules, &RenameRule{Type: "regex", Pattern: "TypeR3", Replace: "T3"})
+		})
 	})
 
-	t.Run("InheritRegexFalseOverride", func(t *testing.T) {
-		currentWd, _ := os.Getwd()
-		tmpDir := t.TempDir()
-		os.Chdir(tmpDir)
-		defer os.Chdir(currentWd)
-
-		configContent := []byte(`
+	t.Run("InheritRegexFalseDisablesAppend", func(t *testing.T) {
+		runInTempDir(t, func(tmpDir string) {
+			configContent := []byte(`
 regex:
   - pattern: "GlobalR1"
     replace: "G1"
@@ -350,56 +296,42 @@ types:
     - pattern: "TypeR2"
       replace: "T2"
 `)
-		setupTestConfigFile(t, tmpDir, ".adptool.yaml", configContent)
+			setupTestConfigFile(t, tmpDir, ".adptool.yaml", configContent)
 
-		cfg, err := LoadConfig("")
-		assert.NoError(t, err)
+			cfg, err := LoadConfig("")
+			assert.NoError(t, err)
 
-		// Verify compiled types regex rules are only from category
-		expectedRegex := []RegexRule{
-			{Pattern: "TypeR2", Replace: "T2"},
-		}
-		compiledRegex := []RegexRule{} // Initialize as empty slice
-		for _, rule := range cfg.CompiledTypes.Rules {
-			if rule.Type == "regex" {
-				compiledRegex = append(compiledRegex, RegexRule{Pattern: rule.Pattern, Replace: rule.Replace})
-			}
-		}
-		assert.True(t, reflect.DeepEqual(expectedRegex, compiledRegex))
+			// Verify that only category-specific regex rules are present.
+			assert.Contains(t, cfg.CompiledTypes.Rules, &RenameRule{Type: "regex", Pattern: "TypeR2", Replace: "T2"})
+			assert.NotContains(t, cfg.CompiledTypes.Rules, &RenameRule{Type: "regex", Pattern: "GlobalR1", Replace: "G1"})
+		})
 	})
 
-	t.Run("InheritRegexFalseClear", func(t *testing.T) {
-		currentWd, _ := os.Getwd()
-		tmpDir := t.TempDir()
-		os.Chdir(tmpDir)
-		defer os.Chdir(currentWd)
-
-		configContent := []byte(`
+	t.Run("InheritRegexFalseWithEmptyListClearsRules", func(t *testing.T) {
+		runInTempDir(t, func(tmpDir string) {
+			configContent := []byte(`
 regex:
   - pattern: "GlobalR1"
     replace: "G1"
 types:
   inherit_regex: false
-  regex: [] # Explicitly empty
+  regex: [] # Explicitly empty list
 `)
-		setupTestConfigFile(t, tmpDir, ".adptool.yaml", configContent)
+			setupTestConfigFile(t, tmpDir, ".adptool.yaml", configContent)
 
-		cfg, err := LoadConfig("")
-		assert.NoError(t, err)
+			cfg, err := LoadConfig("")
+			assert.NoError(t, err)
 
-		// Verify compiled types regex rules are empty
-		for _, rule := range cfg.CompiledTypes.Rules {
-			assert.NotEqual(t, "regex", rule.Type)
-		}
+			// Verify that no regex rules are present in the compiled types rules.
+			for _, rule := range cfg.CompiledTypes.Rules {
+				assert.NotEqual(t, "regex", rule.Type)
+			}
+		})
 	})
 
-	t.Run("InheritIgnoreTrueAppend", func(t *testing.T) {
-		currentWd, _ := os.Getwd()
-		tmpDir := t.TempDir()
-		os.Chdir(tmpDir)
-		defer os.Chdir(currentWd)
-
-		configContent := []byte(`
+	t.Run("InheritIgnoreTrueAppendsRules", func(t *testing.T) {
+		runInTempDir(t, func(tmpDir string) {
+			configContent := []byte(`
 ignore:
   - "GlobalIgnore1"
   - "GlobalIgnore2"
@@ -408,23 +340,20 @@ types:
   ignore:
     - "TypeIgnore3"
 `)
-		setupTestConfigFile(t, tmpDir, ".adptool.yaml", configContent)
+			setupTestConfigFile(t, tmpDir, ".adptool.yaml", configContent)
 
-		cfg, err := LoadConfig("")
-		assert.NoError(t, err)
+			cfg, err := LoadConfig("")
+			assert.NoError(t, err)
 
-		// Verify compiled types ignore rules are appended
-		expectedIgnore := []string{"GlobalIgnore1", "GlobalIgnore2", "TypeIgnore3"}
-		assert.True(t, reflect.DeepEqual(expectedIgnore, cfg.CompiledTypes.Ignore))
+			// Verify that ignore rules from both global and category are present.
+			expectedIgnore := []string{"GlobalIgnore1", "GlobalIgnore2", "TypeIgnore3"}
+			assert.ElementsMatch(t, expectedIgnore, cfg.CompiledTypes.Ignore)
+		})
 	})
 
-	t.Run("InheritIgnoreFalseOverride", func(t *testing.T) {
-		currentWd, _ := os.Getwd()
-		tmpDir := t.TempDir()
-		os.Chdir(tmpDir)
-		defer os.Chdir(currentWd)
-
-		configContent := []byte(`
+	t.Run("InheritIgnoreFalseDisablesAppend", func(t *testing.T) {
+		runInTempDir(t, func(tmpDir string) {
+			configContent := []byte(`
 ignore:
   - "GlobalIgnore1"
 types:
@@ -432,45 +361,39 @@ types:
   ignore:
     - "TypeIgnore2"
 `)
-		setupTestConfigFile(t, tmpDir, ".adptool.yaml", configContent)
+			setupTestConfigFile(t, tmpDir, ".adptool.yaml", configContent)
 
-		cfg, err := LoadConfig("")
-		assert.NoError(t, err)
+			cfg, err := LoadConfig("")
+			assert.NoError(t, err)
 
-		// Verify compiled types ignore rules are only from category
-		expectedIgnore := []string{"TypeIgnore2"}
-		assert.True(t, reflect.DeepEqual(expectedIgnore, cfg.CompiledTypes.Ignore))
+			// Verify that only category-specific ignore rules are present.
+			expectedIgnore := []string{"TypeIgnore2"}
+			assert.True(t, reflect.DeepEqual(expectedIgnore, cfg.CompiledTypes.Ignore))
+		})
 	})
 
-	t.Run("InheritIgnoreFalseClear", func(t *testing.T) {
-		currentWd, _ := os.Getwd()
-		tmpDir := t.TempDir()
-		os.Chdir(tmpDir)
-		defer os.Chdir(currentWd)
-
-		configContent := []byte(`
+	t.Run("InheritIgnoreFalseWithEmptyListClearsRules", func(t *testing.T) {
+		runInTempDir(t, func(tmpDir string) {
+			configContent := []byte(`
 ignore:
   - "GlobalIgnore1"
 types:
   inherit_ignore: false
-  ignore: [] # Explicitly empty
+  ignore: [] # Explicitly empty list
 `)
-		setupTestConfigFile(t, tmpDir, ".adptool.yaml", configContent)
+			setupTestConfigFile(t, tmpDir, ".adptool.yaml", configContent)
 
-		cfg, err := LoadConfig("")
-		assert.NoError(t, err)
+			cfg, err := LoadConfig("")
+			assert.NoError(t, err)
 
-		// Verify compiled types ignore rules are empty
-		assert.Empty(t, cfg.CompiledTypes.Ignore)
+			// Verify that the compiled ignore list for types is empty.
+			assert.Empty(t, cfg.CompiledTypes.Ignore)
+		})
 	})
 
 	t.Run("PrefixSuffixInheritanceLogic", func(t *testing.T) {
-		currentWd, _ := os.Getwd()
-		tmpDir := t.TempDir()
-		os.Chdir(tmpDir)
-		defer os.Chdir(currentWd)
-
-		configContent := []byte(`
+		runInTempDir(t, func(tmpDir string) {
+			configContent := []byte(`
 prefix: "GlobalP"
 suffix: "GlobalS"
 types:
@@ -492,65 +415,56 @@ methods:
   suffix: "MethodS"
   inherit_suffix: true
 `)
-		setupTestConfigFile(t, tmpDir, ".adptool.yaml", configContent)
+			setupTestConfigFile(t, tmpDir, ".adptool.yaml", configContent)
 
-		cfg, err := LoadConfig("")
-		assert.NoError(t, err)
+			cfg, err := LoadConfig("")
+			assert.NoError(t, err)
 
-		// Test Types category
-		assert.Equal(t, "GlobalP", cfg.CompiledTypes.Rules[0].Value) // Prefix: Inherited
-		assert.Empty(t, cfg.CompiledTypes.Rules[1].Value)            // Suffix: Explicitly cleared by inherit_suffix:false and empty suffix
+			// Verify prefix/suffix logic for the Types category.
+			assert.Contains(t, cfg.CompiledTypes.Rules, &RenameRule{Type: "prefix", Value: "GlobalP"})
+			assert.NotContains(t, cfg.CompiledTypes.Rules, &RenameRule{Type: "suffix", Value: "GlobalS"})
 
-		// Test Functions category
-		assert.Equal(t, "FuncP", cfg.CompiledFunctions.Rules[0].Value) // Prefix: Uses category prefix
-		assert.Equal(t, "FuncS", cfg.CompiledFunctions.Rules[1].Value) // Suffix: Uses category suffix
+			// Verify prefix/suffix logic for the Functions category.
+			assert.Contains(t, cfg.CompiledFunctions.Rules, &RenameRule{Type: "prefix", Value: "FuncP"})
+			assert.Contains(t, cfg.CompiledFunctions.Rules, &RenameRule{Type: "suffix", Value: "FuncS"})
 
-		// Test Methods category
-		assert.Empty(t, cfg.CompiledMethods.Rules[0].Value)            // Prefix: Explicitly cleared by inherit_prefix:false and empty prefix
-		assert.Equal(t, "MethodS", cfg.CompiledMethods.Rules[1].Value) // Suffix: Uses category suffix
+			// Verify prefix/suffix logic for the Methods category.
+			assert.NotContains(t, cfg.CompiledMethods.Rules, &RenameRule{Type: "prefix", Value: "GlobalP"})
+			assert.Contains(t, cfg.CompiledMethods.Rules, &RenameRule{Type: "suffix", Value: "MethodS"})
+		})
 	})
 
 	t.Run("FileLevelConfigOverridesProjectLevel", func(t *testing.T) {
-		currentWd, _ := os.Getwd()
-		tmpDir := t.TempDir()
-		os.Chdir(tmpDir)
-		defer os.Chdir(currentWd)
+		runInTempDir(t, func(tmpDir string) {
+			// Setup a project-level config file.
+			setupTestConfigFile(t, tmpDir, ".adptool.yaml", []byte(`prefix: "ProjectLevel"`))
 
-		setupTestConfigFile(t, tmpDir, ".adptool.yaml", []byte(`prefix: "ProjectLevel"`))
+			// Setup a file-level config that should override the project-level one.
+			fileConfigContent := []byte(`prefix: "FileLevel"`)
+			fileConfigPath := setupTestConfigFile(t, tmpDir, "file_level_config.yaml", fileConfigContent)
 
-		fileConfigContent := []byte(`prefix: "FileLevel"`)
-		fileConfigPath := setupTestConfigFile(t, tmpDir, "file_level_config.yaml", fileConfigContent)
-
-		cfg, err := LoadConfig(fileConfigPath)
-		assert.NoError(t, err)
-		assert.NotNil(t, cfg)
-		assert.Equal(t, "FileLevel", cfg.Prefix) // File-level should override
+			cfg, err := LoadConfig(fileConfigPath)
+			assert.NoError(t, err)
+			assert.NotNil(t, cfg)
+			assert.Equal(t, "FileLevel", cfg.Prefix) // File-level config should take precedence.
+		})
 	})
 
 	t.Run("ErrorOnInvalidYAML", func(t *testing.T) {
-		currentWd, _ := os.Getwd()
-		tmpDir := t.TempDir()
-		os.Chdir(tmpDir)
-		defer os.Chdir(currentWd)
+		runInTempDir(t, func(tmpDir string) {
+			// Create an invalid YAML file.
+			fileConfigPath := setupTestConfigFile(t, tmpDir, "invalid.yaml", []byte(`prefix: [invalid`))
 
-		fileConfigPath := setupTestConfigFile(t, tmpDir, "invalid.yaml", []byte(`prefix: [invalid`))
-
-		_, err := LoadConfig(fileConfigPath)
-		assert.Error(t, err)
+			_, err := LoadConfig(fileConfigPath)
+			assert.Error(t, err) // Expect an error due to parsing failure.
+		})
 	})
 
 	t.Run("ErrorOnSpecifiedFileNotFound", func(t *testing.T) {
-		currentWd, _ := os.Getwd()
-		tmpDir := t.TempDir()
-		os.Chdir(tmpDir)
-		defer os.Chdir(currentWd)
-
-		_, err := LoadConfig("nonexistent.yaml")
-		assert.Error(t, err)
+		runInTempDir(t, func(tmpDir string) {
+			// Attempt to load a non-existent config file.
+			_, err := LoadConfig("nonexistent.yaml")
+			assert.Error(t, err) // Expect an error as the file does not exist.
+		})
 	})
-}
-
-// Helper function to create a string pointer
-func strPtr(s string) *string {
-	return &s
 }
