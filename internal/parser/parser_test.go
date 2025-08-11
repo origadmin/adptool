@@ -93,14 +93,24 @@ func TestParseFileDirectives(t *testing.T) {
 						Name:    "ext1.TypeA",
 						RuleSet: config.RuleSet{},
 						Kind:    "type",
-						Methods: []*config.MemberRule{{Name: ".DoSomethingA", RuleSet: config.RuleSet{Explicit: []*config.ExplicitRule{{From: ".DoSomethingA", To: "DoSomethingA_New"}}}}},
+						Methods: []*config.MemberRule{
+							{
+								Name:    ".DoSomethingA",
+								RuleSet: config.RuleSet{Explicit: []*config.ExplicitRule{{From: ".DoSomethingA", To: "DoSomethingA_New"}}},
+							},
+						},
 					},
 					{
 						Name:    "ext1.TypeB",
 						RuleSet: config.RuleSet{},
 						Kind:    "struct",
 						Pattern: "copy",
-						Fields:  []*config.MemberRule{{Name: ".FieldB", RuleSet: config.RuleSet{}}},
+						Fields: []*config.MemberRule{
+							{
+								Name:    ".FieldB",
+								RuleSet: config.RuleSet{},
+							},
+						},
 					},
 					{
 						Name:    "ext1.TypeC",
@@ -111,33 +121,53 @@ func TestParseFileDirectives(t *testing.T) {
 					{
 						Name:    "ext1.TypeD",
 						RuleSet: config.RuleSet{},
-						Kind:    "struct", // Changed from "type" to "struct"
+						Kind:    "struct",
 						Pattern: "define",
 					},
 					{
 						Name:    "ctx3.ContextType",
 						RuleSet: config.RuleSet{},
 						Kind:    "type",
-						Methods: []*config.MemberRule{{Name: ".DoSomethingCtx", RuleSet: config.RuleSet{}}},
+						Methods: []*config.MemberRule{
+							{
+								Name:    ".DoSomethingCtx",
+								RuleSet: config.RuleSet{},
+							},
+						},
 					},
 					{
 						Name:    "nested4.NestedType",
 						RuleSet: config.RuleSet{},
-						Kind:    "type",
+						Kind:    "struct",
 						Pattern: "copy",
-						Fields:  []*config.MemberRule{{Name: ".NestedField", RuleSet: config.RuleSet{}}},
+						Fields: []*config.MemberRule{
+							{
+								Name:    ".NestedField",
+								RuleSet: config.RuleSet{},
+							},
+						},
 					},
 					{
 						Name:    "ctx3.AfterNestedType",
 						RuleSet: config.RuleSet{},
 						Kind:    "type",
-						Methods: []*config.MemberRule{{Name: ".DoSomethingAfterNested", RuleSet: config.RuleSet{}}},
+						Methods: []*config.MemberRule{
+							{
+								Name:    ".DoSomethingAfterNested",
+								RuleSet: config.RuleSet{},
+							},
+						},
 					},
 					{
 						Name:    "github.com/another/pkg/v2.AnotherExternalType",
 						RuleSet: config.RuleSet{},
 						Kind:    "type",
-						Methods: []*config.MemberRule{{Name: ".DoAnother", RuleSet: config.RuleSet{}}},
+						Methods: []*config.MemberRule{
+							{
+								Name:    ".DoAnother",
+								RuleSet: config.RuleSet{},
+							},
+						},
 					},
 				},
 				Functions: []*config.FuncRule{
@@ -185,15 +215,14 @@ func TestParseFileDirectives(t *testing.T) {
 				t.Fatalf("Failed to parse directives: %v", err)
 			}
 
-			// --- Granular Comparison ---
+			// ---	Granular Comparison ---
 			// Compare Types
 			if len(cfg.Types) != len(tt.expectedConfig.Types) {
 				t.Errorf("Types count mismatch. Expected: %d, Actual: %d", len(tt.expectedConfig.Types), len(cfg.Types))
 			} else {
 				for i := range cfg.Types {
 					if !reflect.DeepEqual(*cfg.Types[i], *tt.expectedConfig.Types[i]) {
-						t.Errorf("Type rule at index %d mismatch.\nExpected: %+v\nActual:   %+v", i,
-							*tt.expectedConfig.Types[i], *cfg.Types[i])
+						t.Errorf("Type rule at index %d mismatch.\nExpected: %+v\nActual:   %+v", i, *tt.expectedConfig.Types[i], *cfg.Types[i])
 					}
 				}
 			}
