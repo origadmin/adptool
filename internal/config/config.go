@@ -20,11 +20,19 @@ func newRuleSet() *RuleSet {
 }
 
 // newTypeRuleSet creates a new TypeRuleSet with initialized nested RuleSets.
-func newTypeRuleSet() *TypeRuleSet {
-	return &TypeRuleSet{
+func newTypeRule() *TypeRule {
+	return &TypeRule{
+		Methods: newMemberRule(),
+		Fields:  newMemberRule(),
 		RuleSet: newRuleSet(),
-		Methods: newRuleSet(),
-		Fields:  newRuleSet(),
+	}
+}
+
+func newMemberRule() []*MemberRule {
+	return []*MemberRule{
+		{
+			RuleSet: newRuleSet(),
+		},
 	}
 }
 
@@ -32,7 +40,7 @@ func newTypeRuleSet() *TypeRuleSet {
 type Config struct {
 	Defaults  *Defaults         `yaml:"defaults,omitempty" mapstructure:"defaults,omitempty"`
 	Vars      map[string]string `yaml:"vars,omitempty" mapstructure:"vars,omitempty"`
-	Types     *TypeRuleSet      `yaml:"types,omitempty" mapstructure:"types,omitempty"`
+	Types     []*TypeRule       `yaml:"types,omitempty" mapstructure:"types,omitempty"`
 	Functions *RuleSet          `yaml:"functions,omitempty" mapstructure:"functions,omitempty"`
 	Variables *RuleSet          `yaml:"variables,omitempty" mapstructure:"variables,omitempty"`
 	Constants *RuleSet          `yaml:"constants,omitempty" mapstructure:"constants,omitempty"`
@@ -45,6 +53,7 @@ type Config struct {
 type TypeRule struct {
 	Name     string        `yaml:"name" mapstructure:"name"`
 	Kind     string        `yaml:"kind,omitempty" mapstructure:"kind,omitempty"`
+	Disabled bool          `yaml:"disabled,omitempty" mapstructure:"disabled,omitempty"`
 	Pattern  string        `yaml:"pattern,omitempty" mapstructure:"pattern,omitempty"`
 	Methods  []*MemberRule `yaml:"methods,omitempty" mapstructure:"methods,omitempty"`
 	Fields   []*MemberRule `yaml:"fields,omitempty" mapstructure:"fields,omitempty"`
@@ -54,24 +63,28 @@ type TypeRule struct {
 // FuncRule defines the set of rules for a single function.
 type FuncRule struct {
 	Name     string `yaml:"name" mapstructure:"name"`
+	Disabled bool   `yaml:"disabled,omitempty" mapstructure:"disabled,omitempty"`
 	*RuleSet `yaml:",inline" mapstructure:",squash"`
 }
 
 // VarRule defines the set of rules for a single variable.
 type VarRule struct {
 	Name     string `yaml:"name" mapstructure:"name"`
+	Disabled bool   `yaml:"disabled,omitempty" mapstructure:"disabled,omitempty"`
 	*RuleSet `yaml:",inline" mapstructure:",squash"`
 }
 
 // ConstRule defines the set of rules for a single constant.
 type ConstRule struct {
 	Name     string `yaml:"name" mapstructure:"name"`
+	Disabled bool   `yaml:"disabled,omitempty" mapstructure:"disabled,omitempty"`
 	*RuleSet `yaml:",inline" mapstructure:",squash"`
 }
 
 // MemberRule defines the set of rules for a type member (method or field).
 type MemberRule struct {
 	Name     string `yaml:"name" mapstructure:"name"`
+	Disabled bool   `yaml:"disabled,omitempty" mapstructure:"disabled,omitempty"`
 	*RuleSet `yaml:",inline" mapstructure:",squash"`
 }
 
@@ -104,12 +117,12 @@ type RegexRule struct {
 	Replace string `yaml:"replace" mapstructure:"replace"`
 }
 
-// TypeRuleSet extends a RuleSet with nested rules for type members.
-type TypeRuleSet struct {
-	*RuleSet `yaml:",inline"`
-	Methods  *RuleSet `yaml:"methods,omitempty"`
-	Fields   *RuleSet `yaml:"fields,omitempty"`
-}
+//// TypeRuleSet extends a RuleSet with nested rules for type members.
+//type TypeRuleSet struct {
+//	*RuleSet `yaml:",inline"`
+//	Methods  *RuleSet `yaml:"methods,omitempty"`
+//	Fields   *RuleSet `yaml:"fields,omitempty"`
+//}
 
 // --- Other Top-Level Structures ---
 
