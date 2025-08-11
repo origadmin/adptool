@@ -2,9 +2,14 @@ package loader
 
 import (
 	"errors"
+	"fmt"
+	goast "go/ast"
+	goparser "go/parser"
+	gotoken "go/token"
+
+	"github.com/spf13/viper"
 
 	"github.com/origadmin/adptool/internal/config"
-	"github.com/spf13/viper"
 )
 
 // Load reads the configuration from a file (or searches for one) and unmarshals it into a Config struct.
@@ -40,4 +45,15 @@ func Load(filePath string) (*config.Config, error) {
 	}
 
 	return cfg, nil
+}
+
+// LoadAdapterFile parses a Go source file and returns its AST.
+// It also returns the FileSet used for parsing, which is necessary for position information.
+func LoadAdapterFile(filePath string) (*goast.File, *gotoken.FileSet, error) {
+	fset := gotoken.NewFileSet()
+	node, err := goparser.ParseFile(fset, filePath, nil, goparser.ParseComments)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to parse Go file %s: %w", filePath, err)
+	}
+	return node, fset, nil
 }
