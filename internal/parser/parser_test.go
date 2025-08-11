@@ -20,296 +20,249 @@ func getModuleRoot() string {
 }
 
 func TestParseFileDirectives(t *testing.T) {
-	// Path to the test data file
-	testFilePath := filepath.Join(getModuleRoot(), "testdata", "parser_test_file.go")
-
-	// Load the Go file once for all tests
-	file, fset, err := loader.LoadGoFile(testFilePath)
-	if err != nil {
-		t.Fatalf("Failed to load Go file %s: %v", testFilePath, err)
+	tests := []struct {
+		name           string
+		filePath       string
+		expectedConfig *config.Config
+		expectError    bool
+	}{
+		{
+			name:     "Full Directives Parse",
+			filePath: filepath.Join(getModuleRoot(), "testdata", "parser_test_file.go"),
+			expectedConfig: &config.Config{
+				Defaults: &config.Defaults{
+					Mode: &config.Mode{
+						Strategy: "replace",
+						Prefix:   "append",
+						Suffix:   "append",
+						Explicit: "merge",
+						Regex:    "merge",
+						Ignore:   "merge",
+					},
+				},
+				Vars: []*config.VarEntry{
+					{
+						Name:  "GlobalVar1",
+						Value: "globalValue1",
+					},
+					{
+						Name:  "GlobalVar2",
+						Value: "globalValue2",
+					},
+				},
+				Packages: []*config.Package{
+					{
+						Import: "github.com/my/package/v1",
+						Alias:  "mypkg",
+						Path:   "./vendor/my/package/v1",
+						Vars: []*config.VarEntry{
+							{
+								Name:  "PackageVar1",
+								Value: "packageValue1",
+							},
+						},
+						Types: []*config.TypeRule{
+							{
+								Name:    "MyStructInPackage",
+								Kind:    "struct",
+								Pattern: "wrap",
+								Methods: []*config.MemberRule{
+									{
+										Name:    "DoSomethingInPackage",
+										RuleSet: config.RuleSet{Explicit: []*config.ExplicitRule{{From: "DoSomethingInPackage", To: "DoSomethingNewInPackage"}}},
+									},
+								},
+							},
+						},
+						Functions: []*config.FuncRule{
+							{
+								Name:    "MyFuncInPackage",
+								RuleSet: config.RuleSet{Explicit: []*config.ExplicitRule{{From: "MyFuncInPackage", To: "MyNewFuncInPackage"}}},
+							},
+						},
+					},
+				},
+				Types: []*config.TypeRule{
+					{
+						Name:    "*",
+						RuleSet: config.RuleSet{},
+						Kind:    "struct",
+						Pattern: "wrap",
+					},
+					{
+						Name:    "ext1.TypeA",
+						RuleSet: config.RuleSet{},
+						Kind:    "type",
+						Methods: []*config.MemberRule{{Name: ".DoSomethingA", RuleSet: config.RuleSet{Explicit: []*config.ExplicitRule{{From: ".DoSomethingA", To: "DoSomethingA_New"}}}}},
+					},
+					{
+						Name:    "ext1.TypeB",
+						RuleSet: config.RuleSet{},
+						Kind:    "struct",
+						Pattern: "copy",
+						Fields:  []*config.MemberRule{{Name: ".FieldB", RuleSet: config.RuleSet{}}},
+					},
+					{
+						Name:    "ext1.TypeC",
+						RuleSet: config.RuleSet{},
+						Kind:    "struct",
+						Pattern: "alias",
+					},
+					{
+						Name:    "ext1.TypeD",
+						RuleSet: config.RuleSet{},
+						Kind:    "struct", // Changed from "type" to "struct"
+						Pattern: "define",
+					},
+					{
+						Name:    "ctx3.ContextType",
+						RuleSet: config.RuleSet{},
+						Kind:    "type",
+						Methods: []*config.MemberRule{{Name: ".DoSomethingCtx", RuleSet: config.RuleSet{}}},
+					},
+					{
+						Name:    "nested4.NestedType",
+						RuleSet: config.RuleSet{},
+						Kind:    "type",
+						Pattern: "copy",
+						Fields:  []*config.MemberRule{{Name: ".NestedField", RuleSet: config.RuleSet{}}},
+					},
+					{
+						Name:    "ctx3.AfterNestedType",
+						RuleSet: config.RuleSet{},
+						Kind:    "type",
+						Methods: []*config.MemberRule{{Name: ".DoSomethingAfterNested", RuleSet: config.RuleSet{}}},
+					},
+					{
+						Name:    "github.com/another/pkg/v2.AnotherExternalType",
+						RuleSet: config.RuleSet{},
+						Kind:    "type",
+						Methods: []*config.MemberRule{{Name: ".DoAnother", RuleSet: config.RuleSet{}}},
+					},
+				},
+				Functions: []*config.FuncRule{
+					{
+						Name: "ext1.MyExternalFunction",
+						RuleSet: config.RuleSet{
+							Explicit: []*config.ExplicitRule{{From: "ext1.MyExternalFunction", To: "MyNewFunction"}},
+						},
+					},
+				},
+				Variables: []*config.VarRule{
+					{
+						Name: "ext1.MyExternalVariable",
+						RuleSet: config.RuleSet{
+							Explicit: []*config.ExplicitRule{{From: "ext1.MyExternalVariable", To: "MyNewVariable"}},
+						},
+					},
+				},
+				Constants: []*config.ConstRule{
+					{
+						Name:    "ext1.MyExternalConstant",
+						RuleSet: config.RuleSet{Ignore: []string{"ext1.MyExternalConstant"}},
+					},
+				},
+			},
+		},
 	}
 
-	// --- Test Cases for each Config section ---
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			file, fset, err := loader.LoadGoFile(tt.filePath)
+			if err != nil {
+				t.Fatalf("Failed to load Go file %s: %v", tt.filePath, err)
+			}
 
-	// Test Defaults parsing
-	t.Run("Defaults Parsing", func(t *testing.T) {
-		expected := &config.Config{
-			Defaults: &config.Defaults{
-				Mode: &config.Mode{
-					Strategy: "replace",
-					Prefix:   "append",
-					Suffix:   "append",
-					Explicit: "merge",
-					Regex:    "merge",
-					Ignore:   "merge",
-				},
-			},
-		}
-		actual, err := parser.ParseFileDirectives(file, fset)
-		if err != nil {
-			t.Fatalf("Failed to parse directives: %v", err)
-		}
-		if !reflect.DeepEqual(actual.Defaults, expected.Defaults) {
-			t.Errorf("Defaults mismatch.\nExpected: %+v\nActual:   %+v", expected.Defaults, actual.Defaults)
-		}
-	})
+			cfg, err := parser.ParseFileDirectives(file, fset)
+			if tt.expectError {
+				if err == nil {
+					t.Errorf("Expected an error but got none")
+				}
+				return
+			}
 
-	// Test Vars parsing
-	t.Run("Vars Parsing", func(t *testing.T) {
-		expected := &config.Config{
-			Vars: []*config.VarEntry{
-				{Name: "GlobalVar1", Value: "globalValue1"},
-				{Name: "GlobalVar2", Value: "globalValue2"},
-			},
-		}
-		actual, err := parser.ParseFileDirectives(file, fset)
-		if err != nil {
-			t.Fatalf("Failed to parse directives: %v", err)
-		}
-		if !reflect.DeepEqual(actual.Vars, expected.Vars) {
-			t.Errorf("Vars mismatch.\nExpected: %+v\nActual:   %+v", expected.Vars, actual.Vars)
-		}
-	})
+			if err != nil {
+				t.Fatalf("Failed to parse directives: %v", err)
+			}
 
-	// Test Packages parsing
-	t.Run("Packages Parsing", func(t *testing.T) {
-		expected := &config.Config{
-			Packages: []*config.Package{
-				{
-					Import: "github.com/my/package/v1",
-					Alias:  "mypkg",
-					Path:   "./vendor/my/package/v1",
-					Vars: []*config.VarEntry{
-						{Name: "PackageVar1", Value: "packageValue1"},
-					},
-					Types: []*config.TypeRule{
-						{Name: "MyStructInPackage", Kind: "type", Pattern: "wrap", Methods: []*config.MemberRule{{Name: "DoSomethingInPackage", RuleSet: config.RuleSet{Explicit: []*config.ExplicitRule{{From: "DoSomethingInPackage", To: "DoSomethingNewInPackage"}}}}}, RuleSet: config.RuleSet{}},
-					},
-					Functions: []*config.FuncRule{
-						{Name: "MyFuncInPackage", RuleSet: config.RuleSet{Explicit: []*config.ExplicitRule{{From: "MyFuncInPackage", To: "MyNewFuncInPackage"}}}},
-					},
-				},
-			},
-		}
-		actual, err := parser.ParseFileDirectives(file, fset)
-		if err != nil {
-			t.Fatalf("Failed to parse directives: %v", err)
-		}
-		if !reflect.DeepEqual(actual.Packages, expected.Packages) {
-			t.Errorf("Packages mismatch.\nExpected: %+v\nActual:   %+v", expected.Packages, actual.Packages)
-		}
-	})
+			// --- Granular Comparison ---
+			// Compare Types
+			if len(cfg.Types) != len(tt.expectedConfig.Types) {
+				t.Errorf("Types count mismatch. Expected: %d, Actual: %d", len(tt.expectedConfig.Types), len(cfg.Types))
+			} else {
+				for i := range cfg.Types {
+					if !reflect.DeepEqual(*cfg.Types[i], *tt.expectedConfig.Types[i]) {
+						t.Errorf("Type rule at index %d mismatch.\nExpected: %+v\nActual:   %+v", i,
+							*tt.expectedConfig.Types[i], *cfg.Types[i])
+					}
+				}
+			}
 
-	// Test Types parsing
-	t.Run("Types Parsing", func(t *testing.T) {
-		expected := &config.Config{
-			Types: []*config.TypeRule{
-				{
-					Name:    "*",
-					RuleSet: config.RuleSet{},
-					Kind:    "struct",
-					Pattern: "wrap",
-				},
-				{
-					Name:    "ext1.TypeA",
-					RuleSet: config.RuleSet{},
-					Kind:    "type",
-					Methods: []*config.MemberRule{
-						{Name: ".DoSomethingA", RuleSet: config.RuleSet{Explicit: []*config.ExplicitRule{{From: ".DoSomethingA", To: "DoSomethingA_New"}}}},
-					},
-				},
-				{
-					Name:    "ext1.TypeB",
-					RuleSet: config.RuleSet{},
-					Kind:    "struct",
-					Pattern: "copy",
-					Fields: []*config.MemberRule{
-						{Name: ".FieldB", RuleSet: config.RuleSet{}},
-					},
-				},
-				{
-					Name:    "ext1.TypeC",
-					RuleSet: config.RuleSet{},
-					Kind:    "struct",
-					Pattern: "alias",
-				},
-				{
-					Name:    "ext1.TypeD",
-					RuleSet: config.RuleSet{},
-					Kind:    "type",
-					Pattern: "define",
-				},
-				{
-					Name:    "ctx3.ContextType",
-					RuleSet: config.RuleSet{},
-					Kind:    "type",
-					Methods: []*config.MemberRule{
-						{Name: ".DoSomethingCtx", RuleSet: config.RuleSet{}},
-					},
-				},
-				{
-					Name:    "nested4.NestedType",
-					RuleSet: config.RuleSet{},
-					Kind:    "type",
-					Pattern: "copy",
-					Fields: []*config.MemberRule{
-						{Name: ".NestedField", RuleSet: config.RuleSet{}},
-					},
-				},
-				{
-					Name:    "ctx3.AfterNestedType",
-					RuleSet: config.RuleSet{},
-					Kind:    "type",
-					Methods: []*config.MemberRule{
-						{Name: ".DoSomethingAfterNested", RuleSet: config.RuleSet{}},
-					},
-				},
-				{
-					Name:    "github.com/another/pkg/v2.AnotherExternalType",
-					RuleSet: config.RuleSet{},
-					Kind:    "type",
-					Methods: []*config.MemberRule{
-						{Name: ".DoAnother", RuleSet: config.RuleSet{}},
-					},
-				},
-			},
-		}
-		actual, err := parser.ParseFileDirectives(file, fset)
-		if err != nil {
-			t.Fatalf("Failed to parse directives: %v", err)
-		}
-		if !reflect.DeepEqual(actual.Types, expected.Types) {
-			t.Errorf("Types mismatch.\nExpected: %+v\nActual:   %+v", expected.Types, actual.Types)
-		}
-	})
+			// Compare Functions
+			if len(cfg.Functions) != len(tt.expectedConfig.Functions) {
+				t.Errorf("Functions count mismatch. Expected: %d, Actual: %d", len(tt.expectedConfig.Functions), len(cfg.Functions))
+			} else {
+				for i := range cfg.Functions {
+					if !reflect.DeepEqual(*cfg.Functions[i], *tt.expectedConfig.Functions[i]) {
+						t.Errorf("Function rule at index %d mismatch.\nExpected: %+v\nActual:   %+v", i, *tt.expectedConfig.Functions[i], *cfg.Functions[i])
+					}
+				}
+			}
 
-	// Test Functions parsing
-	t.Run("Functions Parsing", func(t *testing.T) {
-		expected := &config.Config{
-			Functions: []*config.FuncRule{
-				{
-					Name: "ext1.MyExternalFunction",
-					RuleSet: config.RuleSet{
-						Explicit: []*config.ExplicitRule{{From: "ext1.MyExternalFunction", To: "MyNewFunction"}},
-					},
-				},
-			},
-		}
-		actual, err := parser.ParseFileDirectives(file, fset)
-		if err != nil {
-			t.Fatalf("Failed to parse directives: %v", err)
-		}
-		if !reflect.DeepEqual(actual.Functions, expected.Functions) {
-			t.Errorf("Functions mismatch.\nExpected: %+v\nActual:   %+v", expected.Functions, actual.Functions)
-		}
-	})
+			// Compare Variables
+			if len(cfg.Variables) != len(tt.expectedConfig.Variables) {
+				t.Errorf("Variables count mismatch. Expected: %d, Actual: %d", len(tt.expectedConfig.Variables), len(cfg.Variables))
+			} else {
+				for i := range cfg.Variables {
+					if !reflect.DeepEqual(*cfg.Variables[i], *tt.expectedConfig.Variables[i]) {
+						t.Errorf("Variable rule at index %d mismatch.\nExpected: %+v\nActual:   %+v", i, *tt.expectedConfig.Variables[i], *cfg.Variables[i])
+					}
+				}
+			}
 
-	// Test Variables parsing
-	t.Run("Variables Parsing", func(t *testing.T) {
-		expected := &config.Config{
-			Variables: []*config.VarRule{
-				{
-					Name: "ext1.MyExternalVariable",
-					RuleSet: config.RuleSet{
-						Explicit: []*config.ExplicitRule{{From: "ext1.MyExternalVariable", To: "MyNewVariable"}},
-					},
-				},
-			},
-		}
-		actual, err := parser.ParseFileDirectives(file, fset)
-		if err != nil {
-			t.Fatalf("Failed to parse directives: %v", err)
-		}
-		if !reflect.DeepEqual(actual.Variables, expected.Variables) {
-			t.Errorf("Variables mismatch.\nExpected: %+v\nActual:   %+v", expected.Variables, actual.Variables)
-		}
-	})
+			// Compare Constants
+			if len(cfg.Constants) != len(tt.expectedConfig.Constants) {
+				t.Errorf("Constants count mismatch. Expected: %d, Actual: %d", len(tt.expectedConfig.Constants), len(cfg.Constants))
+			} else {
+				for i := range cfg.Constants {
+					if !reflect.DeepEqual(*cfg.Constants[i], *tt.expectedConfig.Constants[i]) {
+						t.Errorf("Constant rule at index %d mismatch.\nExpected: %+v\nActual:   %+v", i, *tt.expectedConfig.Constants[i], *cfg.Constants[i])
+					}
+				}
+			}
 
-	// Test Constants parsing
-	t.Run("Constants Parsing", func(t *testing.T) {
-		expected := &config.Config{
-			Constants: []*config.ConstRule{
-				{
-					Name:    "ext1.MyExternalConstant",
-					RuleSet: config.RuleSet{Ignore: []string{"ext1.MyExternalConstant"}},
-				},
-			},
-		}
-		actual, err := parser.ParseFileDirectives(file, fset)
-		if err != nil {
-			t.Fatalf("Failed to parse directives: %v", err)
-		}
-		if !reflect.DeepEqual(actual.Constants, expected.Constants) {
-			t.Errorf("Constants mismatch.\nExpected: %+v\nActual:   %+v", expected.Constants, actual.Constants)
-		}
-	})
+			// Compare Defaults (if not nil)
+			if cfg.Defaults != nil || tt.expectedConfig.Defaults != nil {
+				if !reflect.DeepEqual(cfg.Defaults, tt.expectedConfig.Defaults) {
+					t.Errorf("Defaults mismatch.\nExpected: %+v\nActual:   %+v", tt.expectedConfig.Defaults, cfg.Defaults)
+				}
+			}
 
-	// Test Defaults parsing
-	t.Run("Defaults Parsing", func(t *testing.T) {
-		expected := &config.Config{
-			Defaults: &config.Defaults{
-				Mode: &config.Mode{
-					Strategy: "replace",
-					Prefix:   "append",
-					Suffix:   "append",
-					Explicit: "merge",
-					Regex:    "merge",
-					Ignore:   "merge",
-				},
-			},
-		}
-		actual, err := parser.ParseFileDirectives(file, fset)
-		if err != nil {
-			t.Fatalf("Failed to parse directives: %v", err)
-		}
-		if !reflect.DeepEqual(actual.Defaults, expected.Defaults) {
-			t.Errorf("Defaults mismatch.\nExpected: %+v\nActual:   %+v", expected.Defaults, actual.Defaults)
-		}
-	})
+			// Compare Vars (if not nil)
+			if cfg.Vars != nil || tt.expectedConfig.Vars != nil {
+				if len(cfg.Vars) != len(tt.expectedConfig.Vars) {
+					t.Errorf("Vars count mismatch. Expected: %d, Actual: %d", len(tt.expectedConfig.Vars), len(cfg.Vars))
+				} else {
+					for i := range cfg.Vars {
+						if !reflect.DeepEqual(*cfg.Vars[i], *tt.expectedConfig.Vars[i]) {
+							t.Errorf("Var entry at index %d mismatch.\nExpected: %+v\nActual:   %+v", i, *tt.expectedConfig.Vars[i], *cfg.Vars[i])
+						}
+					}
+				}
+			}
 
-	// Test Vars parsing
-	t.Run("Vars Parsing", func(t *testing.T) {
-		expected := &config.Config{
-			Vars: []*config.VarEntry{
-				{Name: "GlobalVar1", Value: "globalValue1"},
-				{Name: "GlobalVar2", Value: "globalValue2"},
-			},
-		}
-		actual, err := parser.ParseFileDirectives(file, fset)
-		if err != nil {
-			t.Fatalf("Failed to parse directives: %v", err)
-		}
-		if !reflect.DeepEqual(actual.Vars, expected.Vars) {
-			t.Errorf("Vars mismatch.\nExpected: %+v\nActual:   %+v", expected.Vars, actual.Vars)
-		}
-	})
-
-	// Test Packages parsing
-	t.Run("Packages Parsing", func(t *testing.T) {
-		expected := &config.Config{
-			Packages: []*config.Package{
-				{
-					Import: "github.com/my/package/v1",
-					Alias:  "mypkg",
-					Path:   "./vendor/my/package/v1",
-					Vars: []*config.VarEntry{
-						{Name: "PackageVar1", Value: "packageValue1"},
-					},
-					Types: []*config.TypeRule{
-						{Name: "MyStructInPackage", Kind: "type", Pattern: "wrap", Methods: []*config.MemberRule{{Name: "DoSomethingInPackage", RuleSet: config.RuleSet{Explicit: []*config.ExplicitRule{{From: "DoSomethingInPackage", To: "DoSomethingNewInPackage"}}}}}, RuleSet: config.RuleSet{}},
-					},
-					Functions: []*config.FuncRule{
-						{Name: "MyFuncInPackage", RuleSet: config.RuleSet{Explicit: []*config.ExplicitRule{{From: "MyFuncInPackage", To: "MyNewFuncInPackage"}}}},
-					},
-				},
-			},
-		}
-		actual, err := parser.ParseFileDirectives(file, fset)
-		if err != nil {
-			t.Fatalf("Failed to parse directives: %v", err)
-		}
-		if !reflect.DeepEqual(actual.Packages, expected.Packages) {
-			t.Errorf("Packages mismatch.\nExpected: %+v\nActual:   %+v", expected.Packages, actual.Packages)
-		}
-	})
+			// Compare Packages (if not nil)
+			if cfg.Packages != nil || tt.expectedConfig.Packages != nil {
+				if len(cfg.Packages) != len(tt.expectedConfig.Packages) {
+					t.Errorf("Packages count mismatch. Expected: %d, Actual: %d", len(tt.expectedConfig.Packages), len(cfg.Packages))
+				} else {
+					for i := range cfg.Packages {
+						if !reflect.DeepEqual(*cfg.Packages[i], *tt.expectedConfig.Packages[i]) {
+							t.Errorf("Package at index %d mismatch.\nExpected: %+v\nActual:   %+v", i, *tt.expectedConfig.Packages[i], *cfg.Packages[i])
+						}
+					}
+				}
+			}
+		})
+	}
 }
