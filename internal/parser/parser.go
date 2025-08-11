@@ -57,7 +57,7 @@ func ParseFileDirectives(file *goast.File, fset *gotoken.FileSet) (*config.Confi
 			switch baseCmd {
 			case "type":
 				if len(cmdParts) == 1 {
-					rule := &config.TypeRule{Name: argument, RuleSet: &config.RuleSet{}}
+					rule := &config.TypeRule{Name: argument, RuleSet: config.RuleSet{}}
 					cfg.Types = append(cfg.Types, rule)
 					lastTypeRule = rule
 					lastFuncRule, lastVarRule, lastConstRule, lastMemberRule = nil, nil, nil, nil
@@ -74,13 +74,13 @@ func ParseFileDirectives(file *goast.File, fset *gotoken.FileSet) (*config.Confi
 				} else if len(cmdParts) == 2 {
 					// Generic sub-rule for type (e.g., :rename, :explicit)
 					if lastTypeRule != nil {
-						handleRule(lastTypeRule.RuleSet, lastTypeRule.Name, cmdParts[1], argument)
+						handleRule(&lastTypeRule.RuleSet, lastTypeRule.Name, cmdParts[1], argument)
 					}
 				}
 
 			case "func":
 				if len(cmdParts) == 1 {
-					rule := &config.FuncRule{Name: argument, RuleSet: &config.RuleSet{}}
+					rule := &config.FuncRule{Name: argument, RuleSet: config.RuleSet{}}
 					cfg.Functions = append(cfg.Functions, rule)
 					lastFuncRule = rule
 					lastTypeRule, lastVarRule, lastConstRule, lastMemberRule = nil, nil, nil, nil
@@ -91,12 +91,12 @@ func ParseFileDirectives(file *goast.File, fset *gotoken.FileSet) (*config.Confi
 					lastFuncRule.Disabled = argument == "true"
 				} else if len(cmdParts) == 2 && lastFuncRule != nil {
 					// Generic sub-rule for func (e.g., :rename, :explicit)
-					handleRule(lastFuncRule.RuleSet, lastFuncRule.Name, cmdParts[1], argument)
+					handleRule(&lastFuncRule.RuleSet, lastFuncRule.Name, cmdParts[1], argument)
 				}
 
 			case "var":
 				if len(cmdParts) == 1 {
-					rule := &config.VarRule{Name: argument, RuleSet: &config.RuleSet{}}
+					rule := &config.VarRule{Name: argument, RuleSet: config.RuleSet{}}
 					cfg.Variables = append(cfg.Variables, rule)
 					lastVarRule = rule
 					lastTypeRule, lastFuncRule, lastConstRule, lastMemberRule = nil, nil, nil, nil
@@ -107,12 +107,12 @@ func ParseFileDirectives(file *goast.File, fset *gotoken.FileSet) (*config.Confi
 					lastVarRule.Disabled = argument == "true"
 				} else if len(cmdParts) == 2 && lastVarRule != nil {
 					// Generic sub-rule for var (e.g., :rename, :explicit)
-					handleRule(lastVarRule.RuleSet, lastVarRule.Name, cmdParts[1], argument)
+					handleRule(&lastVarRule.RuleSet, lastVarRule.Name, cmdParts[1], argument)
 				}
 
 			case "const":
 				if len(cmdParts) == 1 {
-					rule := &config.ConstRule{Name: argument, RuleSet: &config.RuleSet{}}
+					rule := &config.ConstRule{Name: argument, RuleSet: config.RuleSet{}}
 					cfg.Constants = append(cfg.Constants, rule)
 					lastConstRule = rule
 					lastTypeRule, lastFuncRule, lastVarRule, lastMemberRule = nil, nil, nil, nil
@@ -123,7 +123,7 @@ func ParseFileDirectives(file *goast.File, fset *gotoken.FileSet) (*config.Confi
 					lastConstRule.Disabled = argument == "true"
 				} else if len(cmdParts) == 2 && lastConstRule != nil {
 					// Generic sub-rule for const (e.g., :rename, :explicit)
-					handleRule(lastConstRule.RuleSet, lastConstRule.Name, cmdParts[1], argument)
+					handleRule(&lastConstRule.RuleSet, lastConstRule.Name, cmdParts[1], argument)
 				}
 
 			case "method", "field":
@@ -131,7 +131,7 @@ func ParseFileDirectives(file *goast.File, fset *gotoken.FileSet) (*config.Confi
 					return nil, fmt.Errorf("line %d: '%s' directive must follow a 'type' directive", fset.Position(comment.Pos()).Line, baseCmd)
 				}
 				if len(cmdParts) == 1 {
-					member := &config.MemberRule{Name: argument, RuleSet: &config.RuleSet{}}
+					member := &config.MemberRule{Name: argument, RuleSet: config.RuleSet{}}
 					if baseCmd == "method" {
 						lastTypeRule.Methods = append(lastTypeRule.Methods, member)
 					} else {
@@ -145,7 +145,7 @@ func ParseFileDirectives(file *goast.File, fset *gotoken.FileSet) (*config.Confi
 					lastMemberRule.Disabled = argument == "true"
 				} else if len(cmdParts) == 2 && lastMemberRule != nil {
 					// Generic sub-rule for method/field (e.g., :rename, :explicit)
-					handleRule(lastMemberRule.RuleSet, lastMemberRule.Name, cmdParts[1], argument)
+					handleRule(&lastMemberRule.RuleSet, lastMemberRule.Name, cmdParts[1], argument)
 				}
 			}
 		}
@@ -164,7 +164,7 @@ func getGlobalFuncRule(cfg *config.Config) *config.FuncRule {
 		}
 	}
 	// Not found, create it
-	globalRule := &config.FuncRule{Name: "*", RuleSet: &config.RuleSet{}}
+	globalRule := &config.FuncRule{Name: "*", RuleSet: config.RuleSet{}}
 	cfg.Functions = append(cfg.Functions, globalRule)
 	return globalRule
 }
