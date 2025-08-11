@@ -1,206 +1,181 @@
 package parser
 
 import (
-	"go/ast"
+	"encoding/json"
+	"fmt"
 	"go/parser"
 	"go/token"
 	"strings"
 
-	// "github.com/origadmin/adptool/internal/config" // Not needed for basic parsing
+	"github.com/origadmin/adptool/internal/config"
 )
 
-// ParsedFile represents a Go source file that has been parsed for adptool directives.
-type ParsedFile struct {
-	FilePath     string
-	PackageName  string
-	Declarations []*ParsedDeclaration
-}
-
-// ParsedDeclaration represents a Go declaration (type, func, var, const) with its associated adptool directive.
-type ParsedDeclaration struct {
-	Name       string       // Name of the declaration (e.g., "MyType", "MyFunc")
-	Kind       string       // Type of declaration (e.g., "type", "func", "var", "const", "method", "field")
-	Directives []*Directive // The parsed adptool directives, if any
-	// Add more fields as needed, e.g., receiver for methods, parent type for fields
-}
-
-// Directive represents a parsed //go:adapter: directive.
-// This is a simplified version for initial parsing. Inline rule parsing will be added later.
-type Directive struct {
-	Command  string // e.g., "package", "type", "func"
-	Argument string // e.g., "github.com/some/pkg", "MyType"
-
-	// Fields for inline rules (will be populated in a later stage of parsing)
-	RulePath   string // e.g., "prefix", "methods:explicit"
-	TargetName string // For inline rules, the name of the target (e.g., "MyType")
-	Value      string // For inline rules, the raw value string
-	IsJSON     bool   // True if the inline rule value is JSON
-}
-
-// ParseFile parses a Go source file and extracts adptool directives.
-func ParseFile(filePath string) (*ParsedFile, error) {
+// ParseFile parses a Go source file and builds a config.Config object from the adptool directives found.
+func ParseFile(filePath string) (*config.Config, error) {
 	fset := token.NewFileSet()
 	node, err := parser.ParseFile(fset, filePath, nil, parser.ParseComments)
 	if err != nil {
 		return nil, err
 	}
 
-	parsedFile := &ParsedFile{
-		FilePath:     filePath,
-		PackageName:  node.Name.Name,
-		Declarations: make([]*ParsedDeclaration, 0),
-	}
+	cfg := config.New()
 
-	ast.Inspect(node, func(n ast.Node) bool {
-		switch decl := n.(type) {
-		case *ast.GenDecl: // import, const, type, var declarations
-			// Check for directives on the GenDecl itself
-			if decl.Doc != nil {
-				var directives []*Directive
-				for _, comment := range decl.Doc.List {
-					if strings.HasPrefix(comment.Text, "//go:adapter:") {
-						dir, err := parseDirective(comment.Text)
-						if err != nil {
-							// Log error or return, for now just skip
-							continue
-						}
-						directives = append(directives, dir)
-					}
-				}
-				if len(directives) > 0 {
-					parsedFile.Declarations = append(parsedFile.Declarations, &ParsedDeclaration{
-						Name:       "", // Name is ambiguous for GenDecl block, will be refined
-						Kind:       "GenDecl",
-						Directives: directives,
-					})
-				}
+	// State trackers for the parser
+	var lastTypeRule *config.TypeRule
+	var lastFuncRule *config.FuncRule
+	var lastVarRule *config.VarRule
+	var lastConstRule *config.ConstRule
+	var lastMemberRule *config.MemberRule
+
+	for _, commentGroup := range node.Comments {
+		for _, comment := range commentGroup.List {
+			if !strings.HasPrefix(comment.Text, "//go:adapter:") {
+				continue
 			}
 
-			// Check for directives on individual Specs within the GenDecl
-			for _, spec := range decl.Specs {
-				var directives []*Directive
-				switch s := spec.(type) {
-				case *ast.TypeSpec:
-					if s.Doc != nil {
-						for _, comment := range s.Doc.List {
-							if strings.HasPrefix(comment.Text, "//go:adapter:") {
-								dir, err := parseDirective(comment.Text)
-								if err != nil {
-									continue
-								}
-								directives = append(directives, dir)
-							}
-						}
-					}
-					if len(directives) > 0 {
-						parsedFile.Declarations = append(parsedFile.Declarations, &ParsedDeclaration{
-							Name:       s.Name.Name,
-							Kind:       "type",
-							Directives: directives,
-						})
-					}
-				case *ast.ValueSpec: // var or const
-					if s.Doc != nil {
-						for _, comment := range s.Doc.List {
-							if strings.HasPrefix(comment.Text, "//go:adapter:") {
-								dir, err := parseDirective(comment.Text)
-								if err != nil {
-									continue
-								}
-								directives = append(directives, dir)
-							}
-						}
-					}
-					if len(directives) > 0 {
-						kind := "var"
-						if decl.Tok == token.CONST {
-							kind = "const"
-						}
-						parsedFile.Declarations = append(parsedFile.Declarations, &ParsedDeclaration{
-							Name:       s.Names[0].Name, // Take the first name
-							Kind:       kind,
-							Directives: directives,
-						})
-					}
-				}
+			rawDirective := strings.TrimPrefix(comment.Text, "//go:adapter:")
+			parts := strings.SplitN(rawDirective, " ", 2)
+			command := parts[0]
+			argument := ""
+			if len(parts) > 1 {
+				argument = parts[1]
 			}
-		case *ast.FuncDecl: // function or method declarations
-			var directives []*Directive
-			if decl.Doc != nil {
-				for _, comment := range decl.Doc.List {
-					if strings.HasPrefix(comment.Text, "//go:adapter:") {
-						dir, err := parseDirective(comment.Text)
-						if err != nil {
-							continue
-						}
-						directives = append(directives, dir)
+
+			cmdParts := strings.Split(command, ":")
+			baseCmd := cmdParts[0]
+
+			// Handle top-level ignore directive separately as it doesn't set a target
+			if baseCmd == "ignore" {
+				// This is a simplified logic. A real implementation would need to parse the argument
+				// to determine if it's a func, type, etc., and add it to the correct global ignore list.
+				// For now, we assume it applies to functions as an example.
+				getGlobalFuncRule(cfg).Ignore = append(getGlobalFuncRule(cfg).Ignore, argument)
+				continue
+			}
+
+			switch baseCmd {
+			case "type":
+				if len(cmdParts) == 1 {
+					rule := &config.TypeRule{Name: argument, RuleSet: &config.RuleSet{}}
+					cfg.Types = append(cfg.Types, rule)
+					lastTypeRule = rule
+					lastFuncRule, lastVarRule, lastConstRule, lastMemberRule = nil, nil, nil, nil
+				} else if len(cmdParts) == 2 && cmdParts[1] == "struct" {
+					if lastTypeRule == nil {
+						return nil, fmt.Errorf("line %d: 'type:struct' must follow a 'type' directive", fset.Position(comment.Pos()).Line)
+					}
+					lastTypeRule.Pattern = argument
+				} else if len(cmdParts) == 2 {
+					if lastTypeRule != nil {
+						handleRule(lastTypeRule, nil, cmdParts[1], argument)
 					}
 				}
-			}
-			if len(directives) > 0 {
-				kind := "func"
-				if decl.Recv != nil { // It's a method
-					kind = "method"
+
+			case "func":
+				if len(cmdParts) == 1 {
+					rule := &config.FuncRule{Name: argument, RuleSet: &config.RuleSet{}}
+					cfg.Functions = append(cfg.Functions, rule)
+					lastFuncRule = rule
+					lastTypeRule, lastVarRule, lastConstRule, lastMemberRule = nil, nil, nil, nil
+				} else if len(cmdParts) == 2 && lastFuncRule != nil {
+					handleRule(lastFuncRule, nil, cmdParts[1], argument)
 				}
-				parsedFile.Declarations = append(parsedFile.Declarations, &ParsedDeclaration{
-					Name:       decl.Name.Name,
-					Kind:       kind,
-					Directives: directives,
-				})
+
+			case "var":
+				if len(cmdParts) == 1 {
+					rule := &config.VarRule{Name: argument, RuleSet: &config.RuleSet{}}
+					cfg.Variables = append(cfg.Variables, rule)
+					lastVarRule = rule
+					lastTypeRule, lastFuncRule, lastConstRule, lastMemberRule = nil, nil, nil, nil
+				} else if len(cmdParts) == 2 && lastVarRule != nil {
+					handleRule(lastVarRule, nil, cmdParts[1], argument)
+				}
+
+			case "const":
+				if len(cmdParts) == 1 {
+					rule := &config.ConstRule{Name: argument, RuleSet: &config.RuleSet{}}
+					cfg.Constants = append(cfg.Constants, rule)
+					lastConstRule = rule
+					lastTypeRule, lastFuncRule, lastVarRule, lastMemberRule = nil, nil, nil, nil
+				} else if len(cmdParts) == 2 && lastConstRule != nil {
+					handleRule(lastConstRule, nil, cmdParts[1], argument)
+				}
+
+			case "method", "field":
+				if lastTypeRule == nil {
+					return nil, fmt.Errorf("line %d: '%s' directive must follow a 'type' directive", fset.Position(comment.Pos()).Line, baseCmd)
+				}
+				if len(cmdParts) == 1 {
+					member := &config.MemberRule{Name: argument, RuleSet: &config.RuleSet{}}
+					if baseCmd == "method" {
+						lastTypeRule.Methods = append(lastTypeRule.Methods, member)
+					} else {
+						lastTypeRule.Fields = append(lastTypeRule.Fields, member)
+					}
+					lastMemberRule = member
+				} else if len(cmdParts) == 2 && lastMemberRule != nil {
+					handleRule(nil, lastMemberRule, cmdParts[1], argument)
+				}
 			}
 		}
-		return true
-	})
+	}
 
-	return parsedFile, nil
+	return cfg, nil
 }
 
-// parseDirective parses a single //go:adapter: comment line into a Directive struct.
-// This is a simplified parser and needs to be expanded to handle all directive types and inline rules.
-func parseDirective(commentText string) (*Directive, error) {
-	// Remove //go:adapter: prefix
-	text := strings.TrimPrefix(commentText, "//go:adapter:")
-
-	parts := strings.SplitN(text, " ", 2)
-	command := parts[0]
-	argument := ""
-	if len(parts) > 1 {
-		argument = parts[1]
-	}
-
-	// Handle inline rules: type:prefix MyType My_
-	// Or type:explicit:json MyType '[{"from": "Foo", "to": "Bar"}]'
-	inlineRuleParts := strings.SplitN(command, ":", 2)
-	if len(inlineRuleParts) > 1 {
-		// This is an inline rule directive
-		cmd := inlineRuleParts[0]             // e.g., "type"
-		rulePathAndJSON := inlineRuleParts[1] // e.g., "prefix" or "explicit:json"
-
-		rulePathParts := strings.SplitN(rulePathAndJSON, ":json", 2)
-		rulePath := rulePathParts[0]
-		isJSON := len(rulePathParts) > 1
-
-		// The argument now contains targetName and value
-		argParts := strings.SplitN(argument, " ", 2)
-		targetName := argParts[0]
-		value := ""
-		if len(argParts) > 1 {
-			value = argParts[1]
+// getGlobalFuncRule finds or creates the global rule for functions.
+func getGlobalFuncRule(cfg *config.Config) *config.FuncRule {
+	for _, r := range cfg.Functions {
+		if r.Name == "*" {
+			return r
 		}
+	}
+	// Not found, create it
+	globalRule := &config.FuncRule{Name: "*", RuleSet: &config.RuleSet{}}
+	cfg.Functions = append(cfg.Functions, globalRule)
+	return globalRule
+}
 
-		return &Directive{
-			Command:    cmd,
-			Argument:   argument, // Keep original argument for full context
-			RulePath:   rulePath,
-			TargetName: targetName,
-			Value:      value,
-			IsJSON:     isJSON,
-		}, nil
+// handleRule applies a sub-rule to the appropriate rule object.
+func handleRule(target interface{}, member *config.MemberRule, ruleName, argument string) {
+	switch r := target.(type) {
+	case *config.TypeRule:
+		applyToRuleSet(r.RuleSet, r.Name, ruleName, argument)
+	case *config.FuncRule:
+		applyToRuleSet(r.RuleSet, r.Name, ruleName, argument)
+	case *config.VarRule:
+		applyToRuleSet(r.RuleSet, r.Name, ruleName, argument)
+	case *config.ConstRule:
+		applyToRuleSet(r.RuleSet, r.Name, ruleName, argument)
+	case *config.MemberRule:
+		applyToRuleSet(r.RuleSet, r.Name, ruleName, argument)
+	}
+	if member != nil {
+		applyToRuleSet(member.RuleSet, member.Name, ruleName, argument)
+	}
+}
+
+func applyToRuleSet(ruleset *config.RuleSet, fromName, ruleName, argument string) {
+	if ruleset == nil {
+		return // Should not happen
 	}
 
-	// Standard directive (e.g., package, type, func)
-	return &Directive{
-		Command:  command,
-		Argument: argument,
-	}, nil
+	switch ruleName {
+	case "rename":
+		if ruleset.Explicit == nil {
+			ruleset.Explicit = make([]*config.ExplicitRule, 0)
+		}
+		ruleset.Explicit = append(ruleset.Explicit, &config.ExplicitRule{From: fromName, To: argument})
+	case "disabled":
+		// This property is on the rule struct itself, not the ruleset.
+		// The main switch should handle this by setting the Disabled field on the target/member rule.
+	case "explicit":
+		if ruleset.Explicit == nil {
+			ruleset.Explicit = make([]*config.ExplicitRule, 0)
+		}
+		var explicitRules []*config.ExplicitRule
+		if err := json.Unmarshal([]byte(argument), &explicitRules); err == nil {
+			ruleset.Explicit = append(ruleset.Explicit, explicitRules...)
+		}
+	}
 }
