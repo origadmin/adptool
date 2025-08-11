@@ -1,5 +1,39 @@
 package config
 
+// New creates a new, fully initialized Config object.
+func New() *Config {
+	return &Config{
+		Defaults: &Defaults{
+			Mode: &Mode{},
+		},
+		Vars:      make(map[string]string),
+		Types:     newTypeRuleSet(),
+		Functions: newRuleSet(),
+		Variables: newRuleSet(),
+		Constants: newRuleSet(),
+		Packages:  make([]*Package, 0),
+	}
+}
+
+// newRuleSet creates a new RuleSet with initialized slices.
+func newRuleSet() *RuleSet {
+	return &RuleSet{
+		Strategy: make([]string, 0),
+		Explicit: make([]*ExplicitRule, 0),
+		Regex:    make([]*RegexRule, 0),
+		Ignore:   make([]string, 0),
+	}
+}
+
+// newTypeRuleSet creates a new TypeRuleSet with initialized nested RuleSets.
+func newTypeRuleSet() *TypeRuleSet {
+	return &TypeRuleSet{
+		RuleSet: newRuleSet(),
+		Methods: newRuleSet(),
+		Fields:  newRuleSet(),
+	}
+}
+
 // Config is the root of the .adptool.yaml configuration file.
 type Config struct {
 	Defaults  *Defaults         `yaml:"defaults,omitempty"`
