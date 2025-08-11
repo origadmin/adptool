@@ -5,6 +5,7 @@ import (
 	goast "go/ast"
 	goparser "go/parser"
 	gotoken "go/token"
+	"log/slog"
 	"path/filepath"
 	"time"
 
@@ -47,7 +48,7 @@ func LoadConfigFile(filePath string) (*config.Config, error) {
 	))); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
-
+	slog.Info("Loaded config", "config", cfg, "settings", v.AllSettings())
 	return cfg, nil
 }
 
