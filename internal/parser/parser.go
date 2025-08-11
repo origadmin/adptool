@@ -46,13 +46,18 @@ func ParseFileDirectives(file *goast.File, fset *gotoken.FileSet) (*config.Confi
 			cmdParts := strings.Split(command, ":")
 			baseCmd := cmdParts[0]
 
-			// Handle top-level ignore directive separately as it doesn't set a target
+			// Handle top-level ignore directive
 			if baseCmd == "ignore" {
 				// This parser only extracts directives from *this* file.
-				// The top-level 'ignore' directive is for global rules, which are handled by the compiler.
+				// The top-level 'ignore' directive is for global rules.
 				// We need to add this to a global list in the config.Config object.
-				// For now, we'll just add it to a dummy list or ignore it.
-				// This is a placeholder for future implementation.
+				// This requires identifying the type of the argument (e.g., func, type, const).
+				// For now, we'll assume it's a constant for testing purposes.
+				globalConstRule := getGlobalFuncRule(cfg)
+				if globalConstRule.RuleSet.Ignore == nil {
+					globalConstRule.RuleSet.Ignore = make([]string, 0)
+				}
+				globalConstRule.RuleSet.Ignore = append(globalConstRule.RuleSet.Ignore, argument)
 				continue
 			}
 
@@ -280,6 +285,21 @@ func ParseFileDirectives(file *goast.File, fset *gotoken.FileSet) (*config.Confi
 type parsingContext struct {
 	DefaultPackageImportPath string
 	DefaultPackageAlias      string
+}
+
+// getGlobalFuncRule finds or creates the global rule for functions.
+// This is a temporary helper for the 'ignore' directive example.
+// A full implementation would need similar helpers for all global rule types.
+func getGlobalFuncRule(cfg *config.Config) *config.FuncRule {
+	for _, r := range cfg.Functions {
+		if r.Name == "*" {
+			return r
+		}
+	}
+	// Not found, create it
+	globalRule := &config.FuncRule{Name: "*", RuleSet: config.RuleSet{}}
+	cfg.Functions = append(cfg.Functions, globalRule)
+	return globalRule
 }
 
 // handleRule applies a sub-rule to the appropriate ruleset.
