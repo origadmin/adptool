@@ -10,6 +10,8 @@ import (
 	"github.com/origadmin/adptool/internal/config"
 )
 
+const directivePrefix = "//go:adapter:"
+
 // ParseFileDirectives parses a Go source file (provided as an AST) and builds a config.Config object
 // containing only the adptool directives found in that file.
 // It does not perform any merging with global configurations.
@@ -25,11 +27,11 @@ func ParseFileDirectives(file *goast.File, fset *gotoken.FileSet) (*config.Confi
 
 	for _, commentGroup := range file.Comments {
 		for _, comment := range commentGroup.List {
-			if !strings.HasPrefix(comment.Text, "//go:adapter:") {
+			if !strings.HasPrefix(comment.Text, directivePrefix) {
 				continue
 			}
 
-			rawDirective := strings.TrimPrefix(comment.Text, "//go:adapter:")
+			rawDirective := strings.TrimPrefix(comment.Text, directivePrefix)
 			parts := strings.SplitN(rawDirective, " ", 2)
 			command := parts[0]
 			argument := ""
