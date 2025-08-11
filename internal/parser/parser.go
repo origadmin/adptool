@@ -47,8 +47,6 @@ func ParseFileDirectives(file *goast.File, fset *gotoken.FileSet) (*config.Confi
 				// This parser only extracts directives from *this* file.
 				// The top-level 'ignore' directive is for global rules, which are handled by the compiler.
 				// We need to add this to a global list in the config.Config object.
-				// For now, we'll add it to a dummy list or ignore it.
-				// This part needs to be refined in a real compiler/resolver.
 				// For now, we'll just add it to a dummy list or ignore it.
 				// This is a placeholder for future implementation.
 				continue
@@ -57,7 +55,7 @@ func ParseFileDirectives(file *goast.File, fset *gotoken.FileSet) (*config.Confi
 			switch baseCmd {
 			case "type":
 				if len(cmdParts) == 1 {
-					rule := &config.TypeRule{Name: argument, RuleSet: config.RuleSet{}}
+					rule := &config.TypeRule{Name: argument, Kind: "type", RuleSet: config.RuleSet{}}
 					cfg.Types = append(cfg.Types, rule)
 					lastTypeRule = rule
 					lastFuncRule, lastVarRule, lastConstRule, lastMemberRule = nil, nil, nil, nil
@@ -66,11 +64,12 @@ func ParseFileDirectives(file *goast.File, fset *gotoken.FileSet) (*config.Confi
 						return nil, fmt.Errorf("line %d: 'type:struct' must follow a 'type' directive", fset.Position(comment.Pos()).Line)
 					}
 					lastTypeRule.Pattern = argument
+					lastTypeRule.Kind = "struct" // Set Kind to struct
 				} else if len(cmdParts) == 2 && cmdParts[1] == "disabled" {
 					if lastTypeRule == nil {
 						return nil, fmt.Errorf("line %d: ':disabled' must follow a 'type' directive", fset.Position(comment.Pos()).Line)
 					}
-					lastTypeRule.Disabled = argument == "true"
+					lastTypeRule.Disabled = (argument == "true")
 				} else if len(cmdParts) == 2 {
 					// Generic sub-rule for type (e.g., :rename, :explicit)
 					if lastTypeRule != nil {
@@ -88,7 +87,7 @@ func ParseFileDirectives(file *goast.File, fset *gotoken.FileSet) (*config.Confi
 					if lastFuncRule == nil {
 						return nil, fmt.Errorf("line %d: ':disabled' must follow a 'func' directive", fset.Position(comment.Pos()).Line)
 					}
-					lastFuncRule.Disabled = argument == "true"
+					lastFuncRule.Disabled = (argument == "true")
 				} else if len(cmdParts) == 2 && lastFuncRule != nil {
 					// Generic sub-rule for func (e.g., :rename, :explicit)
 					handleRule(&lastFuncRule.RuleSet, lastFuncRule.Name, cmdParts[1], argument)
@@ -104,7 +103,7 @@ func ParseFileDirectives(file *goast.File, fset *gotoken.FileSet) (*config.Confi
 					if lastVarRule == nil {
 						return nil, fmt.Errorf("line %d: ':disabled' must follow a 'var' directive", fset.Position(comment.Pos()).Line)
 					}
-					lastVarRule.Disabled = argument == "true"
+					lastVarRule.Disabled = (argument == "true")
 				} else if len(cmdParts) == 2 && lastVarRule != nil {
 					// Generic sub-rule for var (e.g., :rename, :explicit)
 					handleRule(&lastVarRule.RuleSet, lastVarRule.Name, cmdParts[1], argument)
@@ -120,7 +119,7 @@ func ParseFileDirectives(file *goast.File, fset *gotoken.FileSet) (*config.Confi
 					if lastConstRule == nil {
 						return nil, fmt.Errorf("line %d: ':disabled' must follow a 'const' directive", fset.Position(comment.Pos()).Line)
 					}
-					lastConstRule.Disabled = argument == "true"
+					lastConstRule.Disabled = (argument == "true")
 				} else if len(cmdParts) == 2 && lastConstRule != nil {
 					// Generic sub-rule for const (e.g., :rename, :explicit)
 					handleRule(&lastConstRule.RuleSet, lastConstRule.Name, cmdParts[1], argument)
@@ -142,7 +141,7 @@ func ParseFileDirectives(file *goast.File, fset *gotoken.FileSet) (*config.Confi
 					if lastMemberRule == nil {
 						return nil, fmt.Errorf("line %d: ':disabled' must follow a member directive", fset.Position(comment.Pos()).Line)
 					}
-					lastMemberRule.Disabled = argument == "true"
+					lastMemberRule.Disabled = (argument == "true")
 				} else if len(cmdParts) == 2 && lastMemberRule != nil {
 					// Generic sub-rule for method/field (e.g., :rename, :explicit)
 					handleRule(&lastMemberRule.RuleSet, lastMemberRule.Name, cmdParts[1], argument)
@@ -154,21 +153,6 @@ func ParseFileDirectives(file *goast.File, fset *gotoken.FileSet) (*config.Confi
 	return cfg, nil
 }
 
-// getGlobalFuncRule finds or creates the global rule for functions.
-// This is a temporary helper for the 'ignore' directive example.
-// A full implementation would need similar helpers for all global rule types.
-func getGlobalFuncRule(cfg *config.Config) *config.FuncRule {
-	for _, r := range cfg.Functions {
-		if r.Name == "*" {
-			return r
-		}
-	}
-	// Not found, create it
-	globalRule := &config.FuncRule{Name: "*", RuleSet: config.RuleSet{}}
-	cfg.Functions = append(cfg.Functions, globalRule)
-	return globalRule
-}
-
 // handleRule applies a sub-rule to the appropriate ruleset.
 func handleRule(ruleset *config.RuleSet, fromName, ruleName, argument string) {
 	if ruleset == nil {
@@ -176,7 +160,7 @@ func handleRule(ruleset *config.RuleSet, fromName, ruleName, argument string) {
 	}
 
 	switch ruleName {
-	case "rename": // This is the old 'rename' sub-directive, now handled by explicit
+	case "rename":
 		if ruleset.Explicit == nil {
 			ruleset.Explicit = make([]*config.ExplicitRule, 0)
 		}
