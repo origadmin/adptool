@@ -180,8 +180,8 @@ func Merge(base *Config, overlay *Config) (*Config, error) {
 		if merged.Vars == nil {
 			merged.Vars = make([]*VarEntry, 0)
 		}
-		for k, v := range overlay.Vars {
-			merged.Vars[k] = v
+		for _, v := range overlay.Vars {
+			merged.Vars = append(merged.Vars, v)
 		}
 	}
 
