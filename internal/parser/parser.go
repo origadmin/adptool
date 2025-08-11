@@ -3,21 +3,17 @@ package parser
 import (
 	"encoding/json"
 	"fmt"
-	"go/parser"
-	"go/token"
+	goast "go/ast"
+	gotoken "go/token"
 	"strings"
 
 	"github.com/origadmin/adptool/internal/config"
 )
 
-// ParseFile parses a Go source file and builds a config.Config object from the adptool directives found.
-func ParseFile(filePath string) (*config.Config, error) {
-	fset := token.NewFileSet()
-	node, err := parser.ParseFile(fset, filePath, nil, parser.ParseComments)
-	if err != nil {
-		return nil, err
-	}
-
+// ParseFileDirectives parses a Go source file (provided as an AST) and builds a config.Config object
+// containing only the adptool directives found in that file.
+// It does not perform any merging with global configurations.
+func ParseFileDirectives(file *goast.File, fset *gotoken.FileSet) (*config.Config, error) {
 	cfg := config.New()
 
 	// State trackers for the parser
@@ -27,7 +23,7 @@ func ParseFile(filePath string) (*config.Config, error) {
 	var lastConstRule *config.ConstRule
 	var lastMemberRule *config.MemberRule
 
-	for _, commentGroup := range node.Comments {
+	for _, commentGroup := range file.Comments {
 		for _, comment := range commentGroup.List {
 			if !strings.HasPrefix(comment.Text, "//go:adapter:") {
 				continue
@@ -47,10 +43,14 @@ func ParseFile(filePath string) (*config.Config, error) {
 			// Handle top-level ignore directive separately as it doesn't set a target
 			if baseCmd == "ignore" {
 				// This is a simplified logic. A real implementation would need to parse the argument
-				// to determine if it's a func, type, etc., and add it to the correct global ignore list.
-				// For now, we assume it applies to functions as an example.
-				getGlobalFuncRule(cfg).Ignore = append(getGlobalFuncRule(cfg).Ignore, argument)
-				continue
+				// to determine its type (func, type, etc.) and add it to the correct global list.
+				// For now, we add it to a temporary list for demonstration.
+				// This part needs to be refined in a real compiler/resolver.
+				// For now, we'll just add it to a dummy list or ignore it.
+				// As per our final design, 'ignore' is a field in RuleSet, not a top-level command.
+				// The top-level 'ignore' directive is for global rules, which are handled by the compiler.
+				// This parser only extracts directives from *this* file.
+				continue // Skip for now, as it's handled by compiler merging global rules
 			}
 
 			switch baseCmd {
@@ -65,9 +65,15 @@ func ParseFile(filePath string) (*config.Config, error) {
 						return nil, fmt.Errorf("line %d: 'type:struct' must follow a 'type' directive", fset.Position(comment.Pos()).Line)
 					}
 					lastTypeRule.Pattern = argument
+				} else if len(cmdParts) == 2 && cmdParts[1] == "disabled" {
+					if lastTypeRule == nil {
+						return nil, fmt.Errorf("line %d: ':disabled' must follow a 'type' directive", fset.Position(comment.Pos()).Line)
+					}
+					lastTypeRule.Disabled = (argument == "true")
 				} else if len(cmdParts) == 2 {
+					// Generic sub-rule for type (e.g., :rename, :explicit)
 					if lastTypeRule != nil {
-						handleRule(lastTypeRule, nil, cmdParts[1], argument)
+						handleRule(lastTypeRule.RuleSet, lastTypeRule.Name, cmdParts[1], argument)
 					}
 				}
 
@@ -77,8 +83,14 @@ func ParseFile(filePath string) (*config.Config, error) {
 					cfg.Functions = append(cfg.Functions, rule)
 					lastFuncRule = rule
 					lastTypeRule, lastVarRule, lastConstRule, lastMemberRule = nil, nil, nil, nil
+				} else if len(cmdParts) == 2 && cmdParts[1] == "disabled" {
+					if lastFuncRule == nil {
+						return nil, fmt.Errorf("line %d: ':disabled' must follow a 'func' directive", fset.Position(comment.Pos()).Line)
+					}
+					lastFuncRule.Disabled = (argument == "true")
 				} else if len(cmdParts) == 2 && lastFuncRule != nil {
-					handleRule(lastFuncRule, nil, cmdParts[1], argument)
+					// Generic sub-rule for func (e.g., :rename, :explicit)
+					handleRule(lastFuncRule.RuleSet, lastFuncRule.Name, cmdParts[1], argument)
 				}
 
 			case "var":
@@ -87,8 +99,14 @@ func ParseFile(filePath string) (*config.Config, error) {
 					cfg.Variables = append(cfg.Variables, rule)
 					lastVarRule = rule
 					lastTypeRule, lastFuncRule, lastConstRule, lastMemberRule = nil, nil, nil, nil
+				} else if len(cmdParts) == 2 && cmdParts[1] == "disabled" {
+					if lastVarRule == nil {
+						return nil, fmt.Errorf("line %d: ':disabled' must follow a 'var' directive", fset.Position(comment.Pos()).Line)
+					}
+					lastVarRule.Disabled = (argument == "true")
 				} else if len(cmdParts) == 2 && lastVarRule != nil {
-					handleRule(lastVarRule, nil, cmdParts[1], argument)
+					// Generic sub-rule for var (e.g., :rename, :explicit)
+					handleRule(lastVarRule.RuleSet, lastVarRule.Name, cmdParts[1], argument)
 				}
 
 			case "const":
@@ -97,8 +115,14 @@ func ParseFile(filePath string) (*config.Config, error) {
 					cfg.Constants = append(cfg.Constants, rule)
 					lastConstRule = rule
 					lastTypeRule, lastFuncRule, lastVarRule, lastMemberRule = nil, nil, nil, nil
+				} else if len(cmdParts) == 2 && cmdParts[1] == "disabled" {
+					if lastConstRule == nil {
+						return nil, fmt.Errorf("line %d: ':disabled' must follow a 'const' directive", fset.Position(comment.Pos()).Line)
+					}
+					lastConstRule.Disabled = (argument == "true")
 				} else if len(cmdParts) == 2 && lastConstRule != nil {
-					handleRule(lastConstRule, nil, cmdParts[1], argument)
+					// Generic sub-rule for const (e.g., :rename, :explicit)
+					handleRule(lastConstRule.RuleSet, lastConstRule.Name, cmdParts[1], argument)
 				}
 
 			case "method", "field":
@@ -113,8 +137,14 @@ func ParseFile(filePath string) (*config.Config, error) {
 						lastTypeRule.Fields = append(lastTypeRule.Fields, member)
 					}
 					lastMemberRule = member
+				} else if len(cmdParts) == 2 && cmdParts[1] == "disabled" {
+					if lastMemberRule == nil {
+						return nil, fmt.Errorf("line %d: ':disabled' must follow a member directive", fset.Position(comment.Pos()).Line)
+					}
+					lastMemberRule.Disabled = (argument == "true")
 				} else if len(cmdParts) == 2 && lastMemberRule != nil {
-					handleRule(nil, lastMemberRule, cmdParts[1], argument)
+					// Generic sub-rule for method/field (e.g., :rename, :explicit)
+					handleRule(lastMemberRule.RuleSet, lastMemberRule.Name, cmdParts[1], argument)
 				}
 			}
 		}
@@ -123,41 +153,10 @@ func ParseFile(filePath string) (*config.Config, error) {
 	return cfg, nil
 }
 
-// getGlobalFuncRule finds or creates the global rule for functions.
-func getGlobalFuncRule(cfg *config.Config) *config.FuncRule {
-	for _, r := range cfg.Functions {
-		if r.Name == "*" {
-			return r
-		}
-	}
-	// Not found, create it
-	globalRule := &config.FuncRule{Name: "*", RuleSet: &config.RuleSet{}}
-	cfg.Functions = append(cfg.Functions, globalRule)
-	return globalRule
-}
-
-// handleRule applies a sub-rule to the appropriate rule object.
-func handleRule(target interface{}, member *config.MemberRule, ruleName, argument string) {
-	switch r := target.(type) {
-	case *config.TypeRule:
-		applyToRuleSet(r.RuleSet, r.Name, ruleName, argument)
-	case *config.FuncRule:
-		applyToRuleSet(r.RuleSet, r.Name, ruleName, argument)
-	case *config.VarRule:
-		applyToRuleSet(r.RuleSet, r.Name, ruleName, argument)
-	case *config.ConstRule:
-		applyToRuleSet(r.RuleSet, r.Name, ruleName, argument)
-	case *config.MemberRule:
-		applyToRuleSet(r.RuleSet, r.Name, ruleName, argument)
-	}
-	if member != nil {
-		applyToRuleSet(member.RuleSet, member.Name, ruleName, argument)
-	}
-}
-
-func applyToRuleSet(ruleset *config.RuleSet, fromName, ruleName, argument string) {
+// handleRule applies a sub-rule to the appropriate ruleset.
+func handleRule(ruleset *config.RuleSet, fromName, ruleName, argument string) {
 	if ruleset == nil {
-		return // Should not happen
+		return // Should not happen if logic is correct
 	}
 
 	switch ruleName {
@@ -166,9 +165,6 @@ func applyToRuleSet(ruleset *config.RuleSet, fromName, ruleName, argument string
 			ruleset.Explicit = make([]*config.ExplicitRule, 0)
 		}
 		ruleset.Explicit = append(ruleset.Explicit, &config.ExplicitRule{From: fromName, To: argument})
-	case "disabled":
-		// This property is on the rule struct itself, not the ruleset.
-		// The main switch should handle this by setting the Disabled field on the target/member rule.
 	case "explicit":
 		if ruleset.Explicit == nil {
 			ruleset.Explicit = make([]*config.ExplicitRule, 0)
