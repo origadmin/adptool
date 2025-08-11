@@ -40,7 +40,14 @@ func ParseFileDirectives(file *goast.File, fset *gotoken.FileSet) (*config.Confi
 			command := parts[0]
 			argument := ""
 			if len(parts) > 1 {
-				argument = parts[1]
+				// Strip inline comments from the argument
+				argWithComment := parts[1]
+				commentIndex := strings.Index(argWithComment, "//")
+				if commentIndex != -1 {
+					argument = strings.TrimSpace(argWithComment[:commentIndex])
+				} else {
+					argument = strings.TrimSpace(argWithComment)
+				}
 			}
 
 			cmdParts := strings.Split(command, ":")
