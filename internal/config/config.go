@@ -4,7 +4,7 @@ package config
 func New() *Config {
 	return &Config{
 		Defaults: &Defaults{Mode: &Mode{}},
-		Vars:     make(map[string]string),
+		Vars:     make([]*VarEntry, 0),
 		Packages: make([]*Package, 0),
 	}
 }
@@ -38,13 +38,19 @@ func newMemberRule() []*MemberRule {
 
 // Config is the root of the .adptool.yaml configuration file.
 type Config struct {
-	Defaults  *Defaults         `yaml:"defaults,omitempty" mapstructure:"defaults,omitempty"`
-	Vars      map[string]string `yaml:"vars,omitempty" mapstructure:"vars,omitempty"`
-	Packages  []*Package        `yaml:"packages,omitempty" mapstructure:"packages,omitempty"`
-	Types     []*TypeRule       `yaml:"types,omitempty" mapstructure:"types,omitempty"`
-	Functions []*FuncRule       `yaml:"functions,omitempty" mapstructure:"functions,omitempty"`
-	Variables []*VarRule        `yaml:"variables,omitempty" mapstructure:"variables,omitempty"`
-	Constants []*ConstRule      `yaml:"constants,omitempty" mapstructure:"constants,omitempty"`
+	Defaults  *Defaults    `yaml:"defaults,omitempty" mapstructure:"defaults,omitempty"`
+	Vars      []*VarEntry  `yaml:"vars,omitempty" mapstructure:"vars,omitempty"` // Changed to array of VarEntry
+	Packages  []*Package   `yaml:"packages,omitempty" mapstructure:"packages,omitempty"`
+	Types     []*TypeRule  `yaml:"types,omitempty" mapstructure:"types,omitempty"`
+	Functions []*FuncRule  `yaml:"functions,omitempty" mapstructure:"functions,omitempty"`
+	Variables []*VarRule   `yaml:"variables,omitempty" mapstructure:"variables,omitempty"`
+	Constants []*ConstRule `yaml:"constants,omitempty" mapstructure:"constants,omitempty"`
+}
+
+// VarEntry defines a single variable entry in the config.
+type VarEntry struct {
+	Name  string `yaml:"name" mapstructure:"name"`
+	Value string `yaml:"value" mapstructure:"value"`
 }
 
 // --- Rule Structures ---
@@ -128,14 +134,14 @@ type RegexRule struct {
 
 // Package defines rules and variables for a single package.
 type Package struct {
-	Import    string            `yaml:"import" mapstructure:"import"`
-	Path      string            `yaml:"path,omitempty" mapstructure:"path,omitempty"`
-	Alias     string            `yaml:"alias,omitempty" mapstructure:"alias,omitempty"`
-	Vars      map[string]string `yaml:"vars,omitempty" mapstructure:"vars,omitempty"`
-	Types     []*TypeRule       `yaml:"types,omitempty" mapstructure:"types,omitempty"`
-	Functions []*FuncRule       `yaml:"functions,omitempty" mapstructure:"functions,omitempty"`
-	Variables []*VarRule        `yaml:"variables,omitempty" mapstructure:"variables,omitempty"`
-	Constants []*ConstRule      `yaml:"constants,omitempty" mapstructure:"constants,omitempty"`
+	Import    string       `yaml:"import" mapstructure:"import"`
+	Path      string       `yaml:"path,omitempty" mapstructure:"path,omitempty"`
+	Alias     string       `yaml:"alias,omitempty" mapstructure:"alias,omitempty"`
+	Vars      []*VarEntry  `yaml:"vars,omitempty" mapstructure:"vars,omitempty"` // Changed to array of VarEntry
+	Types     []*TypeRule  `yaml:"types,omitempty" mapstructure:"types,omitempty"`
+	Functions []*FuncRule  `yaml:"functions,omitempty" mapstructure:"functions,omitempty"`
+	Variables []*VarRule   `yaml:"variables,omitempty" mapstructure:"variables,omitempty"`
+	Constants []*ConstRule `yaml:"constants,omitempty" mapstructure:"constants,omitempty"`
 }
 
 // Defaults defines the global default behaviors for the entire system.
@@ -176,7 +182,7 @@ func Merge(base *Config, overlay *Config) (*Config, error) {
 	// Vars: overlay takes precedence
 	if overlay.Vars != nil {
 		if merged.Vars == nil {
-			merged.Vars = make(map[string]string)
+			merged.Vars = make([]*VarEntry, 0)
 		}
 		for k, v := range overlay.Vars {
 			merged.Vars[k] = v

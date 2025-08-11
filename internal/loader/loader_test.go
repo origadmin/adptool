@@ -113,9 +113,15 @@ packages:
 						Explicit: "merge",
 					},
 				},
-				Vars: map[string]string{
-					"GlobalVar1": "globalValue1",
-					"GlobalVar2": "globalValue2",
+				Vars: []*config.VarEntry{
+					{
+						Name:  "GlobalVar1",
+						Value: "globalValue1",
+					},
+					{
+						Name:  "GlobalVar2",
+						Value: "globalValue2",
+					},
 				},
 				Types: []*config.TypeRule{
 					{
@@ -123,15 +129,15 @@ packages:
 						Disabled: false,
 						Kind:     "struct",
 						Pattern:  "alias",
-						RuleSet: &config.RuleSet{
+						RuleSet: config.RuleSet{
 							Explicit: []*config.ExplicitRule{{From: "GlobalTypeOld", To: "GlobalTypeNew"}},
 							Ignore:   []string{"GlobalIgnoredType"},
 						},
 						Methods: []*config.MemberRule{
-							{Name: "*", RuleSet: &config.RuleSet{Prefix: "GlobalMethod"}},
+							{Name: "*", RuleSet: config.RuleSet{Prefix: "GlobalMethod"}},
 						},
 						Fields: []*config.MemberRule{
-							{Name: "*", RuleSet: &config.RuleSet{Suffix: "GlobalField"}},
+							{Name: "*", RuleSet: config.RuleSet{Suffix: "GlobalField"}},
 						},
 					},
 					{
@@ -139,22 +145,22 @@ packages:
 						Disabled: false,
 						Kind:     "struct",
 						Pattern:  "wrap",
-						RuleSet: &config.RuleSet{
+						RuleSet: config.RuleSet{
 							Explicit: []*config.ExplicitRule{{From: "MyStructOld", To: "MyStructNew"}},
 						},
 						Methods: []*config.MemberRule{
-							{Name: "DoSomething", Disabled: false, RuleSet: &config.RuleSet{Explicit: []*config.ExplicitRule{{From: "DoSomethingOld", To: "DoSomethingNew"}}}},
-							{Name: "Calculate", RuleSet: &config.RuleSet{Prefix: "Calc"}},
+							{Name: "DoSomething", Disabled: false, RuleSet: config.RuleSet{Explicit: []*config.ExplicitRule{{From: "DoSomethingOld", To: "DoSomethingNew"}}}},
+							{Name: "Calculate", RuleSet: config.RuleSet{Prefix: "Calc"}},
 						},
 						Fields: []*config.MemberRule{
-							{Name: "Data", RuleSet: &config.RuleSet{Suffix: "Value"}},
+							{Name: "Data", RuleSet: config.RuleSet{Suffix: "Value"}},
 						},
 					},
 					{
 						Name:     "MyInterface",
 						Disabled: false,
 						Kind:     "interface",
-						RuleSet: &config.RuleSet{
+						RuleSet: config.RuleSet{
 							Explicit: []*config.ExplicitRule{{From: "MyInterfaceOld", To: "MyInterfaceNew"}},
 						},
 					},
@@ -163,14 +169,14 @@ packages:
 					{
 						Name:     "*",
 						Disabled: false,
-						RuleSet: &config.RuleSet{
+						RuleSet: config.RuleSet{
 							Explicit: []*config.ExplicitRule{{From: "GlobalFuncOld", To: "GlobalFuncNew"}},
 						},
 					},
 					{
 						Name:     "SpecificFunc",
 						Disabled: false,
-						RuleSet: &config.RuleSet{
+						RuleSet: config.RuleSet{
 							Explicit: []*config.ExplicitRule{{From: "SpecificFuncOld", To: "SpecificFuncNew"}},
 						},
 					},
@@ -179,37 +185,42 @@ packages:
 					{
 						Name:     "*",
 						Disabled: false,
-						RuleSet:  &config.RuleSet{Prefix: "GlobalVar"},
+						RuleSet:  config.RuleSet{Prefix: "GlobalVar"},
 					},
 					{
 						Name:     "SpecificVar",
 						Disabled: false,
-						RuleSet:  &config.RuleSet{Suffix: "Specific"},
+						RuleSet:  config.RuleSet{Suffix: "Specific"},
 					},
 				},
 				Constants: []*config.ConstRule{
 					{
 						Name:     "*",
 						Disabled: false,
-						RuleSet:  &config.RuleSet{Ignore: []string{"GlobalIgnoredConst"}},
+						RuleSet:  config.RuleSet{Ignore: []string{"GlobalIgnoredConst"}},
 					},
 					{
 						Name:     "SpecificConst",
 						Disabled: true,
-						RuleSet:  &config.RuleSet{},
+						RuleSet:  config.RuleSet{},
 					},
 				},
 				Packages: []*config.Package{
 					{
 						Import: "github.com/my/package",
 						Alias:  "mypkg",
-						Vars:   map[string]string{"PackageVar1": "packageValue1"},
+						Vars: []*config.VarEntry{
+							{
+								Name:  "PackageVar1",
+								Value: "packageValue1",
+							},
+						},
 						Types: []*config.TypeRule{
-							{Name: "*", Pattern: "copy", RuleSet: &config.RuleSet{}},
-							{Name: "PackageStruct", Pattern: "define", RuleSet: &config.RuleSet{}},
+							{Name: "*", Pattern: "copy", RuleSet: config.RuleSet{}},
+							{Name: "PackageStruct", Pattern: "define", RuleSet: config.RuleSet{}},
 						},
 						Functions: []*config.FuncRule{
-							{Name: "*", RuleSet: &config.RuleSet{Prefix: "PackageFunc"}},
+							{Name: "*", RuleSet: config.RuleSet{Prefix: "PackageFunc"}},
 						},
 					},
 				},
@@ -220,7 +231,7 @@ packages:
 			yamlContent: "",
 			expectedConfig: &config.Config{
 				Defaults:  &config.Defaults{Mode: &config.Mode{}},
-				Vars:      make(map[string]string),
+				Vars:      make([]*config.VarEntry, 0),
 				Types:     make([]*config.TypeRule, 0),
 				Functions: make([]*config.FuncRule, 0),
 				Variables: make([]*config.VarRule, 0),
