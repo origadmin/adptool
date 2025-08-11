@@ -25,8 +25,10 @@ defaults:
     prefix: "append"
     explicit: "merge"
 vars:
-  GlobalVar1: "globalValue1"
-  GlobalVar2: "globalValue2"
+  - name: GlobalVar1
+    value: globalValue1
+  - name: GlobalVar2
+    value: globalValue2
 
 types:
   - name: "*"
@@ -95,7 +97,8 @@ packages:
   - import: "github.com/my/package"
     alias: "mypkg"
     vars:
-      PackageVar1: "packageValue1"
+      - name: PackageVar1
+        value: packageValue1
     types:
       - name: "*"
         pattern: "copy"
@@ -114,14 +117,8 @@ packages:
 					},
 				},
 				Vars: []*config.VarEntry{
-					{
-						Name:  "GlobalVar1",
-						Value: "globalValue1",
-					},
-					{
-						Name:  "GlobalVar2",
-						Value: "globalValue2",
-					},
+					{Name: "GlobalVar1", Value: "globalValue1"},
+					{Name: "GlobalVar2", Value: "globalValue2"},
 				},
 				Types: []*config.TypeRule{
 					{
@@ -230,13 +227,13 @@ packages:
 			name:        "Empty Config",
 			yamlContent: "",
 			expectedConfig: &config.Config{
-				Defaults:  &config.Defaults{Mode: &config.Mode{}},
-				Vars:      make([]*config.VarEntry, 0),
-				Types:     make([]*config.TypeRule, 0),
-				Functions: make([]*config.FuncRule, 0),
-				Variables: make([]*config.VarRule, 0),
-				Constants: make([]*config.ConstRule, 0),
-				Packages:  make([]*config.Package, 0),
+				Defaults:  nil,
+				Vars:      nil,
+				Types:     nil,
+				Functions: nil,
+				Variables: nil,
+				Constants: nil,
+				Packages:  nil,
 			},
 		},
 		{

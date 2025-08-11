@@ -7,9 +7,7 @@ import (
 	gotoken "go/token"
 	"log/slog"
 	"path/filepath"
-	"time"
 
-	"github.com/go-viper/mapstructure/v2"
 	"github.com/spf13/viper"
 
 	"github.com/origadmin/adptool/internal/config"
@@ -41,14 +39,10 @@ func LoadConfigFile(filePath string) (*config.Config, error) {
 	}
 
 	cfg := config.New() // Initialize with defaults
-	if err := v.Unmarshal(cfg, viper.DecodeHook(mapstructure.ComposeDecodeHookFunc(
-		mapstructure.StringToTimeHookFunc(time.RFC3339),
-		mapstructure.StringToSliceHookFunc(","),
-		mapstructure.TextUnmarshallerHookFunc(),
-	))); err != nil {
+	if err := v.Unmarshal(cfg); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
-	slog.Info("Loaded config", "config", cfg, "settings", v.AllSettings())
+	slog.Info("Loaded config", "settings", v.AllSettings())
 	return cfg, nil
 }
 

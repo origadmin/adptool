@@ -2,11 +2,7 @@ package config
 
 // New creates a new, fully initialized Config object.
 func New() *Config {
-	return &Config{
-		Defaults: &Defaults{Mode: &Mode{}},
-		Vars:     make([]*VarEntry, 0),
-		Packages: make([]*Package, 0),
-	}
+	return &Config{}
 }
 
 // newRuleSet creates a new RuleSet with initialized slices.
