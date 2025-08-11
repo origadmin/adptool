@@ -40,11 +40,11 @@ func newMemberRule() []*MemberRule {
 type Config struct {
 	Defaults  *Defaults         `yaml:"defaults,omitempty" mapstructure:"defaults,omitempty"`
 	Vars      map[string]string `yaml:"vars,omitempty" mapstructure:"vars,omitempty"`
-	Types     []*TypeRule       `yaml:"types,omitempty" mapstructure:"types,omitempty"`
-	Functions *RuleSet          `yaml:"functions,omitempty" mapstructure:"functions,omitempty"`
-	Variables *RuleSet          `yaml:"variables,omitempty" mapstructure:"variables,omitempty"`
-	Constants *RuleSet          `yaml:"constants,omitempty" mapstructure:"constants,omitempty"`
 	Packages  []*Package        `yaml:"packages,omitempty" mapstructure:"packages,omitempty"`
+	Types     []*TypeRule       `yaml:"types,omitempty" mapstructure:"types,omitempty"`
+	Functions []*FuncRule       `yaml:"functions,omitempty" mapstructure:"functions,omitempty"`
+	Variables []*VarRule        `yaml:"variables,omitempty" mapstructure:"variables,omitempty"`
+	Constants []*ConstRule      `yaml:"constants,omitempty" mapstructure:"constants,omitempty"`
 }
 
 // --- Rule Structures ---
@@ -52,8 +52,8 @@ type Config struct {
 // TypeRule defines the set of rules for a single type declaration.
 type TypeRule struct {
 	Name     string        `yaml:"name" mapstructure:"name"`
-	Kind     string        `yaml:"kind,omitempty" mapstructure:"kind,omitempty"`
 	Disabled bool          `yaml:"disabled,omitempty" mapstructure:"disabled,omitempty"`
+	Kind     string        `yaml:"kind,omitempty" mapstructure:"kind,omitempty"`
 	Pattern  string        `yaml:"pattern,omitempty" mapstructure:"pattern,omitempty"`
 	Methods  []*MemberRule `yaml:"methods,omitempty" mapstructure:"methods,omitempty"`
 	Fields   []*MemberRule `yaml:"fields,omitempty" mapstructure:"fields,omitempty"`
