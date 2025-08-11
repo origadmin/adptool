@@ -19,8 +19,8 @@ var configPaths = []string{
 	".", "configs",
 }
 
-// Load reads the configuration from a file (or searches for one) and unmarshals it into a Config struct.
-func Load(filePath string) (*config.Config, error) {
+// LoadConfigFile reads the configuration from a file (or searches for one) and unmarshals it into a Config struct.
+func LoadConfigFile(filePath string) (*config.Config, error) {
 	v := viper.New()
 	v.SetConfigName(".adptool")
 	if filePath != "" {

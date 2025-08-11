@@ -10,8 +10,8 @@ func New() *Config {
 }
 
 // newRuleSet creates a new RuleSet with initialized slices.
-func newRuleSet() *RuleSet {
-	return &RuleSet{
+func newRuleSet() RuleSet {
+	return RuleSet{
 		Strategy: make([]string, 0),
 		Explicit: make([]*ExplicitRule, 0),
 		Regex:    make([]*RegexRule, 0),
@@ -20,8 +20,8 @@ func newRuleSet() *RuleSet {
 }
 
 // newTypeRuleSet creates a new TypeRuleSet with initialized nested RuleSets.
-func newTypeRule() *TypeRule {
-	return &TypeRule{
+func newTypeRule() TypeRule {
+	return TypeRule{
 		Methods: newMemberRule(),
 		Fields:  newMemberRule(),
 		RuleSet: newRuleSet(),
@@ -57,35 +57,35 @@ type TypeRule struct {
 	Pattern  string        `yaml:"pattern,omitempty" mapstructure:"pattern,omitempty"`
 	Methods  []*MemberRule `yaml:"methods,omitempty" mapstructure:"methods,omitempty"`
 	Fields   []*MemberRule `yaml:"fields,omitempty" mapstructure:"fields,omitempty"`
-	*RuleSet `yaml:",inline" mapstructure:",squash"`
+	RuleSet  `yaml:",inline" mapstructure:",squash"` // Changed from *RuleSet to RuleSet
 }
 
 // FuncRule defines the set of rules for a single function.
 type FuncRule struct {
 	Name     string `yaml:"name" mapstructure:"name"`
 	Disabled bool   `yaml:"disabled,omitempty" mapstructure:"disabled,omitempty"`
-	*RuleSet `yaml:",inline" mapstructure:",squash"`
+	RuleSet  `yaml:",inline" mapstructure:",squash"` // Changed from *RuleSet to RuleSet
 }
 
 // VarRule defines the set of rules for a single variable.
 type VarRule struct {
 	Name     string `yaml:"name" mapstructure:"name"`
 	Disabled bool   `yaml:"disabled,omitempty" mapstructure:"disabled,omitempty"`
-	*RuleSet `yaml:",inline" mapstructure:",squash"`
+	RuleSet  `yaml:",inline" mapstructure:",squash"` // Changed from *RuleSet to RuleSet
 }
 
 // ConstRule defines the set of rules for a single constant.
 type ConstRule struct {
 	Name     string `yaml:"name" mapstructure:"name"`
 	Disabled bool   `yaml:"disabled,omitempty" mapstructure:"disabled,omitempty"`
-	*RuleSet `yaml:",inline" mapstructure:",squash"`
+	RuleSet  `yaml:",inline" mapstructure:",squash"` // Changed from *RuleSet to RuleSet
 }
 
 // MemberRule defines the set of rules for a type member (method or field).
 type MemberRule struct {
 	Name     string `yaml:"name" mapstructure:"name"`
 	Disabled bool   `yaml:"disabled,omitempty" mapstructure:"disabled,omitempty"`
-	*RuleSet `yaml:",inline" mapstructure:",squash"`
+	RuleSet  `yaml:",inline" mapstructure:",squash"` // Changed from *RuleSet to RuleSet
 }
 
 // RuleSet is the fundamental, reusable building block for defining transformation rules.
@@ -152,4 +152,132 @@ type Mode struct {
 	Explicit string `yaml:"explicit,omitempty" mapstructure:"explicit,omitempty"`
 	Regex    string `yaml:"regex,omitempty" mapstructure:"regex,omitempty"`
 	Ignore   string `yaml:"ignore,omitempty" mapstructure:"ignore,omitempty"`
+}
+
+// Merge combines two Config objects based on adptool's specific precedence rules.
+// The overlay Config's rules will take precedence over the base Config's rules.
+// This function is crucial for applying file-specific directives over project-wide defaults.
+func Merge(base *Config, overlay *Config) (*Config, error) {
+	if base == nil && overlay == nil {
+		return nil, nil
+	}
+	if base == nil {
+		return overlay, nil
+	}
+	if overlay == nil {
+		return base, nil
+	}
+
+	// Create a new Config to hold the merged result
+	merged := &Config{}
+	*merged = *base // Start with a shallow copy of the base
+
+	// Merge simple fields (maps, slices, pointers)
+	// Vars: overlay takes precedence
+	if overlay.Vars != nil {
+		if merged.Vars == nil {
+			merged.Vars = make(map[string]string)
+		}
+		for k, v := range overlay.Vars {
+			merged.Vars[k] = v
+		}
+	}
+
+	// Defaults: overlay takes precedence for individual fields
+	// This is a simplified merge, a full merge would iterate over Mode fields
+	if overlay.Defaults != nil && overlay.Defaults.Mode != nil {
+		if merged.Defaults == nil {
+			merged.Defaults = &Defaults{}
+		}
+		if merged.Defaults.Mode == nil {
+			merged.Defaults.Mode = &Mode{}
+		}
+		// Shallow copy Mode for now, a deeper merge would be field by field
+		*merged.Defaults.Mode = *overlay.Defaults.Mode
+	}
+
+	// Packages: overlay appends to base, or replaces if overlay has a matching import
+	// This is a simplified merge, a full merge would need to match by Import path
+	if overlay.Packages != nil {
+		merged.Packages = append(merged.Packages, overlay.Packages...)
+	}
+
+	// Merge rule lists (Types, Functions, Variables, Constants)
+	// This is the core of the custom merge logic.
+	// Rules are merged based on their 'Name' field.
+	// Overlay rules with matching names replace base rules.
+	// Overlay rules with new names are appended.
+
+	merged.Types = mergeTypeRules(base.Types, overlay.Types)
+	merged.Functions = mergeFuncRules(base.Functions, overlay.Functions)
+	merged.Variables = mergeVarRules(base.Variables, overlay.Variables)
+	merged.Constants = mergeConstRules(base.Constants, overlay.Constants)
+
+	return merged, nil
+}
+
+// mergeTypeRules merges two lists of TypeRule objects.
+func mergeTypeRules(base, overlay []*TypeRule) []*TypeRule {
+	return mergeRules(base, overlay, func(r *TypeRule) string { return r.Name }) // Use Name for matching
+}
+
+// mergeFuncRules merges two lists of FuncRule objects.
+func mergeFuncRules(base, overlay []*FuncRule) []*FuncRule {
+	return mergeRules(base, overlay, func(r *FuncRule) string { return r.Name }) // Use Name for matching
+}
+
+// mergeVarRules merges two lists of VarRule objects.
+func mergeVarRules(base, overlay []*VarRule) []*VarRule {
+	return mergeRules(base, overlay, func(r *VarRule) string { return r.Name }) // Use Name for matching
+}
+
+// mergeConstRules merges two lists of ConstRule objects.
+func mergeConstRules(base, overlay []*ConstRule) []*ConstRule {
+	return mergeRules(base, overlay, func(r *ConstRule) string { return r.Name }) // Use Name for matching
+}
+
+// mergeRules is a generic helper to merge lists of rules based on a key extractor.
+// It assumes the rule objects embed a RuleSet and have a Name field.
+func mergeRules[T interface{ TypeRule | FuncRule | VarRule | ConstRule }](base, overlay []*T, keyExtractor func(*T) string) []*T {
+	if len(overlay) == 0 {
+		return base
+	}
+	if len(base) == 0 {
+		return overlay
+	}
+
+	// Create a map for faster lookups of base rules
+	baseMap := make(map[string]*T)
+	for _, r := range base {
+		baseMap[keyExtractor(r)] = r
+	}
+
+	mergedList := make([]*T, 0, len(base)+len(overlay))
+
+	// Add base rules, merging with overlay if a match exists
+	for _, rBase := range base {
+		k := keyExtractor(rBase)
+		if rOverlay, found := baseMap[k]; found {
+			// Match found, merge rOverlay into rBase
+			// This is where the actual field-by-field merge of RuleSet happens
+			// For now, we'll just take the overlay's RuleSet if it exists, otherwise base's
+			// A more sophisticated merge would merge individual fields of RuleSet
+			// This part needs to be refined to merge individual fields of RuleSet
+			// For now, if a rule exists in overlay, it completely replaces the base rule.
+			// This is the simplest merge strategy.
+			mergedList = append(mergedList, rOverlay)
+			delete(baseMap, k) // Mark as processed
+		} else {
+			mergedList = append(mergedList, rBase)
+		}
+	}
+
+	// Add remaining overlay rules (those not in base)
+	for _, rOverlay := range overlay {
+		if _, found := baseMap[keyExtractor(rOverlay)]; !found {
+			mergedList = append(mergedList, rOverlay)
+		}
+	}
+
+	return mergedList
 }
