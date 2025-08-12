@@ -280,7 +280,7 @@ func TestParseTypes(t *testing.T) {
 		assert.Equal(t, len(expected.Methods), len(actual.Methods), "Type %d Methods count mismatch", i)
 		for j := range expected.Methods {
 			if j < len(actual.Methods) {
-				assert.Equal(t, expected.Methods[j].Name, actual.Methods[j].Name, "Type %d Method %d Name mismatch", i, j)
+				assert.Equal(t, expected.Methods[j].Name, actual.Methods[j].Name, "Type %d Functions %d Name mismatch", i, j)
 			}
 		}
 
