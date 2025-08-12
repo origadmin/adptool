@@ -47,12 +47,12 @@ func ParseFileDirectives(file *goast.File, fset *gotoken.FileSet) (*config.Confi
 			}
 		case "default":
 			slog.Info("Handling 'default' directive")
-			if err := handleDefaultsDirective(context, pd.CmdParts, pd.Argument); err != nil {
+			if err := handleDefaultDirective(context, pd.SubCmds, pd.Argument); err != nil {
 				return nil, err
 			}
 		case "prop":
 			slog.Info("Handling 'prop' directive")
-			if err := handleVarsDirective(context, pd.CmdParts, pd.Argument); err != nil {
+			if err := handleVarsDirective(context, pd.SubCmds, pd.Argument); err != nil {
 				return nil, err
 			}
 		case "package":
@@ -62,9 +62,10 @@ func ParseFileDirectives(file *goast.File, fset *gotoken.FileSet) (*config.Confi
 			}
 		case "type":
 			if len(pd.SubCmds) > 0 {
+				cmd := pd.SubCmds[0]
 				switch pd.SubCmds[0] {
 				case "method", "field":
-					if err := handleMemberDirective(context, pd.CmdParts[1], pd.SubCmds, pd.Argument); err != nil {
+					if err := handleMemberDirective(context, cmd, pd.SubCmds, pd.Argument); err != nil {
 						return nil, err
 					}
 				default:
