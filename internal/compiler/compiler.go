@@ -111,7 +111,7 @@ func Compile(cfg *config.Config) (*CompiledConfig, error) {
 		}
 
 		// Resolve package variables (inherits from global)
-		pkgResolvedVars, err := resolveVars(pkgCfg.Vars, globalResolvedVars, nil)
+		pkgResolvedVars, err := resolveVars(pkgCfg.Props, globalResolvedVars, nil)
 		if err != nil {
 			return nil, fmt.Errorf("failed to resolve variables for package %s: %w", pkgCfg.Import, err)
 		}

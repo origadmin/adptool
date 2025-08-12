@@ -55,7 +55,7 @@ func TestParseFileDirectives(t *testing.T) {
 						Import: "github.com/my/package/v1",
 						Alias:  "mypkg",
 						Path:   "./vendor/my/package/v1",
-						Vars: []*config.PropsEntry{
+						Props: []*config.PropsEntry{
 							{
 								Name:  "PackageVar1",
 								Value: "packageValue1",
@@ -267,10 +267,10 @@ func TestParseFileDirectives(t *testing.T) {
 				}
 			}
 
-			// Compare Vars (if not nil)
+			// Compare Props (if not nil)
 			if cfg.Variables != nil || tt.expectedConfig.Variables != nil {
 				if len(cfg.Variables) != len(tt.expectedConfig.Variables) {
-					t.Errorf("Vars count mismatch. Expected: %d, Actual: %d", len(tt.expectedConfig.Variables), len(cfg.Variables))
+					t.Errorf("Props count mismatch. Expected: %d, Actual: %d", len(tt.expectedConfig.Variables), len(cfg.Variables))
 				} else {
 					for i := range cfg.Variables {
 						if !reflect.DeepEqual(*cfg.Variables[i], *tt.expectedConfig.Variables[i]) {
