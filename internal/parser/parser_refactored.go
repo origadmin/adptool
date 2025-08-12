@@ -42,7 +42,7 @@ func newParserState(cfg *config.Config, fset *gotoken.FileSet, line int) *parser
 }
 
 // parseDirective extracts command, argument, base command, and command parts from a raw directive string.
-func parseDirective(rawDirective string) (command, argument, baseCmd string, cmdParts []string) {
+func parseDirective(rawDirective string) (command, argument, baseCmd string, cmdParts []string, isJsonArgument bool) {
 	parts := strings.SplitN(rawDirective, " ", 2)
 	command = parts[0]
 	argument = ""
@@ -52,6 +52,17 @@ func parseDirective(rawDirective string) (command, argument, baseCmd string, cmd
 	}
 	cmdParts = strings.Split(command, ":")
 	baseCmd = cmdParts[0]
+
+	// Check for :json suffix
+	if len(cmdParts) > 1 && cmdParts[len(cmdParts)-1] == "json" {
+		isJsonArgument = true
+		// Remove the :json part from cmdParts and baseCmd for further processing
+		cmdParts = cmdParts[:len(cmdParts)-1]
+		baseCmd = cmdParts[0]   // Re-evaluate baseCmd after removing :json
+		if len(cmdParts) == 1 { // If only baseCmd:json was present, baseCmd is just baseCmd
+			baseCmd = command[:strings.LastIndex(command, ":json")]
+		}
+	}
 	return
 }
 
@@ -79,7 +90,7 @@ func handleDefaultsDirective(state *parserState, cmdParts []string, argument str
 	case "regex":
 		state.cfg.Defaults.Mode.Regex = argument
 	case "ignores":
-		state.cfg.Defaults.Mode.IgnoresMode = argument
+		state.cfg.Defaults.Mode.Ignores = argument
 	default:
 		return fmt.Errorf("line %d: unknown defaults mode field '%s'", state.line, modeField)
 	}
@@ -95,9 +106,9 @@ func handleVarsDirective(state *parserState, cmdParts []string, argument string)
 	if len(varNameParts) != 2 {
 		return fmt.Errorf("line %d: invalid vars directive argument. Expected 'name value'", state.line)
 	}
-	entry := &config.VarEntry{Name: varNameParts[0], Value: varNameParts[1]}
+	entry := &config.PropsEntry{Name: varNameParts[0], Value: varNameParts[1]}
 	if state.cfg.Props == nil {
-		state.cfg.Props = make([]*config.VarEntry, 0)
+		state.cfg.Props = make([]*config.PropsEntry, 0)
 	}
 	state.cfg.Props = append(state.cfg.Props, entry)
 	return nil
@@ -135,9 +146,9 @@ func handlePackageDirective(state *parserState, cmdParts []string, argument stri
 			if len(varNameParts) != 2 {
 				return fmt.Errorf("line %d: invalid package vars directive argument. Expected 'name value'", state.line)
 			}
-			entry := &config.VarEntry{Name: varNameParts[0], Value: varNameParts[1]}
+			entry := &config.PropsEntry{Name: varNameParts[0], Value: varNameParts[1]}
 			if state.lastPackageRule.Vars == nil {
-				state.lastPackageRule.Vars = make([]*config.VarEntry, 0)
+				state.lastPackageRule.Vars = make([]*config.PropsEntry, 0)
 			}
 			state.lastPackageRule.Vars = append(state.lastPackageRule.Vars, entry)
 		case "types":
@@ -343,7 +354,7 @@ func handleRule(ruleset *config.RuleSet, fromName, ruleName, argument string) {
 		if len(explicitRules) == 2 {
 			ruleset.Explicit = append(ruleset.Explicit, &config.ExplicitRule{From: explicitRules[0], To: explicitRules[1]})
 		}
-	case "explicit.json":
+	case "explicit:json":
 		if ruleset.Explicit == nil {
 			ruleset.Explicit = make([]*config.ExplicitRule, 0)
 		}

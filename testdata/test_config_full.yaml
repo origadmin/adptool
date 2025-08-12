@@ -16,7 +16,7 @@ types:
     pattern: "alias"
     explicit:
       - { from: "GlobalTypeOld", to: "GlobalTypeNew" }
-    ignore: [ "GlobalIgnoredType" ]
+    ignores: [ "GlobalIgnoredType" ]
     methods:
       - name: "*"
         prefix: "GlobalMethod"
@@ -68,7 +68,7 @@ variables:
 constants:
   - name: "*"
     disabled: false
-    ignore: [ "GlobalIgnoredConst" ]
+    ignores: [ "GlobalIgnoredConst" ]
   - name: "SpecificConst"
     disabled: true
 

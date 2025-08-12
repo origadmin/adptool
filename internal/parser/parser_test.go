@@ -37,10 +37,10 @@ func TestParseFileDirectives(t *testing.T) {
 						Suffix:   "append",
 						Explicit: "merge",
 						Regex:    "merge",
-						Ignore:   "merge",
+						Ignores:  "merge",
 					},
 				},
-				Vars: []*config.VarEntry{
+				Props: []*config.PropsEntry{
 					{
 						Name:  "GlobalVar1",
 						Value: "globalValue1",
@@ -55,7 +55,7 @@ func TestParseFileDirectives(t *testing.T) {
 						Import: "github.com/my/package/v1",
 						Alias:  "mypkg",
 						Path:   "./vendor/my/package/v1",
-						Vars: []*config.VarEntry{
+						Vars: []*config.PropsEntry{
 							{
 								Name:  "PackageVar1",
 								Value: "packageValue1",
@@ -189,7 +189,7 @@ func TestParseFileDirectives(t *testing.T) {
 				Constants: []*config.ConstRule{
 					{
 						Name:    "ext1.MyExternalConstant",
-						RuleSet: config.RuleSet{Ignore: []string{"ext1.MyExternalConstant"}},
+						RuleSet: config.RuleSet{Ignores: []string{"ext1.MyExternalConstant"}},
 					},
 				},
 			},
@@ -268,13 +268,13 @@ func TestParseFileDirectives(t *testing.T) {
 			}
 
 			// Compare Vars (if not nil)
-			if cfg.Vars != nil || tt.expectedConfig.Vars != nil {
-				if len(cfg.Vars) != len(tt.expectedConfig.Vars) {
-					t.Errorf("Vars count mismatch. Expected: %d, Actual: %d", len(tt.expectedConfig.Vars), len(cfg.Vars))
+			if cfg.Variables != nil || tt.expectedConfig.Variables != nil {
+				if len(cfg.Variables) != len(tt.expectedConfig.Variables) {
+					t.Errorf("Vars count mismatch. Expected: %d, Actual: %d", len(tt.expectedConfig.Variables), len(cfg.Variables))
 				} else {
-					for i := range cfg.Vars {
-						if !reflect.DeepEqual(*cfg.Vars[i], *tt.expectedConfig.Vars[i]) {
-							t.Errorf("Var entry at index %d mismatch.\nExpected: %+v\nActual:   %+v", i, *tt.expectedConfig.Vars[i], *cfg.Vars[i])
+					for i := range cfg.Variables {
+						if !reflect.DeepEqual(*cfg.Variables[i], *tt.expectedConfig.Variables[i]) {
+							t.Errorf("Var entry at index %d mismatch.\nExpected: %+v\nActual:   %+v", i, *tt.expectedConfig.Variables[i], *cfg.Variables[i])
 						}
 					}
 				}
