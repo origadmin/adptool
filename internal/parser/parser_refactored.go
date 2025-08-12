@@ -220,7 +220,10 @@ func handlePackageDirective(context *Context, cmdParts []string, argument string
 func handleTypeDirective(context *Context, cmdParts []string, argument string) error {
 	if len(cmdParts) == 1 {
 		rule := &config.TypeRule{Name: argument, Kind: "type", RuleSet: config.RuleSet{}}
-		context.Config.Types = append(context.Config.Types, rule)
+		context.Config.Types = append(context.Config.Types, rule) // Always add to global
+		if context.CurrentPackage != nil {
+			context.CurrentPackage.Types = append(context.CurrentPackage.Types, rule)
+		}
 		context.Reset()
 		context.CurrentTypeRule = rule
 	} else if len(cmdParts) == 2 && cmdParts[1] == "struct" {
@@ -247,7 +250,10 @@ func handleTypeDirective(context *Context, cmdParts []string, argument string) e
 func handleFuncDirective(context *Context, cmdParts []string, argument string) error {
 	if len(cmdParts) == 1 {
 		rule := &config.FuncRule{Name: argument, RuleSet: config.RuleSet{}}
-		context.Config.Functions = append(context.Config.Functions, rule)
+		context.Config.Functions = append(context.Config.Functions, rule) // Always add to global
+		if context.CurrentPackage != nil {
+			context.CurrentPackage.Functions = append(context.CurrentPackage.Functions, rule)
+		}
 		context.Reset()
 		context.CurrentFuncRule = rule
 	} else if len(cmdParts) == 2 && cmdParts[1] == "disabled" {
@@ -266,7 +272,10 @@ func handleFuncDirective(context *Context, cmdParts []string, argument string) e
 func handleVarDirective(context *Context, cmdParts []string, argument string) error {
 	if len(cmdParts) == 1 {
 		rule := &config.VarRule{Name: argument, RuleSet: config.RuleSet{}}
-		context.Config.Variables = append(context.Config.Variables, rule)
+		context.Config.Variables = append(context.Config.Variables, rule) // Always add to global
+		if context.CurrentPackage != nil {
+			context.CurrentPackage.Variables = append(context.CurrentPackage.Variables, rule)
+		}
 		context.Reset()
 		context.CurrentVarRule = rule
 	} else if len(cmdParts) == 2 && cmdParts[1] == "disabled" {
@@ -285,7 +294,10 @@ func handleVarDirective(context *Context, cmdParts []string, argument string) er
 func handleConstDirective(context *Context, cmdParts []string, argument string) error {
 	if len(cmdParts) == 1 {
 		rule := &config.ConstRule{Name: argument, RuleSet: config.RuleSet{}}
-		context.Config.Constants = append(context.Config.Constants, rule)
+		context.Config.Constants = append(context.Config.Constants, rule) // Always add to global
+		if context.CurrentPackage != nil {
+			context.CurrentPackage.Constants = append(context.CurrentPackage.Constants, rule)
+		}
 		context.Reset()
 		context.CurrentConstRule = rule
 	} else if len(cmdParts) == 2 && cmdParts[1] == "disabled" {
@@ -293,6 +305,11 @@ func handleConstDirective(context *Context, cmdParts []string, argument string) 
 			return fmt.Errorf("line %d: ':disabled' must follow a 'const' Directive", context.Directive.Line)
 		}
 		context.CurrentConstRule.Disabled = argument == "true"
+	} else if len(cmdParts) == 2 && cmdParts[1] == "ignores" {
+		if context.CurrentConstRule == nil {
+			return fmt.Errorf("line %d: ':ignores' must follow a 'const' Directive", context.Directive.Line)
+		}
+		context.CurrentConstRule.RuleSet.Ignores = append(context.CurrentConstRule.RuleSet.Ignores, argument)
 	} else if len(cmdParts) == 2 && context.CurrentConstRule != nil {
 		// Generic sub-rule for const (e.g., :rename, :explicit)
 		handleRule(&context.CurrentConstRule.RuleSet, context.CurrentConstRule.Name, cmdParts[1], argument)
@@ -302,7 +319,7 @@ func handleConstDirective(context *Context, cmdParts []string, argument string) 
 
 // handleMemberDirective handles the parsing of method and field directives.
 func handleMemberDirective(context *Context, baseCmd string, cmdParts []string, argument string) error {
-	if context.Directive.BaseCmd != "types" {
+	if context.CurrentTypeRule == nil {
 		return fmt.Errorf("line %d: '%s' Directive must follow a 'type' Directive", context.Directive.Line, baseCmd)
 	}
 	if len(cmdParts) == 1 {

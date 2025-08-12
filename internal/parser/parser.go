@@ -5,6 +5,7 @@ import (
 	"fmt"
 	goast "go/ast"
 	gotoken "go/token"
+	"log/slog"
 	"strings"
 
 	"github.com/origadmin/adptool/internal/config"
@@ -24,10 +25,13 @@ func ParseFileDirectives(file *goast.File, fset *gotoken.FileSet) (*config.Confi
 			break
 		}
 		pd := context.Directive
+		slog.Info("Processing directive", "line", pd.Line, "command", pd.Command, "argument", pd.Argument)
 		switch pd.BaseCmd {
 		case "ignore": // Handle local ignore Directive
+			slog.Info("Handling 'ignore' directive")
 			context.Config.Ignores = append(context.Config.Ignores, pd.Argument)
 		case "ignores": // Handle global ignore Directive
+			slog.Info("Handling 'ignores' directive")
 			if pd.IsJSON {
 				var patterns []string
 				if err := json.Unmarshal([]byte(pd.Argument), &patterns); err != nil {
@@ -42,41 +46,67 @@ func ParseFileDirectives(file *goast.File, fset *gotoken.FileSet) (*config.Confi
 				context.Config.Ignores = append(context.Config.Ignores, patterns...)
 			}
 		case "default":
+			slog.Info("Handling 'default' directive")
 			if err := handleDefaultsDirective(context, pd.CmdParts, pd.Argument); err != nil {
 				return nil, err
 			}
 		case "prop":
+			slog.Info("Handling 'prop' directive")
 			if err := handleVarsDirective(context, pd.CmdParts, pd.Argument); err != nil {
 				return nil, err
 			}
 		case "package":
+			slog.Info("Handling 'package' directive")
 			if err := handlePackageDirective(context, pd.CmdParts, pd.Argument); err != nil {
 				return nil, err
 			}
 		case "type":
-			if err := handleTypeDirective(context, pd.CmdParts, pd.Argument); err != nil {
-				return nil, err
+			if len(pd.CmdParts) > 1 {
+				switch pd.CmdParts[1] {
+				case "method", "field":
+					if err := handleMemberDirective(context, pd.CmdParts[1], pd.SubCmds, pd.Argument); err != nil {
+						return nil, err
+					}
+				default:
+					if err := handleTypeDirective(context, pd.CmdParts, pd.Argument); err != nil {
+						return nil, err
+					}
+				}
+			} else {
+				if err := handleTypeDirective(context, pd.CmdParts, pd.Argument); err != nil {
+					return nil, err
+				}
 			}
 		case "func":
+			slog.Info("Handling 'func' directive")
 			if err := handleFuncDirective(context, pd.CmdParts, pd.Argument); err != nil {
 				return nil, err
 			}
 		case "var":
+			slog.Info("Handling 'var' directive")
 			if err := handleVarDirective(context, pd.CmdParts, pd.Argument); err != nil {
 				return nil, err
 			}
 		case "const":
+			slog.Info("Handling 'const' directive")
 			if err := handleConstDirective(context, pd.CmdParts, pd.Argument); err != nil {
 				return nil, err
 			}
 		case "method", "field":
+			slog.Info("Handling 'method' or 'field' directive")
 			if err := handleMemberDirective(context, pd.BaseCmd, pd.CmdParts, pd.Argument); err != nil {
 				return nil, err
 			}
 		case "context", "done":
-			// Context and done directives are handled by the loader, not the parser.
-			// We will ignore them here.
+			slog.Info("Handling 'context' or 'done' directive")
+			if pd.BaseCmd == "done" {
+				if context.CurrentPackage != nil {
+					context.CurrentPackage = nil
+				}
+				context.Reset()
+			}
 		default:
+			slog.Error("Unknown directive", "line", pd.Line, "command", pd.Command)
 			return nil, fmt.Errorf("line %d: unknown Directive '%s'", pd.Line, pd.Command)
 		}
 	}
