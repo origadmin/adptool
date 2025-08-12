@@ -57,7 +57,7 @@ func ParseFileDirectives(file *goast.File, fset *gotoken.FileSet) (*config.Confi
 			}
 		case "package":
 			slog.Info("Handling 'package' directive")
-			if err := handlePackageDirective(context, pd.CmdParts, pd.Argument); err != nil {
+			if err := handlePackageDirective(context, pd.SubCmds, pd.Argument); err != nil {
 				return nil, err
 			}
 		case "type":
