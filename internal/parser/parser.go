@@ -27,6 +27,12 @@ func ParseFileDirectives(file *goast.File, fset *gotoken.FileSet) (*config.Confi
 			}
 
 			rawDirective := strings.TrimPrefix(comment.Text, directivePrefix)
+			// Clean rawDirective from any trailing comments
+			commentStart := strings.Index(rawDirective, "//")
+			if commentStart != -1 {
+				rawDirective = strings.TrimSpace(rawDirective[:commentStart])
+			}
+
 			command, argument, baseCmd, cmdParts := parseDirective(rawDirective)
 
 			// Handle top-level ignore directive
