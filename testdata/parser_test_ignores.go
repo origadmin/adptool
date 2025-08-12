@@ -1,8 +1,8 @@
 package testdata
 
-// go:adapter:ignore pattern1
-// go:adapter:ignores pattern2,pattern3
-// go:adapter:ignores:json ["pattern4", "pattern5"]
+//go:adapter:ignore pattern1
+//go:adapter:ignores pattern2,pattern3
+//go:adapter:ignores:json ["pattern4", "pattern5"]
 
 // This file is used to test the parsing of ignore and ignores directives.
 // It contains various formats of ignore directives:

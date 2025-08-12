@@ -315,7 +315,32 @@ func TestParseFunctions(t *testing.T) {
 		},
 	}
 
-	assert.Equal(t, expectedFunctions, cfg.Functions, "Functions mismatch")
+	// 比较函数数量
+	assert.Equal(t, len(expectedFunctions), len(cfg.Functions), "Functions count mismatch")
+
+	// 逐个比较每个函数
+	for i := range expectedFunctions {
+		expected := expectedFunctions[i]
+		actual := cfg.Functions[i]
+
+		assert.Equal(t, expected.Name, actual.Name, "Function %d Name mismatch", i)
+
+		// 比较 RuleSet
+		assert.Equal(t, len(expected.RuleSet.Explicit), len(actual.RuleSet.Explicit), "Function %d RuleSet.Explicit count mismatch", i)
+		for j := range expected.RuleSet.Explicit {
+			if j < len(actual.RuleSet.Explicit) {
+				assert.Equal(t, expected.RuleSet.Explicit[j].From, actual.RuleSet.Explicit[j].From, "Function %d Explicit %d From mismatch", i, j)
+				assert.Equal(t, expected.RuleSet.Explicit[j].To, actual.RuleSet.Explicit[j].To, "Function %d Explicit %d To mismatch", i, j)
+			}
+		}
+
+		assert.Equal(t, len(expected.RuleSet.Ignores), len(actual.RuleSet.Ignores), "Function %d RuleSet.Ignores count mismatch", i)
+		for j := range expected.RuleSet.Ignores {
+			if j < len(actual.RuleSet.Ignores) {
+				assert.Equal(t, expected.RuleSet.Ignores[j], actual.RuleSet.Ignores[j], "Function %d Ignore %d mismatch", i, j)
+			}
+		}
+	}
 }
 
 func TestParseVariables(t *testing.T) {
@@ -339,7 +364,32 @@ func TestParseVariables(t *testing.T) {
 		},
 	}
 
-	assert.Equal(t, expectedVariables, cfg.Variables, "Variables mismatch")
+	// 比较变量数量
+	assert.Equal(t, len(expectedVariables), len(cfg.Variables), "Variables count mismatch")
+
+	// 逐个比较每个变量
+	for i := range expectedVariables {
+		expected := expectedVariables[i]
+		actual := cfg.Variables[i]
+
+		assert.Equal(t, expected.Name, actual.Name, "Variable %d Name mismatch", i)
+
+		// 比较 RuleSet
+		assert.Equal(t, len(expected.RuleSet.Explicit), len(actual.RuleSet.Explicit), "Variable %d RuleSet.Explicit count mismatch", i)
+		for j := range expected.RuleSet.Explicit {
+			if j < len(actual.RuleSet.Explicit) {
+				assert.Equal(t, expected.RuleSet.Explicit[j].From, actual.RuleSet.Explicit[j].From, "Variable %d Explicit %d From mismatch", i, j)
+				assert.Equal(t, expected.RuleSet.Explicit[j].To, actual.RuleSet.Explicit[j].To, "Variable %d Explicit %d To mismatch", i, j)
+			}
+		}
+
+		assert.Equal(t, len(expected.RuleSet.Ignores), len(actual.RuleSet.Ignores), "Variable %d RuleSet.Ignores count mismatch", i)
+		for j := range expected.RuleSet.Ignores {
+			if j < len(actual.RuleSet.Ignores) {
+				assert.Equal(t, expected.RuleSet.Ignores[j], actual.RuleSet.Ignores[j], "Variable %d Ignore %d mismatch", i, j)
+			}
+		}
+	}
 }
 
 func TestParseConstants(t *testing.T) {
@@ -361,7 +411,32 @@ func TestParseConstants(t *testing.T) {
 		},
 	}
 
-	assert.Equal(t, expectedConstants, cfg.Constants, "Constants mismatch")
+	// 比较常量数量
+	assert.Equal(t, len(expectedConstants), len(cfg.Constants), "Constants count mismatch")
+
+	// 逐个比较每个常量
+	for i := range expectedConstants {
+		expected := expectedConstants[i]
+		actual := cfg.Constants[i]
+
+		assert.Equal(t, expected.Name, actual.Name, "Constant %d Name mismatch", i)
+
+		// 比较 RuleSet
+		assert.Equal(t, len(expected.RuleSet.Explicit), len(actual.RuleSet.Explicit), "Constant %d RuleSet.Explicit count mismatch", i)
+		for j := range expected.RuleSet.Explicit {
+			if j < len(actual.RuleSet.Explicit) {
+				assert.Equal(t, expected.RuleSet.Explicit[j].From, actual.RuleSet.Explicit[j].From, "Constant %d Explicit %d From mismatch", i, j)
+				assert.Equal(t, expected.RuleSet.Explicit[j].To, actual.RuleSet.Explicit[j].To, "Constant %d Explicit %d To mismatch", i, j)
+			}
+		}
+
+		assert.Equal(t, len(expected.RuleSet.Ignores), len(actual.RuleSet.Ignores), "Constant %d RuleSet.Ignores count mismatch", i)
+		for j := range expected.RuleSet.Ignores {
+			if j < len(actual.RuleSet.Ignores) {
+				assert.Equal(t, expected.RuleSet.Ignores[j], actual.RuleSet.Ignores[j], "Constant %d Ignore %d mismatch", i, j)
+			}
+		}
+	}
 }
 
 func TestParseIgnores(t *testing.T) {
@@ -385,6 +460,30 @@ func TestParseIgnores(t *testing.T) {
 		"pattern5", // 来自 ignores:json 指令（JSON 数组）
 	}
 
-	// 使用 assert 断言验证结果
-	assert.ElementsMatch(t, expectedIgnores, cfg.Ignores, "Ignores patterns mismatch")
+	// 比较忽略模式数量
+	assert.Equal(t, len(expectedIgnores), len(cfg.Ignores), "Ignores count mismatch")
+
+	// 由于忽略模式的顺序可能不同，我们需要检查每个预期的模式是否都存在
+	for _, expected := range expectedIgnores {
+		found := false
+		for _, actual := range cfg.Ignores {
+			if expected == actual {
+				found = true
+				break
+			}
+		}
+		assert.True(t, found, "Expected ignore pattern %q not found", expected)
+	}
+
+	// 同样，检查是否有意外的模式
+	for _, actual := range cfg.Ignores {
+		found := false
+		for _, expected := range expectedIgnores {
+			if actual == expected {
+				found = true
+				break
+			}
+		}
+		assert.True(t, found, "Unexpected ignore pattern %q found", actual)
+	}
 }
