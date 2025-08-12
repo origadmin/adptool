@@ -19,7 +19,7 @@ type ContextEntry struct {
 type Context struct {
 	DefaultPackageImportPath string
 	DefaultPackageAlias      string
-	stack                    []*ContextEntry // Stack of active context entries
+	Entries                  []ContextEntry
 }
 
 type parserState struct {
@@ -42,29 +42,6 @@ func newParserState(cfg *config.Config, fset *gotoken.FileSet, line int) *parser
 		line:    line,
 		context: &Context{}, // Initialize stack
 	}
-}
-
-// parseDirective extracts command, argument, base command, and command parts from a raw Directive string.
-func parseDirective(rawDirective string) Directive {
-	var pd Directive
-	parts := strings.SplitN(rawDirective, " ", 2)
-	pd.Command = parts[0]
-	pd.Argument = ""
-	if len(parts) > 1 {
-		// Strip inline comments from the argument
-		pd.Argument = parts[1]
-	}
-
-	// Check for :json suffix first
-	if strings.HasSuffix(pd.Command, ":json") {
-		pd.IsJsonArgument = true
-		pd.Command = strings.TrimSuffix(pd.Command, ":json")
-	}
-
-	pd.CmdParts = strings.Split(pd.Command, ":")
-	pd.BaseCmd = pd.CmdParts[0]
-
-	return pd
 }
 
 // handleDefaultsDirective handles the parsing of defaults directives.
