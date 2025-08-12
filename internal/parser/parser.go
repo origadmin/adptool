@@ -38,10 +38,10 @@ func ParseFileDirectives(file *goast.File, fset *gotoken.FileSet) (*config.Confi
 			// Helper to apply pending ignore arguments to a rule's RuleSet
 			applyPendingIgnore := func(rs *config.RuleSet) {
 				if len(state.pendingIgnoreArguments) > 0 {
-					if rs.Ignore == nil {
-						rs.Ignore = make([]string, 0)
+					if rs.Ignores == nil {
+						rs.Ignores = make([]string, 0)
 					}
-					rs.Ignore = append(rs.Ignore, state.pendingIgnoreArguments...)
+					rs.Ignores = append(rs.Ignores, state.pendingIgnoreArguments...)
 					state.pendingIgnoreArguments = nil // Clear after applying
 				}
 			}
@@ -53,7 +53,7 @@ func ParseFileDirectives(file *goast.File, fset *gotoken.FileSet) (*config.Confi
 				if err := handleDefaultsDirective(state, cmdParts, argument); err != nil {
 					return nil, err
 				}
-			case "vars":
+			case "props":
 				if err := handleVarsDirective(state, cmdParts, argument); err != nil {
 					return nil, err
 				}
