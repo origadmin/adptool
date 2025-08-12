@@ -217,8 +217,8 @@ func handlePackageDirective(context *Context, cmdParts []string, argument string
 }
 
 // handleTypeDirective handles the parsing of type directives.
-func handleTypeDirective(context *Context, cmdParts []string, argument string) error {
-	if len(cmdParts) == 1 {
+func handleTypeDirective(context *Context, subCmds []string, argument string) error {
+	if len(subCmds) == 0 {
 		rule := &config.TypeRule{Name: argument, Kind: "type", RuleSet: config.RuleSet{}}
 		context.Config.Types = append(context.Config.Types, rule) // Always add to global
 		if context.CurrentPackage != nil {
@@ -226,21 +226,21 @@ func handleTypeDirective(context *Context, cmdParts []string, argument string) e
 		}
 		context.Reset()
 		context.CurrentTypeRule = rule
-	} else if len(cmdParts) == 2 && cmdParts[1] == "struct" {
+	} else if len(subCmds) == 1 && subCmds[0] == "struct" {
 		if context.CurrentTypeRule == nil {
 			return fmt.Errorf("line %d: 'type:struct' must follow a 'type' Directive", context.Directive.Line)
 		}
 		context.CurrentTypeRule.Pattern = argument
 		context.CurrentTypeRule.Kind = "struct"
-	} else if len(cmdParts) == 2 && cmdParts[1] == "disabled" {
+	} else if len(subCmds) == 1 && subCmds[0] == "disabled" {
 		if context.CurrentTypeRule == nil {
 			return fmt.Errorf("line %d: ':disabled' must follow a 'type' Directive", context.Directive.Line)
 		}
 		context.CurrentTypeRule.Disabled = argument == "true"
-	} else if len(cmdParts) == 2 {
+	} else if len(subCmds) == 1 {
 		// Generic sub-rule for type (e.g., :rename, :explicit)
 		if context.CurrentTypeRule != nil {
-			handleRule(&context.CurrentTypeRule.RuleSet, context.CurrentTypeRule.Name, cmdParts[1], argument)
+			handleRule(&context.CurrentTypeRule.RuleSet, context.CurrentTypeRule.Name, subCmds[1], argument)
 		}
 	}
 	return nil
@@ -318,11 +318,11 @@ func handleConstDirective(context *Context, cmdParts []string, argument string) 
 }
 
 // handleMemberDirective handles the parsing of method and field directives.
-func handleMemberDirective(context *Context, baseCmd string, cmdParts []string, argument string) error {
+func handleMemberDirective(context *Context, baseCmd string, subCmds []string, argument string) error {
 	if context.CurrentTypeRule == nil {
 		return fmt.Errorf("line %d: '%s' Directive must follow a 'type' Directive", context.Directive.Line, baseCmd)
 	}
-	if len(cmdParts) == 1 {
+	if len(subCmds) == 0 {
 		member := &config.MemberRule{Name: argument, RuleSet: config.RuleSet{}}
 		if baseCmd == "method" {
 			context.CurrentTypeRule.Methods = append(context.CurrentTypeRule.Methods, member)
@@ -330,14 +330,14 @@ func handleMemberDirective(context *Context, baseCmd string, cmdParts []string, 
 			context.CurrentTypeRule.Fields = append(context.CurrentTypeRule.Fields, member)
 		}
 		context.CurrentMemberRule = member
-	} else if len(cmdParts) == 2 && cmdParts[1] == "disabled" {
+	} else if len(subCmds) == 1 && subCmds[0] == "disabled" {
 		if context.CurrentMemberRule == nil {
 			return fmt.Errorf("line %d: ':disabled' must follow a member Directive", context.Directive.Line)
 		}
 		context.CurrentMemberRule.Disabled = argument == "true"
-	} else if len(cmdParts) == 2 && context.CurrentMemberRule != nil {
+	} else if len(subCmds) == 1 && context.CurrentMemberRule != nil {
 		// Generic sub-rule for method/field (e.g., :rename, :explicit)
-		handleRule(&context.CurrentMemberRule.RuleSet, context.CurrentMemberRule.Name, cmdParts[1], argument)
+		handleRule(&context.CurrentMemberRule.RuleSet, context.CurrentMemberRule.Name, subCmds[0], argument)
 	}
 	return nil
 }

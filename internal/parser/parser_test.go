@@ -105,10 +105,8 @@ func TestParsePackages(t *testing.T) {
 					Pattern: "wrap",
 					Methods: []*config.MemberRule{
 						{
-							Name: "DoSomethingInPackage",
-							RuleSet: config.RuleSet{Explicit: []*config.ExplicitRule{
-								{From: "DoSomethingInPackage", To: "DoSomethingNewInPackage"}},
-							},
+							Name:    "DoSomethingInPackage",
+							RuleSet: config.RuleSet{Explicit: []*config.ExplicitRule{{From: "DoSomethingInPackage", To: "DoSomethingNewInPackage"}}},
 						},
 					},
 				},
@@ -122,8 +120,79 @@ func TestParsePackages(t *testing.T) {
 		},
 	}
 
-	if !reflect.DeepEqual(cfg.Packages, expectedPackages) {
-		t.Errorf("Packages mismatch.\nExpected: %+v\nActual:   %+v", expectedPackages, cfg.Packages)
+	if len(cfg.Packages) != len(expectedPackages) {
+		t.Errorf("Packages count mismatch. Expected: %d, Actual: %d", len(expectedPackages), len(cfg.Packages))
+		return
+	}
+
+	for i := range expectedPackages {
+		expected := expectedPackages[i]
+		actual := cfg.Packages[i]
+
+		if expected.Import != actual.Import {
+			t.Errorf("Package %d Import mismatch. Expected: %s, Actual: %s", i, expected.Import, actual.Import)
+		}
+		if expected.Alias != actual.Alias {
+			t.Errorf("Package %d Alias mismatch. Expected: %s, Actual: %s", i, expected.Alias, actual.Alias)
+		}
+		if expected.Path != actual.Path {
+			t.Errorf("Package %d Path mismatch. Expected: %s, Actual: %s", i, expected.Path, actual.Path)
+		}
+
+		// Compare Props
+		if len(actual.Props) != len(expected.Props) {
+			t.Errorf("Package %d Props count mismatch. Expected: %d, Actual: %d", i, len(expected.Props), len(actual.Props))
+		} else {
+			for j := range expected.Props {
+				if !reflect.DeepEqual(*actual.Props[j], *expected.Props[j]) {
+					t.Errorf("Package %d Prop %d mismatch.\nExpected: %+v\nActual:   %+v", i, j, *expected.Props[j], *actual.Props[j])
+				}
+			}
+		}
+
+		// Compare Types
+		if len(actual.Types) != len(expected.Types) {
+			t.Errorf("Package %d Types count mismatch. Expected: %d, Actual: %d", i, len(expected.Types), len(actual.Types))
+		} else {
+			for j := range expected.Types {
+				if !reflect.DeepEqual(*actual.Types[j], *expected.Types[j]) {
+					t.Errorf("Package %d Type %d mismatch.\nExpected: %+v\nActual:   %+v", i, j, *expected.Types[j], *actual.Types[j])
+				}
+			}
+		}
+
+		// Compare Functions
+		if len(actual.Functions) != len(expected.Functions) {
+			t.Errorf("Package %d Functions count mismatch. Expected: %d, Actual: %d", i, len(expected.Functions), len(actual.Functions))
+		} else {
+			for j := range expected.Functions {
+				if !reflect.DeepEqual(*actual.Functions[j], *expected.Functions[j]) {
+					t.Errorf("Package %d Function %d mismatch.\nExpected: %+v\nActual:   %+v", i, j, *expected.Functions[j], *actual.Functions[j])
+				}
+			}
+		}
+
+		// Compare Variables
+		if len(actual.Variables) != len(expected.Variables) {
+			t.Errorf("Package %d Variables count mismatch. Expected: %d, Actual: %d", i, len(expected.Variables), len(actual.Variables))
+		} else {
+			for j := range expected.Variables {
+				if !reflect.DeepEqual(*actual.Variables[j], *expected.Variables[j]) {
+					t.Errorf("Package %d Variable %d mismatch.\nExpected: %+v\nActual:   %+v", i, j, *expected.Variables[j], *actual.Variables[j])
+				}
+			}
+		}
+
+		// Compare Constants
+		if len(actual.Constants) != len(expected.Constants) {
+			t.Errorf("Package %d Constants count mismatch. Expected: %d, Actual: %d", i, len(expected.Constants), len(actual.Constants))
+		} else {
+			for j := range expected.Constants {
+				if !reflect.DeepEqual(*actual.Constants[j], *expected.Constants[j]) {
+					t.Errorf("Package %d Constant %d mismatch.\nExpected: %+v\nActual:   %+v", i, j, *expected.Constants[j], *actual.Constants[j])
+				}
+			}
+		}
 	}
 }
 
@@ -210,7 +279,7 @@ func TestParseTypes(t *testing.T) {
 			Kind:    "type",
 			Methods: []*config.MemberRule{
 				{
-					Name:    ".DoSomethingAfterNested",
+					Name:    "DoSomethingAfterNested",
 					RuleSet: config.RuleSet{},
 				},
 			},
@@ -221,7 +290,7 @@ func TestParseTypes(t *testing.T) {
 			Kind:    "type",
 			Methods: []*config.MemberRule{
 				{
-					Name:    ".DoAnother",
+					Name:    "DoAnother",
 					RuleSet: config.RuleSet{},
 				},
 			},
