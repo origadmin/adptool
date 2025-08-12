@@ -41,18 +41,16 @@ func ParseFileDirectives(file *goast.File, fset *gotoken.FileSet) (*config.Confi
 			}
 
 			rawDirective := strings.TrimPrefix(comment.Text, directivePrefix)
+			commentIndex := strings.Index(rawDirective, "//")
+			if commentIndex != -1 {
+				rawDirective = rawDirective[:commentIndex]
+			}
 			parts := strings.SplitN(rawDirective, " ", 2)
 			command := parts[0]
 			argument := ""
 			if len(parts) > 1 {
 				// Strip inline comments from the argument
-				argWithComment := parts[1]
-				commentIndex := strings.Index(argWithComment, "//")
-				if commentIndex != -1 {
-					argument = strings.TrimSpace(argWithComment[:commentIndex])
-				} else {
-					argument = strings.TrimSpace(argWithComment)
-				}
+				argument = parts[1]
 			}
 			fmt.Printf("  rawDirective: %s, command: %s, argument: %s\n", rawDirective, command, argument)
 
