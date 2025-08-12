@@ -116,7 +116,7 @@ packages:
 						Explicit: "merge",
 					},
 				},
-				Vars: []*config.VarEntry{
+				Vars: []*config.PropsEntry{
 					{Name: "GlobalVar1", Value: "globalValue1"},
 					{Name: "GlobalVar2", Value: "globalValue2"},
 				},
@@ -206,7 +206,7 @@ packages:
 					{
 						Import: "github.com/my/package",
 						Alias:  "mypkg",
-						Vars: []*config.VarEntry{
+						Vars: []*config.PropsEntry{
 							{
 								Name:  "PackageVar1",
 								Value: "packageValue1",

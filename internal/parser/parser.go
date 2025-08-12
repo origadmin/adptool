@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"encoding/json" // Added for JSON unmarshaling
 	"fmt"
 	goast "go/ast"
 	gotoken "go/token"
@@ -33,7 +34,7 @@ func ParseFileDirectives(file *goast.File, fset *gotoken.FileSet) (*config.Confi
 				rawDirective = strings.TrimSpace(rawDirective[:commentStart])
 			}
 
-			command, argument, baseCmd, cmdParts := parseDirective(rawDirective)
+			command, argument, baseCmd, cmdParts, isJsonArgument := parseDirective(rawDirective)
 
 			// Helper to apply pending ignore arguments to a rule's RuleSet
 			applyPendingIgnore := func(rs *config.RuleSet) {
@@ -48,7 +49,15 @@ func ParseFileDirectives(file *goast.File, fset *gotoken.FileSet) (*config.Confi
 
 			switch baseCmd {
 			case "ignore": // Handle global ignore directive
-				state.cfg.Ignores = append(state.cfg.Ignores, argument)
+				if isJsonArgument {
+					var patterns []string
+					if err := json.Unmarshal([]byte(argument), &patterns); err != nil {
+						return nil, fmt.Errorf("line %d: invalid JSON for ignore directive: %w", state.line, err)
+					}
+					state.cfg.Ignores = append(state.cfg.Ignores, patterns...)
+				} else {
+					state.cfg.Ignores = append(state.cfg.Ignores, argument)
+				}
 			case "defaults":
 				if err := handleDefaultsDirective(state, cmdParts, argument); err != nil {
 					return nil, err

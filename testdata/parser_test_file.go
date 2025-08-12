@@ -11,7 +11,7 @@ package main
 //go:adapter:defaults:mode:suffix append
 //go:adapter:defaults:mode:explicit merge
 //go:adapter:defaults:mode:regex merge
-//go:adapter:defaults:mode:ignore merge
+//go:adapter:defaults:mode:ignores merge
 
 // Vars configuration
 //go:adapter:vars GlobalVar1 globalValue1
@@ -93,5 +93,5 @@ package main
 //go:adapter:var ext1.MyExternalVariable
 //go:adapter:var:rename MyNewVariable
 
-//go:adapter:ignore ext1.MyExternalConstant
+//go:adapter:ignores ext1.MyExternalConstant
 //go:adapter:const ext1.MyExternalConstant
