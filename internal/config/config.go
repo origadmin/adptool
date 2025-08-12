@@ -4,6 +4,7 @@ package config
 func New() *Config {
 	return &Config{
 		Ignores: make([]string, 0),
+		Props:   make([]*VarEntry, 0),
 	}
 }
 
@@ -13,7 +14,7 @@ func newRuleSet() RuleSet {
 		Strategy: make([]string, 0),
 		Explicit: make([]*ExplicitRule, 0),
 		Regex:    make([]*RegexRule, 0),
-		Ignore:   make([]string, 0),
+		Ignores:  make([]string, 0),
 	}
 }
 
@@ -38,7 +39,7 @@ func newMemberRule() []*MemberRule {
 type Config struct {
 	Ignores   []string     `yaml:"ignores,omitempty" mapstructure:"ignores,omitempty"` // Global ignore patterns
 	Defaults  *Defaults    `yaml:"defaults,omitempty" mapstructure:"defaults,omitempty"`
-	Vars      []*VarEntry  `yaml:"vars,omitempty" mapstructure:"vars,omitempty"` // Changed to array of VarEntry
+	Props     []*VarEntry  `yaml:"props,omitempty" mapstructure:"props,omitempty"` // Configuration properties
 	Packages  []*Package   `yaml:"packages,omitempty" mapstructure:"packages,omitempty"`
 	Types     []*TypeRule  `yaml:"types,omitempty" mapstructure:"types,omitempty"`
 	Functions []*FuncRule  `yaml:"functions,omitempty" mapstructure:"functions,omitempty"`
@@ -104,7 +105,7 @@ type RuleSet struct {
 	ExplicitMode    string          `yaml:"explicit_mode,omitempty" mapstructure:"explicit_mode,omitempty"`
 	Regex           []*RegexRule    `yaml:"regex,omitempty" mapstructure:"regex,omitempty"`
 	RegexMode       string          `yaml:"regex_mode,omitempty" mapstructure:"regex_mode,omitempty"`
-	Ignore          []string        `yaml:"ignore,omitempty" mapstructure:"ignore,omitempty"`
+	Ignores         []string        `yaml:"ignores,omitempty" mapstructure:"ignores,omitempty"`
 	IgnoreMode      string          `yaml:"ignore_mode,omitempty" mapstructure:"ignore_mode,omitempty"`
 	TransformBefore string          `yaml:"transform_before,omitempty" mapstructure:"transform_before,omitempty"`
 	TransformAfter  string          `yaml:"transform_after,omitempty" mapstructure:"transform_after,omitempty"`
@@ -156,7 +157,7 @@ type Mode struct {
 	Suffix   string `yaml:"suffix,omitempty" mapstructure:"suffix,omitempty"`
 	Explicit string `yaml:"explicit,omitempty" mapstructure:"explicit,omitempty"`
 	Regex    string `yaml:"regex,omitempty" mapstructure:"regex,omitempty"`
-	Ignore   string `yaml:"ignore,omitempty" mapstructure:"ignore,omitempty"`
+	Ignores  string `yaml:"ignores,omitempty" mapstructure:"ignores,omitempty"`
 }
 
 // Merge combines two Config objects based on adptool's specific precedence rules.
@@ -178,13 +179,13 @@ func Merge(base *Config, overlay *Config) (*Config, error) {
 	*merged = *base // Start with a shallow copy of the base
 
 	// Merge simple fields (maps, slices, pointers)
-	// Vars: overlay takes precedence
-	if overlay.Vars != nil {
-		if merged.Vars == nil {
-			merged.Vars = make([]*VarEntry, 0)
+	// Props: overlay takes precedence
+	if overlay.Props != nil {
+		if merged.Props == nil {
+			merged.Props = make([]*VarEntry, 0)
 		}
-		for _, v := range overlay.Vars {
-			merged.Vars = append(merged.Vars, v)
+		for _, v := range overlay.Props {
+			merged.Props = append(merged.Props, v)
 		}
 	}
 

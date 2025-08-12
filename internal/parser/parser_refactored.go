@@ -78,8 +78,8 @@ func handleDefaultsDirective(state *parserState, cmdParts []string, argument str
 		state.cfg.Defaults.Mode.Explicit = argument
 	case "regex":
 		state.cfg.Defaults.Mode.Regex = argument
-	case "ignore":
-		state.cfg.Defaults.Mode.Ignore = argument
+	case "ignores":
+		state.cfg.Defaults.Mode.Ignores = argument
 	default:
 		return fmt.Errorf("line %d: unknown defaults mode field '%s'", state.line, modeField)
 	}
@@ -96,10 +96,10 @@ func handleVarsDirective(state *parserState, cmdParts []string, argument string)
 		return fmt.Errorf("line %d: invalid vars directive argument. Expected 'name value'", state.line)
 	}
 	entry := &config.VarEntry{Name: varNameParts[0], Value: varNameParts[1]}
-	if state.cfg.Vars == nil {
-		state.cfg.Vars = make([]*config.VarEntry, 0)
+	if state.cfg.Props == nil {
+		state.cfg.Props = make([]*config.VarEntry, 0)
 	}
-	state.cfg.Vars = append(state.cfg.Vars, entry)
+	state.cfg.Props = append(state.cfg.Props, entry)
 	return nil
 }
 
