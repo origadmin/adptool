@@ -2,9 +2,10 @@ package parser_test
 
 import (
 	"path/filepath"
-	"reflect"
 	"runtime"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 
 	"github.com/origadmin/adptool/internal/config"
 	"github.com/origadmin/adptool/internal/loader"
@@ -42,9 +43,7 @@ func TestParseDefaults(t *testing.T) {
 		},
 	}
 
-	if !reflect.DeepEqual(cfg.Defaults, expectedDefaults) {
-		t.Errorf("Defaults mismatch.\nExpected: %+v\nActual:   %+v", expectedDefaults, cfg.Defaults)
-	}
+	assert.Equal(t, expectedDefaults, cfg.Defaults, "Defaults mismatch")
 }
 
 func TestParseProps(t *testing.T) {
@@ -70,9 +69,7 @@ func TestParseProps(t *testing.T) {
 		},
 	}
 
-	if !reflect.DeepEqual(cfg.Props, expectedProps) {
-		t.Errorf("Props mismatch.\nExpected: %+v\nActual:   %+v", expectedProps, cfg.Props)
-	}
+	assert.Equal(t, expectedProps, cfg.Props, "Props mismatch")
 }
 
 func TestParsePackages(t *testing.T) {
@@ -120,78 +117,44 @@ func TestParsePackages(t *testing.T) {
 		},
 	}
 
-	if len(cfg.Packages) != len(expectedPackages) {
-		t.Errorf("Packages count mismatch. Expected: %d, Actual: %d", len(expectedPackages), len(cfg.Packages))
-		return
-	}
+	assert.Equal(t, len(expectedPackages), len(cfg.Packages), "Packages count mismatch")
 
 	for i := range expectedPackages {
 		expected := expectedPackages[i]
 		actual := cfg.Packages[i]
 
-		if expected.Import != actual.Import {
-			t.Errorf("Package %d Import mismatch. Expected: %s, Actual: %s", i, expected.Import, actual.Import)
-		}
-		if expected.Alias != actual.Alias {
-			t.Errorf("Package %d Alias mismatch. Expected: %s, Actual: %s", i, expected.Alias, actual.Alias)
-		}
-		if expected.Path != actual.Path {
-			t.Errorf("Package %d Path mismatch. Expected: %s, Actual: %s", i, expected.Path, actual.Path)
-		}
+		assert.Equal(t, expected.Import, actual.Import, "Package %d Import mismatch", i)
+		assert.Equal(t, expected.Alias, actual.Alias, "Package %d Alias mismatch", i)
+		assert.Equal(t, expected.Path, actual.Path, "Package %d Path mismatch", i)
 
 		// Compare Props
-		if len(actual.Props) != len(expected.Props) {
-			t.Errorf("Package %d Props count mismatch. Expected: %d, Actual: %d", i, len(expected.Props), len(actual.Props))
-		} else {
-			for j := range expected.Props {
-				if !reflect.DeepEqual(*actual.Props[j], *expected.Props[j]) {
-					t.Errorf("Package %d Prop %d mismatch.\nExpected: %+v\nActual:   %+v", i, j, *expected.Props[j], *actual.Props[j])
-				}
-			}
+		assert.Equal(t, len(expected.Props), len(actual.Props), "Package %d Props count mismatch", i)
+		for j := range expected.Props {
+			assert.Equal(t, *expected.Props[j], *actual.Props[j], "Package %d Prop %d mismatch", i, j)
 		}
 
 		// Compare Types
-		if len(actual.Types) != len(expected.Types) {
-			t.Errorf("Package %d Types count mismatch. Expected: %d, Actual: %d", i, len(expected.Types), len(actual.Types))
-		} else {
-			for j := range expected.Types {
-				if !reflect.DeepEqual(*actual.Types[j], *expected.Types[j]) {
-					t.Errorf("Package %d Type %d mismatch.\nExpected: %+v\nActual:   %+v", i, j, *expected.Types[j], *actual.Types[j])
-				}
-			}
+		assert.Equal(t, len(expected.Types), len(actual.Types), "Package %d Types count mismatch", i)
+		for j := range expected.Types {
+			assert.Equal(t, *expected.Types[j], *actual.Types[j], "Package %d Type %d mismatch", i, j)
 		}
 
 		// Compare Functions
-		if len(actual.Functions) != len(expected.Functions) {
-			t.Errorf("Package %d Functions count mismatch. Expected: %d, Actual: %d", i, len(expected.Functions), len(actual.Functions))
-		} else {
-			for j := range expected.Functions {
-				if !reflect.DeepEqual(*actual.Functions[j], *expected.Functions[j]) {
-					t.Errorf("Package %d Function %d mismatch.\nExpected: %+v\nActual:   %+v", i, j, *expected.Functions[j], *actual.Functions[j])
-				}
-			}
+		assert.Equal(t, len(expected.Functions), len(actual.Functions), "Package %d Functions count mismatch", i)
+		for j := range expected.Functions {
+			assert.Equal(t, *expected.Functions[j], *actual.Functions[j], "Package %d Function %d mismatch", i, j)
 		}
 
 		// Compare Variables
-		if len(actual.Variables) != len(expected.Variables) {
-			t.Errorf("Package %d Variables count mismatch. Expected: %d, Actual: %d", i, len(expected.Variables), len(actual.Variables))
-		} else {
-			for j := range expected.Variables {
-				if !reflect.DeepEqual(*actual.Variables[j], *expected.Variables[j]) {
-					t.Errorf("Package %d Variable %d mismatch.\nExpected: %+v\nActual:   %+v", i, j, *expected.Variables[j], *actual.Variables[j])
-				}
-			}
+		assert.Equal(t, len(expected.Variables), len(actual.Variables), "Package %d Variables count mismatch", i)
+		for j := range expected.Variables {
+			assert.Equal(t, *expected.Variables[j], *actual.Variables[j], "Package %d Variable %d mismatch", i, j)
 		}
 
 		// Compare Constants
-		if len(actual.Constants) != len(expected.Constants) {
-			t.Errorf("Package %d Constants count mismatch. Expected: %d, Actual: %d", i, len(expected.Constants), len(actual.Constants))
-		} else {
-			for j := range expected.Constants {
-				if !reflect.DeepEqual(*actual.Constants[j], *expected.Constants[j]) {
-					t.Errorf("Package %d Constant %d mismatch.\nExpected: %+v\nActual:   %+v", i, j, *expected.Constants[j], *actual.Constants[j])
-				}
-			}
+		assert.Equal(t, len(expected.Constants), len(actual.Constants), "Package %d Constants count mismatch", i)
+		for j := range expected.Constants {
+			assert.Equal(t, *expected.Constants[j], *actual.Constants[j], "Package %d Constant %d mismatch", i, j)
 		}
 	}
 }
@@ -297,8 +260,37 @@ func TestParseTypes(t *testing.T) {
 		},
 	}
 
-	if !reflect.DeepEqual(cfg.Types, expectedTypes) {
-		t.Errorf("Types mismatch.\nExpected: %+v\nActual:   %+v", expectedTypes, cfg.Types)
+	// 比较类型数量
+	assert.Equal(t, len(expectedTypes), len(cfg.Types), "Types count mismatch")
+
+	// 逐个比较每个类型
+	for i := range expectedTypes {
+		expected := expectedTypes[i]
+		actual := cfg.Types[i]
+
+		assert.Equal(t, expected.Name, actual.Name, "Type %d Name mismatch", i)
+		assert.Equal(t, expected.Kind, actual.Kind, "Type %d Kind mismatch", i)
+		assert.Equal(t, expected.Pattern, actual.Pattern, "Type %d Pattern mismatch", i)
+
+		// 比较 RuleSet
+		assert.Equal(t, len(expected.RuleSet.Explicit), len(actual.RuleSet.Explicit), "Type %d RuleSet.Explicit count mismatch", i)
+		assert.Equal(t, len(expected.RuleSet.Ignores), len(actual.RuleSet.Ignores), "Type %d RuleSet.Ignores count mismatch", i)
+
+		// 比较 Methods
+		assert.Equal(t, len(expected.Methods), len(actual.Methods), "Type %d Methods count mismatch", i)
+		for j := range expected.Methods {
+			if j < len(actual.Methods) {
+				assert.Equal(t, expected.Methods[j].Name, actual.Methods[j].Name, "Type %d Method %d Name mismatch", i, j)
+			}
+		}
+
+		// 比较 Fields
+		assert.Equal(t, len(expected.Fields), len(actual.Fields), "Type %d Fields count mismatch", i)
+		for j := range expected.Fields {
+			if j < len(actual.Fields) {
+				assert.Equal(t, expected.Fields[j].Name, actual.Fields[j].Name, "Type %d Field %d Name mismatch", i, j)
+			}
+		}
 	}
 }
 
@@ -323,9 +315,7 @@ func TestParseFunctions(t *testing.T) {
 		},
 	}
 
-	if !reflect.DeepEqual(cfg.Functions, expectedFunctions) {
-		t.Errorf("Functions mismatch.\nExpected: %+v\nActual:   %+v", expectedFunctions, cfg.Functions)
-	}
+	assert.Equal(t, expectedFunctions, cfg.Functions, "Functions mismatch")
 }
 
 func TestParseVariables(t *testing.T) {
@@ -349,9 +339,7 @@ func TestParseVariables(t *testing.T) {
 		},
 	}
 
-	if !reflect.DeepEqual(cfg.Variables, expectedVariables) {
-		t.Errorf("Variables mismatch.\nExpected: %+v\nActual:   %+v", expectedVariables, cfg.Variables)
-	}
+	assert.Equal(t, expectedVariables, cfg.Variables, "Variables mismatch")
 }
 
 func TestParseConstants(t *testing.T) {
@@ -373,7 +361,30 @@ func TestParseConstants(t *testing.T) {
 		},
 	}
 
-	if !reflect.DeepEqual(cfg.Constants, expectedConstants) {
-		t.Errorf("Constants mismatch.\nExpected: %+v\nActual:   %+v", expectedConstants, cfg.Constants)
+	assert.Equal(t, expectedConstants, cfg.Constants, "Constants mismatch")
+}
+
+func TestParseIgnores(t *testing.T) {
+	filePath := filepath.Join(getModuleRoot(), "testdata", "parser_test_ignores.go")
+	file, fset, err := loader.LoadGoFile(filePath)
+	if err != nil {
+		t.Fatalf("Failed to load Go file %s: %v", filePath, err)
 	}
+
+	cfg, err := parser.ParseFileDirectives(file, fset)
+	if err != nil {
+		t.Fatalf("Failed to parse directives: %v", err)
+	}
+
+	// 预期的忽略模式
+	expectedIgnores := []string{
+		"pattern1", // 来自 ignore 指令
+		"pattern2", // 来自 ignores 指令（逗号分隔）
+		"pattern3", // 来自 ignores 指令（逗号分隔）
+		"pattern4", // 来自 ignores:json 指令（JSON 数组）
+		"pattern5", // 来自 ignores:json 指令（JSON 数组）
+	}
+
+	// 使用 assert 断言验证结果
+	assert.ElementsMatch(t, expectedIgnores, cfg.Ignores, "Ignores patterns mismatch")
 }
