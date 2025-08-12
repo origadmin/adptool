@@ -1,4 +1,4 @@
-package main
+package testdata
 
 // Props configuration
 //go:adapter:prop GlobalVar1 globalValue1

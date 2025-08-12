@@ -1,4 +1,4 @@
-package main
+package testdata
 
 // --- Other Top-level Directives ---
 

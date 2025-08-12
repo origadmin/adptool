@@ -1,4 +1,4 @@
-package main
+package testdata
 
 // Defaults configuration
 //go:adapter:default:mode:strategy replace
