@@ -61,19 +61,19 @@ func ParseFileDirectives(file *goast.File, fset *gotoken.FileSet) (*config.Confi
 				return nil, err
 			}
 		case "type":
-			if len(pd.CmdParts) > 1 {
-				switch pd.CmdParts[1] {
+			if len(pd.SubCmds) > 0 {
+				switch pd.SubCmds[0] {
 				case "method", "field":
 					if err := handleMemberDirective(context, pd.CmdParts[1], pd.SubCmds, pd.Argument); err != nil {
 						return nil, err
 					}
 				default:
-					if err := handleTypeDirective(context, pd.CmdParts, pd.Argument); err != nil {
+					if err := handleTypeDirective(context, pd.SubCmds, pd.Argument); err != nil {
 						return nil, err
 					}
 				}
 			} else {
-				if err := handleTypeDirective(context, pd.CmdParts, pd.Argument); err != nil {
+				if err := handleTypeDirective(context, pd.SubCmds, pd.Argument); err != nil {
 					return nil, err
 				}
 			}
