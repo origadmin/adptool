@@ -35,12 +35,6 @@ func ParseFileDirectives(file *goast.File, fset *gotoken.FileSet) (*config.Confi
 
 			command, argument, baseCmd, cmdParts := parseDirective(rawDirective)
 
-			// Handle top-level ignore directive
-			if baseCmd == "ignore" {
-				state.pendingIgnoreArguments = append(state.pendingIgnoreArguments, argument)
-				continue
-			}
-
 			// Helper to apply pending ignore arguments to a rule's RuleSet
 			applyPendingIgnore := func(rs *config.RuleSet) {
 				if len(state.pendingIgnoreArguments) > 0 {
@@ -53,6 +47,8 @@ func ParseFileDirectives(file *goast.File, fset *gotoken.FileSet) (*config.Confi
 			}
 
 			switch baseCmd {
+			case "ignore": // Handle global ignore directive
+				state.cfg.Ignores = append(state.cfg.Ignores, argument)
 			case "defaults":
 				if err := handleDefaultsDirective(state, cmdParts, argument); err != nil {
 					return nil, err
