@@ -13,8 +13,9 @@ type Directive struct {
 	Line     int
 	Command  string
 	Argument string
-	BaseCmd  string
 	CmdParts []string
+	BaseCmd  string
+	SubCmds  []string
 }
 
 // DirectiveExtractor iterates over comments and extracts adptool directives.
@@ -82,6 +83,6 @@ func parseDirective(rawDirective string) Directive {
 
 	pd.CmdParts = strings.Split(pd.Command, ":")
 	pd.BaseCmd = pd.CmdParts[0]
-
+	pd.SubCmds = pd.CmdParts[1:]
 	return pd
 }

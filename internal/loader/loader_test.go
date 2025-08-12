@@ -206,7 +206,7 @@ packages:
 					{
 						Import: "github.com/my/package",
 						Alias:  "mypkg",
-						Vars: []*config.PropsEntry{
+						Props: []*config.PropsEntry{
 							{
 								Name:  "PackageVar1",
 								Value: "packageValue1",

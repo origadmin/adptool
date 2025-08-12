@@ -137,7 +137,7 @@ type Package struct {
 	Import    string        `yaml:"import" mapstructure:"import"`
 	Path      string        `yaml:"path,omitempty" mapstructure:"path,omitempty"`
 	Alias     string        `yaml:"alias,omitempty" mapstructure:"alias,omitempty"`
-	Vars      []*PropsEntry `yaml:"vars,omitempty" mapstructure:"vars,omitempty"` // Changed to array of PropsEntry
+	Props     []*PropsEntry `yaml:"props,omitempty" mapstructure:"props,omitempty"` // Changed to array of PropsEntry
 	Types     []*TypeRule   `yaml:"types,omitempty" mapstructure:"types,omitempty"`
 	Functions []*FuncRule   `yaml:"functions,omitempty" mapstructure:"functions,omitempty"`
 	Variables []*VarRule    `yaml:"variables,omitempty" mapstructure:"variables,omitempty"`

@@ -6,28 +6,28 @@ package main
 // --- Top-level Config Directives ---
 
 // Defaults configuration
-//go:adapter:defaults:mode:strategy replace
-//go:adapter:defaults:mode:prefix append
-//go:adapter:defaults:mode:suffix append
-//go:adapter:defaults:mode:explicit merge
-//go:adapter:defaults:mode:regex merge
-//go:adapter:defaults:mode:ignores merge
+//go:adapter:default:mode:strategy replace
+//go:adapter:default:mode:prefix append
+//go:adapter:default:mode:suffix append
+//go:adapter:default:mode:explicit merge
+//go:adapter:default:mode:regex merge
+//go:adapter:default:mode:ignores merge
 
-// Vars configuration
-//go:adapter:vars GlobalVar1 globalValue1
-//go:adapter:vars GlobalVar2 globalValue2
+// Props configuration
+//go:adapter:prop GlobalVar1 globalValue1
+//go:adapter:prop GlobalVar2 globalValue2
 
 // Packages configuration
 //go:adapter:package github.com/my/package/v1
 //go:adapter:package:alias mypkg
 //go:adapter:package:path ./vendor/my/package/v1
-//go:adapter:package:vars PackageVar1 packageValue1
-//go:adapter:package:types MyStructInPackage
-//go:adapter:package:types:struct wrap
-//go:adapter:package:types:methods DoSomethingInPackage
-//go:adapter:package:types:methods:rename DoSomethingNewInPackage
-//go:adapter:package:functions MyFuncInPackage
-//go:adapter:package:functions:rename MyNewFuncInPackage
+//go:adapter:package:prop PackageVar1 packageValue1
+//go:adapter:package:type MyStructInPackage
+//go:adapter:package:type:struct wrap
+//go:adapter:package:type:method DoSomethingInPackage
+//go:adapter:package:type:method:rename DoSomethingNewInPackage
+//go:adapter:package:function MyFuncInPackage
+//go:adapter:package:function:rename MyNewFuncInPackage
 
 // --- Type Directives ---
 
@@ -38,13 +38,13 @@ package main
 
 // Test 2: A specific type that should inherit the global 'wrap' pattern
 //go:adapter:type ext1.TypeA
-//go:adapter:method .DoSomethingA
-//go:adapter:method:rename DoSomethingA_New
+//go:adapter:type:method .DoSomethingA
+//go:adapter:type:method:rename DoSomethingA_New
 
 // Test 3: A specific type that overrides the global pattern
 //go:adapter:type ext1.TypeB
 //go:adapter:type:struct copy
-//go:adapter:field .FieldB
+//go:adapter:type:field .FieldB
 
 // Test 4: A type that explicitly uses the default 'alias' pattern
 //go:adapter:type ext1.TypeC
@@ -61,7 +61,7 @@ package main
 // This type is defined within the context
 //go:adapter:type ctx3.ContextType
 // It should inherit the global 'wrap' pattern
-//go:adapter:method .DoSomethingCtx
+//go:adapter:type:method .DoSomethingCtx
 
 // Nested context
 //go:adapter:context
@@ -70,19 +70,19 @@ package main
 // This type is in the nested context
 //go:adapter:type nested4.NestedType
 //go:adapter:type:struct copy // Override pattern inside nested context
-//go:adapter:field .NestedField
+//go:adapter:type:field .NestedField
 
 //go:adapter:done // End nested context
 
 // Back in ctx3 context. Test that the pattern reverts.
 //go:adapter:type ctx3.AfterNestedType
-//go:adapter:method .DoSomethingAfterNested
+//go:adapter:type:method .DoSomethingAfterNested
 
 //go:adapter:done // End main context
 
 // Test 7: A directive with a full import path, should also use global 'wrap' pattern
 //go:adapter:type github.com/another/pkg/v2.AnotherExternalType
-//go:adapter:method .DoAnother
+//go:adapter:type:method .DoAnother
 
 // --- Other Top-level Directives ---
 

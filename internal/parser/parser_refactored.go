@@ -3,7 +3,6 @@ package parser
 import (
 	"encoding/json"
 	"fmt"
-	gotoken "go/token"
 	"strings"
 
 	"github.com/origadmin/adptool/internal/config"
@@ -15,179 +14,202 @@ type ContextEntry struct {
 	IsExplicit bool // True if this context was explicitly started by a :context Directive
 }
 
-// Context manages the current parsing context, including a stack for nested contexts.
+// Context manages the current parsing context
 type Context struct {
-	DefaultPackageImportPath string
-	DefaultPackageAlias      string
-	Entries                  []ContextEntry
+	Directive         *Directive
+	Config            *config.Config
+	CurrentPackage    *config.Package
+	CurrentTypeRule   *config.TypeRule
+	CurrentFuncRule   *config.FuncRule
+	CurrentVarRule    *config.VarRule
+	CurrentConstRule  *config.ConstRule
+	CurrentMemberRule *config.MemberRule
 }
 
-type parserState struct {
-	cfg             *config.Config
-	fset            *gotoken.FileSet
-	line            int
-	lastTypeRule    *config.TypeRule
-	lastFuncRule    *config.FuncRule
-	lastVarRule     *config.VarRule
-	lastConstRule   *config.ConstRule
-	lastMemberRule  *config.MemberRule
-	lastPackageRule *config.Package
-	context         *Context
+func (c *Context) CurrentRule() string {
+	switch {
+	case c.CurrentPackage != nil:
+		return "package"
+	case c.CurrentTypeRule != nil:
+		return "type"
+	case c.CurrentFuncRule != nil:
+		return "function"
+	case c.CurrentVarRule != nil:
+		return "var"
+	case c.CurrentMemberRule != nil:
+		return "member"
+	case c.CurrentConstRule != nil:
+		return "const"
+	default:
+		return "unknown"
+	}
+
+}
+func (c *Context) Reset() {
+	c.CurrentTypeRule = nil
+	c.CurrentFuncRule = nil
+	c.CurrentVarRule = nil
+	c.CurrentConstRule = nil
+	c.CurrentMemberRule = nil
 }
 
-func newParserState(cfg *config.Config, fset *gotoken.FileSet, line int) *parserState {
-	return &parserState{
-		cfg:     cfg,
-		fset:    fset,
-		line:    line,
-		context: &Context{}, // Initialize stack
+func NewContext() *Context {
+	return &Context{
+		Config: config.New(),
 	}
 }
 
 // handleDefaultsDirective handles the parsing of defaults directives.
-func handleDefaultsDirective(state *parserState, cmdParts []string, argument string) error {
+func handleDefaultsDirective(context *Context, cmdParts []string, argument string) error {
 	if len(cmdParts) < 2 || cmdParts[1] != "mode" || len(cmdParts) < 3 {
-		return fmt.Errorf("line %d: invalid defaults Directive format. Expected 'defaults:mode:<field> <value>'", state.line)
+		return fmt.Errorf("line %d: invalid defaults Directive format. Expected 'defaults:mode:<field> <value>'",
+			context.Directive.Line)
 	}
-	if state.cfg.Defaults == nil {
-		state.cfg.Defaults = &config.Defaults{}
+	if context.Config.Defaults == nil {
+		context.Config.Defaults = &config.Defaults{}
 	}
-	if state.cfg.Defaults.Mode == nil {
-		state.cfg.Defaults.Mode = &config.Mode{}
+	if context.Config.Defaults.Mode == nil {
+		context.Config.Defaults.Mode = &config.Mode{}
 	}
 	modeField := cmdParts[2]
 	switch modeField {
 	case "strategy":
-		state.cfg.Defaults.Mode.Strategy = argument
+		context.Config.Defaults.Mode.Strategy = argument
 	case "prefix":
-		state.cfg.Defaults.Mode.Prefix = argument
+		context.Config.Defaults.Mode.Prefix = argument
 	case "suffix":
-		state.cfg.Defaults.Mode.Suffix = argument
+		context.Config.Defaults.Mode.Suffix = argument
 	case "explicit":
-		state.cfg.Defaults.Mode.Explicit = argument
+		context.Config.Defaults.Mode.Explicit = argument
 	case "regex":
-		state.cfg.Defaults.Mode.Regex = argument
+		context.Config.Defaults.Mode.Regex = argument
 	case "ignores":
-		state.cfg.Defaults.Mode.Ignores = argument
+		context.Config.Defaults.Mode.Ignores = argument
 	default:
-		return fmt.Errorf("line %d: unknown defaults mode field '%s'", state.line, modeField)
+		return fmt.Errorf("line %d: unknown defaults mode field '%s'", context.Directive.Line, modeField)
 	}
 	return nil
 }
 
 // handleVarsDirective handles the parsing of vars directives.
-func handleVarsDirective(state *parserState, cmdParts []string, argument string) error {
+func handleVarsDirective(context *Context, cmdParts []string, argument string) error {
 	if len(cmdParts) != 1 {
-		return fmt.Errorf("line %d: invalid vars Directive format. Expected 'vars <name> <value>'", state.line)
+		return fmt.Errorf("line %d: invalid vars Directive format. Expected 'vars <name> <value>'", context.Directive.Line)
 	}
 	varNameParts := strings.SplitN(argument, " ", 2)
 	if len(varNameParts) != 2 {
-		return fmt.Errorf("line %d: invalid vars Directive argument. Expected 'name value'", state.line)
+		return fmt.Errorf("line %d: invalid vars Directive argument. Expected 'name value'", context.Directive.Line)
 	}
 	entry := &config.PropsEntry{Name: varNameParts[0], Value: varNameParts[1]}
-	if state.cfg.Props == nil {
-		state.cfg.Props = make([]*config.PropsEntry, 0)
+	if context.Config.Props == nil {
+		context.Config.Props = make([]*config.PropsEntry, 0)
 	}
-	state.cfg.Props = append(state.cfg.Props, entry)
+	context.Config.Props = append(context.Config.Props, entry)
 	return nil
 }
 
 // handlePackageDirective handles the parsing of package directives.
-func handlePackageDirective(state *parserState, cmdParts []string, argument string) error {
+func handlePackageDirective(context *Context, cmdParts []string, argument string) error {
+	if context.Directive.BaseCmd != "package" {
+		return fmt.Errorf("line %d: invalid package Directive format. Expected 'package <import_path>' or 'package <import_path> <alias>'", context.Directive.Line)
+	}
 	if len(cmdParts) == 1 { // //go:adapter:package <import_path> [alias] or //go:adapter:package <import_path>
 		pkgParts := strings.SplitN(argument, " ", 2)
 		if len(pkgParts) == 2 { // Context-setting form: //go:adapter:package <import_path> <alias>
-			state.context.DefaultPackageImportPath = pkgParts[0]
-			state.context.DefaultPackageAlias = pkgParts[1]
+			//context := &Context{
+			//	CurrentPackageImportPath: pkgParts[0],
+			//	CurrentPackageAlias:      pkgParts[1],
+			//}
+			context.CurrentPackage = &config.Package{Import: pkgParts[0], Alias: pkgParts[1]}
 		} else if len(pkgParts) == 1 { // Config-adding form: //go:adapter:package <import_path>
-			if state.cfg.Packages == nil {
-				state.cfg.Packages = make([]*config.Package, 0)
+			if context.Config.Packages == nil {
+				context.Config.Packages = make([]*config.Package, 0)
 			}
 			pkg := &config.Package{Import: argument}
-			state.cfg.Packages = append(state.cfg.Packages, pkg)
-			state.lastPackageRule = pkg
+			context.Config.Packages = append(context.Config.Packages, pkg)
+			context.CurrentPackage = pkg
 			//applyPendingIgnore(&pkg.RuleSet)
 			// Reset other last rules
-			state.lastTypeRule, state.lastFuncRule, state.lastVarRule, state.lastConstRule, state.lastMemberRule = nil, nil, nil, nil, nil
+			//context.CurrentTypeRule, context.CurrentFuncRule, context.CurrentVarRule, context.CurrentConstRule, context.CurrentMemberRule = nil, nil, nil, nil, nil
 		} else {
-			return fmt.Errorf("line %d: invalid package Directive format. Expected 'package <import_path>' or 'package <import_path> <alias>'", state.line)
+			return fmt.Errorf("line %d: invalid package Directive format. Expected 'package <import_path>' or 'package <import_path> <alias>'", context.Directive.Line)
 		}
-	} else if len(cmdParts) > 1 && cmdParts[0] == "package" && state.lastPackageRule != nil {
+	} else if len(cmdParts) > 1 && context.CurrentPackage != nil {
 		subCmd := cmdParts[1]
 		switch subCmd {
 		case "alias":
-			state.lastPackageRule.Alias = argument
+			context.CurrentPackage.Alias = argument
 		case "path":
-			state.lastPackageRule.Path = argument
-		case "vars":
+			context.CurrentPackage.Path = argument
+		case "prop":
 			varNameParts := strings.SplitN(argument, " ", 2)
 			if len(varNameParts) != 2 {
-				return fmt.Errorf("line %d: invalid package vars Directive argument. Expected 'name value'", state.line)
+				return fmt.Errorf("line %d: invalid package vars Directive argument. Expected 'name value'", context.Directive.Line)
 			}
 			entry := &config.PropsEntry{Name: varNameParts[0], Value: varNameParts[1]}
-			if state.lastPackageRule.Vars == nil {
-				state.lastPackageRule.Vars = make([]*config.PropsEntry, 0)
+			if context.CurrentPackage.Props == nil {
+				context.CurrentPackage.Props = make([]*config.PropsEntry, 0)
 			}
-			state.lastPackageRule.Vars = append(state.lastPackageRule.Vars, entry)
-		case "types":
+			context.CurrentPackage.Props = append(context.CurrentPackage.Props, entry)
+		case "type":
 			rule := &config.TypeRule{Name: argument, RuleSet: config.RuleSet{}}
-			if state.lastPackageRule.Types == nil {
-				state.lastPackageRule.Types = make([]*config.TypeRule, 0)
+			if context.CurrentPackage.Types == nil {
+				context.CurrentPackage.Types = make([]*config.TypeRule, 0)
 			}
-			state.lastPackageRule.Types = append(state.lastPackageRule.Types, rule)
-			state.lastTypeRule = rule
-			state.lastFuncRule, state.lastVarRule, state.lastConstRule, state.lastMemberRule = nil, nil, nil, nil
-		case "functions":
+			context.CurrentPackage.Types = append(context.CurrentPackage.Types, rule)
+			context.Reset()
+			context.CurrentTypeRule = rule
+		case "function":
 			rule := &config.FuncRule{Name: argument, RuleSet: config.RuleSet{}}
-			if state.lastPackageRule.Functions == nil {
-				state.lastPackageRule.Functions = make([]*config.FuncRule, 0)
+			if context.CurrentPackage.Functions == nil {
+				context.CurrentPackage.Functions = make([]*config.FuncRule, 0)
 			}
-			state.lastPackageRule.Functions = append(state.lastPackageRule.Functions, rule)
-			state.lastFuncRule = rule
-			state.lastTypeRule, state.lastVarRule, state.lastConstRule, state.lastMemberRule = nil, nil, nil, nil
-		case "variables":
+			context.CurrentPackage.Functions = append(context.CurrentPackage.Functions, rule)
+			context.Reset()
+			context.CurrentFuncRule = rule
+		case "variable":
 			rule := &config.VarRule{Name: argument, RuleSet: config.RuleSet{}}
-			if state.lastPackageRule.Variables == nil {
-				state.lastPackageRule.Variables = make([]*config.VarRule, 0)
+			if context.CurrentPackage.Variables == nil {
+				context.CurrentPackage.Variables = make([]*config.VarRule, 0)
 			}
-			state.lastPackageRule.Variables = append(state.lastPackageRule.Variables, rule)
-			state.lastVarRule = rule
-			state.lastTypeRule, state.lastFuncRule, state.lastConstRule, state.lastMemberRule = nil, nil, nil, nil
-		case "constants":
+			context.CurrentPackage.Variables = append(context.CurrentPackage.Variables, rule)
+			context.Reset()
+			context.CurrentVarRule = rule
+		case "constant":
 			rule := &config.ConstRule{Name: argument, RuleSet: config.RuleSet{}}
-			if state.lastPackageRule.Constants == nil {
-				state.lastPackageRule.Constants = make([]*config.ConstRule, 0)
+			if context.CurrentPackage.Constants == nil {
+				context.CurrentPackage.Constants = make([]*config.ConstRule, 0)
 			}
-			state.lastPackageRule.Constants = append(state.lastPackageRule.Constants, rule)
-			state.lastConstRule = rule
-			state.lastTypeRule, state.lastVarRule, state.lastConstRule, state.lastMemberRule = nil, nil, nil, nil
+			context.CurrentPackage.Constants = append(context.CurrentPackage.Constants, rule)
+			context.Reset()
+			context.CurrentConstRule = rule
 		default:
 			// Handle sub-directives of types/functions/variables/constants within a package
-			if len(cmdParts) == 3 && cmdParts[2] == "struct" && state.lastTypeRule != nil {
-				state.lastTypeRule.Pattern = argument
-				state.lastTypeRule.Kind = "struct"
-			} else if len(cmdParts) == 3 && cmdParts[2] == "disabled" && state.lastTypeRule != nil {
-				state.lastTypeRule.Disabled = argument == "true"
-			} else if len(cmdParts) == 3 && state.lastTypeRule != nil {
+			if len(cmdParts) == 3 && cmdParts[2] == "struct" && context.CurrentTypeRule != nil {
+				context.CurrentTypeRule.Pattern = argument
+				context.CurrentTypeRule.Kind = "struct"
+			} else if len(cmdParts) == 3 && cmdParts[2] == "disabled" && context.CurrentTypeRule != nil {
+				context.CurrentTypeRule.Disabled = argument == "true"
+			} else if len(cmdParts) == 3 && context.CurrentTypeRule != nil {
 				// Generic sub-rule for type within package
-				handleRule(&state.lastTypeRule.RuleSet, state.lastTypeRule.Name, cmdParts[2], argument)
-			} else if len(cmdParts) == 3 && cmdParts[2] == "disabled" && state.lastFuncRule != nil {
-				state.lastFuncRule.Disabled = argument == "true"
-			} else if len(cmdParts) == 3 && state.lastFuncRule != nil {
+				handleRule(&context.CurrentTypeRule.RuleSet, context.CurrentTypeRule.Name, cmdParts[2], argument)
+			} else if len(cmdParts) == 3 && cmdParts[2] == "disabled" && context.CurrentFuncRule != nil {
+				context.CurrentFuncRule.Disabled = argument == "true"
+			} else if len(cmdParts) == 3 && context.CurrentFuncRule != nil {
 				// Generic sub-rule for func within package
-				handleRule(&state.lastFuncRule.RuleSet, state.lastFuncRule.Name, cmdParts[2], argument)
-			} else if len(cmdParts) == 3 && cmdParts[2] == "disabled" && state.lastVarRule != nil {
-				state.lastVarRule.Disabled = argument == "true"
-			} else if len(cmdParts) == 3 && state.lastVarRule != nil {
+				handleRule(&context.CurrentFuncRule.RuleSet, context.CurrentFuncRule.Name, cmdParts[2], argument)
+			} else if len(cmdParts) == 3 && cmdParts[2] == "disabled" && context.CurrentVarRule != nil {
+				context.CurrentVarRule.Disabled = argument == "true"
+			} else if len(cmdParts) == 3 && context.CurrentVarRule != nil {
 				// Generic sub-rule for var within package
-				handleRule(&state.lastVarRule.RuleSet, state.lastVarRule.Name, cmdParts[2], argument)
-			} else if len(cmdParts) == 3 && cmdParts[2] == "disabled" && state.lastConstRule != nil {
-				state.lastConstRule.Disabled = argument == "true"
-			} else if len(cmdParts) == 3 && state.lastConstRule != nil {
+				handleRule(&context.CurrentVarRule.RuleSet, context.CurrentVarRule.Name, cmdParts[2], argument)
+			} else if len(cmdParts) == 3 && cmdParts[2] == "disabled" && context.CurrentConstRule != nil {
+				context.CurrentConstRule.Disabled = argument == "true"
+			} else if len(cmdParts) == 3 && context.CurrentConstRule != nil {
 				// Generic sub-rule for const within package
-				handleRule(&state.lastConstRule.RuleSet, state.lastConstRule.Name, cmdParts[2], argument)
+				handleRule(&context.CurrentConstRule.RuleSet, context.CurrentConstRule.Name, cmdParts[2], argument)
 			} else {
-				return fmt.Errorf("line %d: unknown package sub-Directive '%s'", state.line, cmdParts[2])
+				return fmt.Errorf("line %d: unknown package sub-directive '%s'", context.Directive.Line, cmdParts[1])
 			}
 		}
 	}
@@ -195,110 +217,110 @@ func handlePackageDirective(state *parserState, cmdParts []string, argument stri
 }
 
 // handleTypeDirective handles the parsing of type directives.
-func handleTypeDirective(state *parserState, cmdParts []string, argument string) error {
+func handleTypeDirective(context *Context, cmdParts []string, argument string) error {
 	if len(cmdParts) == 1 {
 		rule := &config.TypeRule{Name: argument, Kind: "type", RuleSet: config.RuleSet{}}
-		state.cfg.Types = append(state.cfg.Types, rule)
-		state.lastTypeRule = rule
-		state.lastFuncRule, state.lastVarRule, state.lastConstRule, state.lastMemberRule, state.lastPackageRule = nil, nil, nil, nil, nil
+		context.Config.Types = append(context.Config.Types, rule)
+		context.Reset()
+		context.CurrentTypeRule = rule
 	} else if len(cmdParts) == 2 && cmdParts[1] == "struct" {
-		if state.lastTypeRule == nil {
-			return fmt.Errorf("line %d: 'type:struct' must follow a 'type' Directive", state.line)
+		if context.CurrentTypeRule == nil {
+			return fmt.Errorf("line %d: 'type:struct' must follow a 'type' Directive", context.Directive.Line)
 		}
-		state.lastTypeRule.Pattern = argument
-		state.lastTypeRule.Kind = "struct"
+		context.CurrentTypeRule.Pattern = argument
+		context.CurrentTypeRule.Kind = "struct"
 	} else if len(cmdParts) == 2 && cmdParts[1] == "disabled" {
-		if state.lastTypeRule == nil {
-			return fmt.Errorf("line %d: ':disabled' must follow a 'type' Directive", state.line)
+		if context.CurrentTypeRule == nil {
+			return fmt.Errorf("line %d: ':disabled' must follow a 'type' Directive", context.Directive.Line)
 		}
-		state.lastTypeRule.Disabled = argument == "true"
+		context.CurrentTypeRule.Disabled = argument == "true"
 	} else if len(cmdParts) == 2 {
 		// Generic sub-rule for type (e.g., :rename, :explicit)
-		if state.lastTypeRule != nil {
-			handleRule(&state.lastTypeRule.RuleSet, state.lastTypeRule.Name, cmdParts[1], argument)
+		if context.CurrentTypeRule != nil {
+			handleRule(&context.CurrentTypeRule.RuleSet, context.CurrentTypeRule.Name, cmdParts[1], argument)
 		}
 	}
 	return nil
 }
 
 // handleFuncDirective handles the parsing of func directives.
-func handleFuncDirective(state *parserState, cmdParts []string, argument string) error {
+func handleFuncDirective(context *Context, cmdParts []string, argument string) error {
 	if len(cmdParts) == 1 {
 		rule := &config.FuncRule{Name: argument, RuleSet: config.RuleSet{}}
-		state.cfg.Functions = append(state.cfg.Functions, rule)
-		state.lastFuncRule = rule
-		state.lastTypeRule, state.lastVarRule, state.lastConstRule, state.lastMemberRule, state.lastPackageRule = nil, nil, nil, nil, nil
+		context.Config.Functions = append(context.Config.Functions, rule)
+		context.Reset()
+		context.CurrentFuncRule = rule
 	} else if len(cmdParts) == 2 && cmdParts[1] == "disabled" {
-		if state.lastFuncRule == nil {
-			return fmt.Errorf("line %d: ':disabled' must follow a 'func' Directive", state.line)
+		if context.CurrentFuncRule == nil {
+			return fmt.Errorf("line %d: ':disabled' must follow a 'func' Directive", context.Directive.Line)
 		}
-		state.lastFuncRule.Disabled = argument == "true"
-	} else if len(cmdParts) == 2 && state.lastFuncRule != nil {
+		context.CurrentFuncRule.Disabled = argument == "true"
+	} else if len(cmdParts) == 2 && context.CurrentFuncRule != nil {
 		// Generic sub-rule for func (e.g., :rename, :explicit)
-		handleRule(&state.lastFuncRule.RuleSet, state.lastFuncRule.Name, cmdParts[1], argument)
+		handleRule(&context.CurrentFuncRule.RuleSet, context.CurrentFuncRule.Name, cmdParts[1], argument)
 	}
 	return nil
 }
 
 // handleVarDirective handles the parsing of var directives.
-func handleVarDirective(state *parserState, cmdParts []string, argument string) error {
+func handleVarDirective(context *Context, cmdParts []string, argument string) error {
 	if len(cmdParts) == 1 {
 		rule := &config.VarRule{Name: argument, RuleSet: config.RuleSet{}}
-		state.cfg.Variables = append(state.cfg.Variables, rule)
-		state.lastVarRule = rule
-		state.lastTypeRule, state.lastFuncRule, state.lastConstRule, state.lastMemberRule = nil, nil, nil, nil
+		context.Config.Variables = append(context.Config.Variables, rule)
+		context.Reset()
+		context.CurrentVarRule = rule
 	} else if len(cmdParts) == 2 && cmdParts[1] == "disabled" {
-		if state.lastVarRule == nil {
-			return fmt.Errorf("line %d: ':disabled' must follow a 'var' Directive", state.line)
+		if context.CurrentVarRule == nil {
+			return fmt.Errorf("line %d: ':disabled' must follow a 'var' Directive", context.Directive.Line)
 		}
-		state.lastVarRule.Disabled = argument == "true"
-	} else if len(cmdParts) == 2 && state.lastVarRule != nil {
+		context.CurrentVarRule.Disabled = argument == "true"
+	} else if len(cmdParts) == 2 && context.CurrentVarRule != nil {
 		// Generic sub-rule for var (e.g., :rename, :explicit)
-		handleRule(&state.lastVarRule.RuleSet, state.lastVarRule.Name, cmdParts[1], argument)
+		handleRule(&context.CurrentVarRule.RuleSet, context.CurrentVarRule.Name, cmdParts[1], argument)
 	}
 	return nil
 }
 
 // handleConstDirective handles the parsing of const directives.
-func handleConstDirective(state *parserState, cmdParts []string, argument string) error {
+func handleConstDirective(context *Context, cmdParts []string, argument string) error {
 	if len(cmdParts) == 1 {
 		rule := &config.ConstRule{Name: argument, RuleSet: config.RuleSet{}}
-		state.cfg.Constants = append(state.cfg.Constants, rule)
-		state.lastConstRule = rule
-		state.lastTypeRule, state.lastFuncRule, state.lastVarRule, state.lastMemberRule = nil, nil, nil, nil
+		context.Config.Constants = append(context.Config.Constants, rule)
+		context.Reset()
+		context.CurrentConstRule = rule
 	} else if len(cmdParts) == 2 && cmdParts[1] == "disabled" {
-		if state.lastConstRule == nil {
-			return fmt.Errorf("line %d: ':disabled' must follow a 'const' Directive", state.line)
+		if context.CurrentConstRule == nil {
+			return fmt.Errorf("line %d: ':disabled' must follow a 'const' Directive", context.Directive.Line)
 		}
-		state.lastConstRule.Disabled = argument == "true"
-	} else if len(cmdParts) == 2 && state.lastConstRule != nil {
+		context.CurrentConstRule.Disabled = argument == "true"
+	} else if len(cmdParts) == 2 && context.CurrentConstRule != nil {
 		// Generic sub-rule for const (e.g., :rename, :explicit)
-		handleRule(&state.lastConstRule.RuleSet, state.lastConstRule.Name, cmdParts[1], argument)
+		handleRule(&context.CurrentConstRule.RuleSet, context.CurrentConstRule.Name, cmdParts[1], argument)
 	}
 	return nil
 }
 
 // handleMemberDirective handles the parsing of method and field directives.
-func handleMemberDirective(state *parserState, baseCmd string, cmdParts []string, argument string) error {
-	if state.lastTypeRule == nil {
-		return fmt.Errorf("line %d: '%s' Directive must follow a 'type' Directive", state.line, baseCmd)
+func handleMemberDirective(context *Context, baseCmd string, cmdParts []string, argument string) error {
+	if context.Directive.BaseCmd != "types" {
+		return fmt.Errorf("line %d: '%s' Directive must follow a 'type' Directive", context.Directive.Line, baseCmd)
 	}
 	if len(cmdParts) == 1 {
 		member := &config.MemberRule{Name: argument, RuleSet: config.RuleSet{}}
 		if baseCmd == "method" {
-			state.lastTypeRule.Methods = append(state.lastTypeRule.Methods, member)
+			context.CurrentTypeRule.Methods = append(context.CurrentTypeRule.Methods, member)
 		} else {
-			state.lastTypeRule.Fields = append(state.lastTypeRule.Fields, member)
+			context.CurrentTypeRule.Fields = append(context.CurrentTypeRule.Fields, member)
 		}
-		state.lastMemberRule = member
+		context.CurrentMemberRule = member
 	} else if len(cmdParts) == 2 && cmdParts[1] == "disabled" {
-		if state.lastMemberRule == nil {
-			return fmt.Errorf("line %d: ':disabled' must follow a member Directive", state.line)
+		if context.CurrentMemberRule == nil {
+			return fmt.Errorf("line %d: ':disabled' must follow a member Directive", context.Directive.Line)
 		}
-		state.lastMemberRule.Disabled = argument == "true"
-	} else if len(cmdParts) == 2 && state.lastMemberRule != nil {
+		context.CurrentMemberRule.Disabled = argument == "true"
+	} else if len(cmdParts) == 2 && context.CurrentMemberRule != nil {
 		// Generic sub-rule for method/field (e.g., :rename, :explicit)
-		handleRule(&state.lastMemberRule.RuleSet, state.lastMemberRule.Name, cmdParts[1], argument)
+		handleRule(&context.CurrentMemberRule.RuleSet, context.CurrentMemberRule.Name, cmdParts[1], argument)
 	}
 	return nil
 }
