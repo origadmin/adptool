@@ -2,7 +2,9 @@ package config
 
 // New creates a new, fully initialized Config object.
 func New() *Config {
-	return &Config{}
+	return &Config{
+		Ignores: make([]string, 0),
+	}
 }
 
 // newRuleSet creates a new RuleSet with initialized slices.
@@ -34,6 +36,7 @@ func newMemberRule() []*MemberRule {
 
 // Config is the root of the .adptool.yaml configuration file.
 type Config struct {
+	Ignores   []string     `yaml:"ignores,omitempty" mapstructure:"ignores,omitempty"` // Global ignore patterns
 	Defaults  *Defaults    `yaml:"defaults,omitempty" mapstructure:"defaults,omitempty"`
 	Vars      []*VarEntry  `yaml:"vars,omitempty" mapstructure:"vars,omitempty"` // Changed to array of VarEntry
 	Packages  []*Package   `yaml:"packages,omitempty" mapstructure:"packages,omitempty"`
@@ -183,6 +186,11 @@ func Merge(base *Config, overlay *Config) (*Config, error) {
 		for _, v := range overlay.Vars {
 			merged.Vars = append(merged.Vars, v)
 		}
+	}
+
+	// Ignores: overlay appends to base
+	if overlay.Ignores != nil {
+		merged.Ignores = append(merged.Ignores, overlay.Ignores...)
 	}
 
 	// Defaults: overlay takes precedence for individual fields
