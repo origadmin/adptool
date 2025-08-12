@@ -48,13 +48,7 @@ func parseDirective(rawDirective string) (command, argument, baseCmd string, cmd
 	argument = ""
 	if len(parts) > 1 {
 		// Strip inline comments from the argument
-		argWithComment := parts[1]
-		commentIndex := strings.Index(argWithComment, "//")
-		if commentIndex != -1 {
-			argument = strings.TrimSpace(argWithComment[:commentIndex])
-		} else {
-			argument = strings.TrimSpace(argWithComment)
-		}
+		argument = parts[1]
 	}
 	cmdParts = strings.Split(command, ":")
 	baseCmd = cmdParts[0]
