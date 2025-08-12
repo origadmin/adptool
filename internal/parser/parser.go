@@ -25,7 +25,7 @@ func ParseFileDirectives(file *goast.File, fset *gotoken.FileSet) (*config.Confi
 
 		switch pd.BaseCmd {
 		case "ignore": // Handle global ignore Directive
-			if pd.IsJsonArgument {
+			if pd.IsJSON {
 				var patterns []string
 				if err := json.Unmarshal([]byte(pd.Argument), &patterns); err != nil {
 					return nil, err
