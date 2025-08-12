@@ -29,6 +29,8 @@ package main
 //go:adapter:package:function MyFuncInPackage
 //go:adapter:package:function:rename MyNewFuncInPackage
 
+//go:adapter:done
+
 // --- Type Directives ---
 
 // Test 1: Global rule setting
@@ -93,5 +95,6 @@ package main
 //go:adapter:var ext1.MyExternalVariable
 //go:adapter:var:rename MyNewVariable
 
-//go:adapter:ignores ext1.MyExternalConstant
 //go:adapter:const ext1.MyExternalConstant
+//go:adapter:const:ignores ext1.MyExternalConstant
+
