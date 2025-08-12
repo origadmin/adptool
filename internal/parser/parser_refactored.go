@@ -16,6 +16,14 @@ type parsingContext struct {
 }
 
 // state holds the mutable state during parsing.
+type directive struct {
+	Command        string
+	Argument       string
+	BaseCmd        string
+	CmdParts       []string
+	IsJsonArgument bool
+}
+
 type parserState struct {
 	cfg  *config.Config
 	fset *gotoken.FileSet
@@ -42,28 +50,26 @@ func newParserState(cfg *config.Config, fset *gotoken.FileSet, line int) *parser
 }
 
 // parseDirective extracts command, argument, base command, and command parts from a raw directive string.
-func parseDirective(rawDirective string) (command, argument, baseCmd string, cmdParts []string, isJsonArgument bool) {
+func parseDirective(rawDirective string) directive {
+	var pd directive
 	parts := strings.SplitN(rawDirective, " ", 2)
-	command = parts[0]
-	argument = ""
+	pd.Command = parts[0]
+	pd.Argument = ""
 	if len(parts) > 1 {
 		// Strip inline comments from the argument
-		argument = parts[1]
+		pd.Argument = parts[1]
 	}
-	cmdParts = strings.Split(command, ":")
-	baseCmd = cmdParts[0]
 
-	// Check for :json suffix
-	if len(cmdParts) > 1 && cmdParts[len(cmdParts)-1] == "json" {
-		isJsonArgument = true
-		// Remove the :json part from cmdParts and baseCmd for further processing
-		cmdParts = cmdParts[:len(cmdParts)-1]
-		baseCmd = cmdParts[0]   // Re-evaluate baseCmd after removing :json
-		if len(cmdParts) == 1 { // If only baseCmd:json was present, baseCmd is just baseCmd
-			baseCmd = command[:strings.LastIndex(command, ":json")]
-		}
+	// Check for :json suffix first
+	if strings.HasSuffix(pd.Command, ":json") {
+		pd.IsJsonArgument = true
+		pd.Command = strings.TrimSuffix(pd.Command, ":json")
 	}
-	return
+
+	pd.CmdParts = strings.Split(pd.Command, ":")
+	pd.BaseCmd = pd.CmdParts[0]
+
+	return pd
 }
 
 // handleDefaultsDirective handles the parsing of defaults directives.
@@ -355,12 +361,19 @@ func handleRule(ruleset *config.RuleSet, fromName, ruleName, argument string) {
 			ruleset.Explicit = append(ruleset.Explicit, &config.ExplicitRule{From: explicitRules[0], To: explicitRules[1]})
 		}
 	case "explicit:json":
-		if ruleset.Explicit == nil {
-			ruleset.Explicit = make([]*config.ExplicitRule, 0)
-		}
 		var explicitRules []*config.ExplicitRule
-		if err := json.Unmarshal([]byte(argument), &ruleset.Explicit); err == nil {
+		if err := json.Unmarshal([]byte(argument), &explicitRules); err == nil {
 			ruleset.Explicit = explicitRules
+		}
+	case "regex:json":
+		var regexRules []*config.RegexRule
+		if err := json.Unmarshal([]byte(argument), &regexRules); err == nil {
+			ruleset.Regex = regexRules
+		}
+	case "strategy:json":
+		var strategies []string
+		if err := json.Unmarshal([]byte(argument), &strategies); err == nil {
+			ruleset.Strategy = strategies
 		}
 	}
 }

@@ -1,7 +1,7 @@
 package parser
 
 import (
-	"encoding/json" // Added for JSON unmarshaling
+	"encoding/json"
 	"fmt"
 	goast "go/ast"
 	gotoken "go/token"
@@ -34,7 +34,7 @@ func ParseFileDirectives(file *goast.File, fset *gotoken.FileSet) (*config.Confi
 				rawDirective = strings.TrimSpace(rawDirective[:commentStart])
 			}
 
-			command, argument, baseCmd, cmdParts, isJsonArgument := parseDirective(rawDirective)
+			pd := parseDirective(rawDirective)
 
 			// Helper to apply pending ignore arguments to a rule's RuleSet
 			applyPendingIgnore := func(rs *config.RuleSet) {
@@ -47,54 +47,54 @@ func ParseFileDirectives(file *goast.File, fset *gotoken.FileSet) (*config.Confi
 				}
 			}
 
-			switch baseCmd {
+			switch pd.BaseCmd {
 			case "ignore": // Handle global ignore directive
-				if isJsonArgument {
+				if pd.IsJsonArgument {
 					var patterns []string
-					if err := json.Unmarshal([]byte(argument), &patterns); err != nil {
-						return nil, fmt.Errorf("line %d: invalid JSON for ignore directive: %w", state.line, err)
+					if err := json.Unmarshal([]byte(pd.Argument), &patterns); err != nil {
+						return nil, err
 					}
 					state.cfg.Ignores = append(state.cfg.Ignores, patterns...)
 				} else {
-					state.cfg.Ignores = append(state.cfg.Ignores, argument)
+					state.cfg.Ignores = append(state.cfg.Ignores, pd.Argument)
 				}
 			case "defaults":
-				if err := handleDefaultsDirective(state, cmdParts, argument); err != nil {
+				if err := handleDefaultsDirective(state, pd.CmdParts, pd.Argument); err != nil {
 					return nil, err
 				}
 			case "props":
-				if err := handleVarsDirective(state, cmdParts, argument); err != nil {
+				if err := handleVarsDirective(state, pd.CmdParts, pd.Argument); err != nil {
 					return nil, err
 				}
 			case "package":
-				if err := handlePackageDirective(state, cmdParts, argument, applyPendingIgnore); err != nil {
+				if err := handlePackageDirective(state, pd.CmdParts, pd.Argument, applyPendingIgnore); err != nil {
 					return nil, err
 				}
 			case "type":
-				if err := handleTypeDirective(state, cmdParts, argument, applyPendingIgnore); err != nil {
+				if err := handleTypeDirective(state, pd.CmdParts, pd.Argument, applyPendingIgnore); err != nil {
 					return nil, err
 				}
 			case "func":
-				if err := handleFuncDirective(state, cmdParts, argument, applyPendingIgnore); err != nil {
+				if err := handleFuncDirective(state, pd.CmdParts, pd.Argument, applyPendingIgnore); err != nil {
 					return nil, err
 				}
 			case "var":
-				if err := handleVarDirective(state, cmdParts, argument, applyPendingIgnore); err != nil {
+				if err := handleVarDirective(state, pd.CmdParts, pd.Argument, applyPendingIgnore); err != nil {
 					return nil, err
 				}
 			case "const":
-				if err := handleConstDirective(state, cmdParts, argument, applyPendingIgnore); err != nil {
+				if err := handleConstDirective(state, pd.CmdParts, pd.Argument, applyPendingIgnore); err != nil {
 					return nil, err
 				}
 			case "method", "field":
-				if err := handleMemberDirective(state, baseCmd, cmdParts, argument, applyPendingIgnore); err != nil {
+				if err := handleMemberDirective(state, pd.BaseCmd, pd.CmdParts, pd.Argument, applyPendingIgnore); err != nil {
 					return nil, err
 				}
 			case "context", "done":
 				// Context and done directives are handled by the loader, not the parser.
 				// We will ignore them here.
 			default:
-				return nil, fmt.Errorf("line %d: unknown directive '%s'", state.line, command)
+				return nil, fmt.Errorf("line %d: unknown directive '%s'", state.line, pd.Command)
 			}
 		}
 	}
