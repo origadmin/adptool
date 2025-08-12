@@ -79,7 +79,7 @@ func handleDefaultsDirective(state *parserState, cmdParts []string, argument str
 	case "regex":
 		state.cfg.Defaults.Mode.Regex = argument
 	case "ignores":
-		state.cfg.Defaults.Mode.Ignores = argument
+		state.cfg.Defaults.Mode.IgnoresMode = argument
 	default:
 		return fmt.Errorf("line %d: unknown defaults mode field '%s'", state.line, modeField)
 	}

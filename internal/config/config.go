@@ -106,7 +106,7 @@ type RuleSet struct {
 	Regex           []*RegexRule    `yaml:"regex,omitempty" mapstructure:"regex,omitempty"`
 	RegexMode       string          `yaml:"regex_mode,omitempty" mapstructure:"regex_mode,omitempty"`
 	Ignores         []string        `yaml:"ignores,omitempty" mapstructure:"ignores,omitempty"`
-	IgnoreMode      string          `yaml:"ignore_mode,omitempty" mapstructure:"ignore_mode,omitempty"`
+	IgnoresMode     string          `yaml:"ignores_mode,omitempty" mapstructure:"ignores_mode,omitempty"`
 	TransformBefore string          `yaml:"transform_before,omitempty" mapstructure:"transform_before,omitempty"`
 	TransformAfter  string          `yaml:"transform_after,omitempty" mapstructure:"transform_after,omitempty"`
 }
