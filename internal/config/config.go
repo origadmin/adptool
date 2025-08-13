@@ -70,6 +70,12 @@ type MemberRule struct {
 	RuleSet  `yaml:",inline" mapstructure:",squash" json:",inline" toml:",inline"`
 }
 
+// Transform defines the before and after template strings for renaming.
+type Transform struct {
+	Before string `yaml:"before,omitempty" mapstructure:"before,omitempty" json:"before,omitempty" toml:"before,omitempty"`
+	After  string `yaml:"after,omitempty" mapstructure:"after,omitempty" json:"after,omitempty" toml:"after,omitempty"`
+}
+
 // RuleSet is the fundamental, reusable building block for defining transformation rules.
 type RuleSet struct {
 	Strategy        []string        `yaml:"strategy,omitempty" mapstructure:"strategy,omitempty" json:"strategy,omitempty" toml:"strategy,omitempty"`
