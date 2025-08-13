@@ -61,41 +61,28 @@ func ParseFileDirectives(file *goast.File, fset *gotoken.FileSet) (*config.Confi
 				return nil, err
 			}
 		case "type":
-			if len(pd.SubCmds) > 0 {
-				cmd := pd.SubCmds[0]
-				switch pd.SubCmds[0] {
-				case "method", "field":
-					if err := handleMemberDirective(context, cmd, pd.SubCmds, pd.Argument); err != nil {
-						return nil, err
-					}
-				default:
-					if err := handleTypeDirective(context, pd.SubCmds, pd.Argument); err != nil {
-						return nil, err
-					}
-				}
-			} else {
-				if err := handleTypeDirective(context, pd.SubCmds, pd.Argument); err != nil {
-					return nil, err
-				}
+			slog.Info("Handling 'type' directive")
+			if err := handleTypeDirective(context, pd.SubCmds, pd.Argument); err != nil {
+				return nil, err
 			}
 		case "func":
 			slog.Info("Handling 'func' directive")
-			if err := handleFuncDirective(context, pd.CmdParts, pd.Argument); err != nil {
+			if err := handleFuncDirective(context, pd.SubCmds, pd.Argument); err != nil {
 				return nil, err
 			}
 		case "var":
 			slog.Info("Handling 'var' directive")
-			if err := handleVarDirective(context, pd.CmdParts, pd.Argument); err != nil {
+			if err := handleVarDirective(context, pd.SubCmds, pd.Argument); err != nil {
 				return nil, err
 			}
 		case "const":
 			slog.Info("Handling 'const' directive")
-			if err := handleConstDirective(context, pd.CmdParts, pd.Argument); err != nil {
+			if err := handleConstDirective(context, pd.SubCmds, pd.Argument); err != nil {
 				return nil, err
 			}
 		case "method", "field":
 			slog.Info("Handling 'method' or 'field' directive")
-			if err := handleMemberDirective(context, pd.BaseCmd, pd.CmdParts, pd.Argument); err != nil {
+			if err := handleMemberDirective(context, pd.BaseCmd, pd.SubCmds, pd.Argument); err != nil {
 				return nil, err
 			}
 		case "context", "done":
