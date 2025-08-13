@@ -46,15 +46,15 @@ func ParseFileDirectives(file *goast.File, fset *gotoken.FileSet) (*config.Confi
 			}
 		case "default":
 			err = handleDefaultDirective(builder, d)
-		case "prop":
-			err = handleVarsDirective(builder, d)
+		case "prop", "property":
+			err = handlePropDirective(builder, d)
 		case "package":
 			err = handlePackageDirective(builder, d)
 		case "type":
 			err = handleTypeDirective(builder, d.SubCmds, d.Argument, d)
-		case "func":
+		case "func", "function":
 			err = handleFuncDirective(builder, d.SubCmds, d.Argument, d)
-		case "var":
+		case "var", "variable":
 			err = handleVarDirective(builder, d.SubCmds, d.Argument, d)
 		case "const":
 			err = handleConstDirective(builder, d.SubCmds, d.Argument, d)

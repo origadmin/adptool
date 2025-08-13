@@ -38,18 +38,15 @@ func handleDefaultDirective(builder *ConfigBuilder, d *Directive) error {
 	return nil
 }
 
-func handleVarsDirective(builder *ConfigBuilder, d *Directive) error {
+func handlePropDirective(builder *ConfigBuilder, d *Directive) error {
 	if len(d.SubCmds) != 0 {
-		return newDirectiveError(d, "invalid vars Directive format. Expected 'vars <name> <value>'")
+		return newDirectiveError(d, "invalid prop directive format. Expected 'prop <name> <value>'")
 	}
 	name, value, err := parseNameValue(d.Argument)
 	if err != nil {
-		return newDirectiveError(d, "invalid vars Directive argument: %v", err)
+		return newDirectiveError(d, "invalid prop directive argument: %v", err)
 	}
 	entry := &config.PropsEntry{Name: name, Value: value}
-	if builder.config.Props == nil {
-		builder.config.Props = make([]*config.PropsEntry, 0)
-	}
 	builder.config.Props = append(builder.config.Props, entry)
 	return nil
 }
@@ -68,7 +65,7 @@ func handlePackageDirective(builder *ConfigBuilder, d *Directive) error {
 	}
 
 	if builder.currentPackage == nil {
-		return newDirectiveError(d, "'package:%s' must follow a 'package' Directive", d.SubCmds[0])
+		return newDirectiveError(d, "'package:%s' must follow a 'package' directive", d.SubCmds[0])
 	}
 
 	switch d.SubCmds[0] {
@@ -80,9 +77,6 @@ func handlePackageDirective(builder *ConfigBuilder, d *Directive) error {
 		name, value, err := parseNameValue(d.Argument)
 		if err != nil {
 			return newDirectiveError(d, "invalid package prop argument: %v", err)
-		}
-		if builder.currentPackage.Props == nil {
-			builder.currentPackage.Props = make([]*config.PropsEntry, 0)
 		}
 		builder.currentPackage.Props = append(builder.currentPackage.Props, &config.PropsEntry{Name: name, Value: value})
 	case "type":
@@ -104,7 +98,7 @@ func handleTypeDirective(builder *ConfigBuilder, subCmds []string, argument stri
 		builder.AddTypeRule(argument)
 		return nil
 	}
-	return builder.ApplySubDirective(subCmds, argument, d)
+	return builder.ApplySubDirective(subCmds, argument)
 }
 
 func handleFuncDirective(builder *ConfigBuilder, subCmds []string, argument string, d *Directive) error {
@@ -112,7 +106,7 @@ func handleFuncDirective(builder *ConfigBuilder, subCmds []string, argument stri
 		builder.AddFuncRule(argument)
 		return nil
 	}
-	return builder.ApplySubDirective(subCmds, argument, d)
+	return builder.ApplySubDirective(subCmds, argument)
 }
 
 func handleVarDirective(builder *ConfigBuilder, subCmds []string, argument string, d *Directive) error {
@@ -120,7 +114,7 @@ func handleVarDirective(builder *ConfigBuilder, subCmds []string, argument strin
 		builder.AddVarRule(argument)
 		return nil
 	}
-	return builder.ApplySubDirective(subCmds, argument, d)
+	return builder.ApplySubDirective(subCmds, argument)
 }
 
 func handleConstDirective(builder *ConfigBuilder, subCmds []string, argument string, d *Directive) error {
@@ -128,5 +122,5 @@ func handleConstDirective(builder *ConfigBuilder, subCmds []string, argument str
 		builder.AddConstRule(argument)
 		return nil
 	}
-	return builder.ApplySubDirective(subCmds, argument, d)
+	return builder.ApplySubDirective(subCmds, argument)
 }
