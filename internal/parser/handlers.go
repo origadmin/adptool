@@ -1,231 +1,132 @@
 package parser
 
 import (
-	"encoding/json"
-	"fmt"
-	"log/slog"
 	"strings"
 
 	"github.com/origadmin/adptool/internal/config"
 )
 
-// --- Default and Prop Handlers ---
+// --- Top-Level Handlers ---
 
-func handleDefaultDirective(context *Context, subCmds []string, argument string) error {
-	if len(subCmds) < 1 || subCmds[0] != "mode" || len(subCmds) < 2 {
-		return newDirectiveError(context.Directive, "invalid defaults Directive format. Expected 'default:mode:<field> <value>'")
+func handleDefaultDirective(builder *ConfigBuilder, d *Directive) error {
+	if len(d.SubCmds) < 1 || d.SubCmds[0] != "mode" || len(d.SubCmds) < 2 {
+		return newDirectiveError(d, "invalid defaults Directive format. Expected 'default:mode:<field> <value>'")
 	}
-	if context.Config.Defaults == nil {
-		context.Config.Defaults = &config.Defaults{}
+	if builder.config.Defaults == nil {
+		builder.config.Defaults = &config.Defaults{}
 	}
-	if context.Config.Defaults.Mode == nil {
-		context.Config.Defaults.Mode = &config.Mode{}
+	if builder.config.Defaults.Mode == nil {
+		builder.config.Defaults.Mode = &config.Mode{}
 	}
-	modeField := subCmds[1]
+	modeField := d.SubCmds[1]
 	switch modeField {
 	case "strategy":
-		context.Config.Defaults.Mode.Strategy = argument
+		builder.config.Defaults.Mode.Strategy = d.Argument
 	case "prefix":
-		context.Config.Defaults.Mode.Prefix = argument
+		builder.config.Defaults.Mode.Prefix = d.Argument
 	case "suffix":
-		context.Config.Defaults.Mode.Suffix = argument
+		builder.config.Defaults.Mode.Suffix = d.Argument
 	case "explicit":
-		context.Config.Defaults.Mode.Explicit = argument
+		builder.config.Defaults.Mode.Explicit = d.Argument
 	case "regex":
-		context.Config.Defaults.Mode.Regex = argument
+		builder.config.Defaults.Mode.Regex = d.Argument
 	case "ignores":
-		context.Config.Defaults.Mode.Ignores = argument
+		builder.config.Defaults.Mode.Ignores = d.Argument
 	default:
-		return newDirectiveError(context.Directive, "unknown defaults mode field '%s'", modeField)
+		return newDirectiveError(d, "unknown defaults mode field '%s'", modeField)
 	}
 	return nil
 }
 
-func handleVarsDirective(context *Context, subCmds []string, argument string) error {
-	if len(subCmds) != 0 {
-		return newDirectiveError(context.Directive, "invalid vars Directive format. Expected 'vars <name> <value>'")
+func handleVarsDirective(builder *ConfigBuilder, d *Directive) error {
+	if len(d.SubCmds) != 0 {
+		return newDirectiveError(d, "invalid vars Directive format. Expected 'vars <name> <value>'")
 	}
-	name, value, err := parseNameValue(argument)
+	name, value, err := parseNameValue(d.Argument)
 	if err != nil {
-		return newDirectiveError(context.Directive, "invalid vars Directive argument: %v", err)
+		return newDirectiveError(d, "invalid vars Directive argument: %v", err)
 	}
 	entry := &config.PropsEntry{Name: name, Value: value}
-	if context.Config.Props == nil {
-		context.Config.Props = make([]*config.PropsEntry, 0)
+	if builder.config.Props == nil {
+		builder.config.Props = make([]*config.PropsEntry, 0)
 	}
-	context.Config.Props = append(context.Config.Props, entry)
+	builder.config.Props = append(builder.config.Props, entry)
 	return nil
 }
 
-// --- Core Handlers ---
-
-func handlePackageDirective(ctx *Context, subCmds []string, argument string) error {
-	if len(subCmds) == 0 {
-		pkgParts := strings.SplitN(argument, " ", 2)
+func handlePackageDirective(builder *ConfigBuilder, d *Directive) error {
+	if len(d.SubCmds) == 0 {
+		pkgParts := strings.SplitN(d.Argument, " ", 2)
 		var pkg *config.Package
 		if len(pkgParts) == 2 {
 			pkg = &config.Package{Import: pkgParts[0], Alias: pkgParts[1]}
 		} else {
-			pkg = &config.Package{Import: argument}
+			pkg = &config.Package{Import: d.Argument}
 		}
-
-		if ctx.Config.Packages == nil {
-			ctx.Config.Packages = make([]*config.Package, 0)
-		}
-		ctx.Config.Packages = append(ctx.Config.Packages, pkg)
-		ctx.CurrentPackage = pkg
-		ctx.ResetActiveRule()
+		builder.SetPackageScope(pkg)
 		return nil
 	}
 
-	if ctx.CurrentPackage == nil {
-		return newDirectiveError(ctx.Directive, "'package:%s' must follow a 'package' Directive", subCmds[0])
+	if builder.currentPackage == nil {
+		return newDirectiveError(d, "'package:%s' must follow a 'package' Directive", d.SubCmds[0])
 	}
 
-	switch subCmds[0] {
+	switch d.SubCmds[0] {
 	case "alias":
-		ctx.CurrentPackage.Alias = argument
+		builder.currentPackage.Alias = d.Argument
 	case "path":
-		ctx.CurrentPackage.Path = argument
+		builder.currentPackage.Path = d.Argument
 	case "prop":
-		name, value, err := parseNameValue(argument)
+		name, value, err := parseNameValue(d.Argument)
 		if err != nil {
-			return newDirectiveError(ctx.Directive, "invalid package prop argument: %v", err)
+			return newDirectiveError(d, "invalid package prop argument: %v", err)
 		}
-		if ctx.CurrentPackage.Props == nil {
-			ctx.CurrentPackage.Props = make([]*config.PropsEntry, 0)
+		if builder.currentPackage.Props == nil {
+			builder.currentPackage.Props = make([]*config.PropsEntry, 0)
 		}
-		ctx.CurrentPackage.Props = append(ctx.CurrentPackage.Props, &config.PropsEntry{Name: name, Value: value})
+		builder.currentPackage.Props = append(builder.currentPackage.Props, &config.PropsEntry{Name: name, Value: value})
 	case "type":
-		return handleTypeDirective(ctx, subCmds[1:], argument)
+		return handleTypeDirective(builder, d.SubCmds[1:], d.Argument, d)
 	case "function", "func":
-		return handleFuncDirective(ctx, subCmds[1:], argument)
+		return handleFuncDirective(builder, d.SubCmds[1:], d.Argument, d)
 	case "variable", "var":
-		return handleVarDirective(ctx, subCmds[1:], argument)
+		return handleVarDirective(builder, d.SubCmds[1:], d.Argument, d)
 	case "constant", "const":
-		return handleConstDirective(ctx, subCmds[1:], argument)
+		return handleConstDirective(builder, d.SubCmds[1:], d.Argument, d)
 	default:
-		return newDirectiveError(ctx.Directive, "unknown package sub-directive '%s'", subCmds[0])
+		return newDirectiveError(d, "unknown package sub-directive '%s'", d.SubCmds[0])
 	}
 	return nil
 }
 
-func handleTypeDirective(ctx *Context, subCmds []string, argument string) error {
+func handleTypeDirective(builder *ConfigBuilder, subCmds []string, argument string, d *Directive) error {
 	if len(subCmds) == 0 {
-		configRule := &config.TypeRule{Name: argument, Kind: "type"}
-		rule := &TypeRule{TypeRule: configRule}
-		ctx.AddTypeRule(configRule)
-		ctx.SetActiveRule(rule)
+		builder.AddTypeRule(argument)
 		return nil
 	}
-
-	activeRule := ctx.ActiveRule()
-	if activeRule == nil {
-		return newDirectiveError(ctx.Directive, "':%s' must follow a 'type' Directive", subCmds[0])
-	}
-
-	return activeRule.ApplySubDirective(ctx, subCmds, argument)
+	return builder.ApplySubDirective(subCmds, argument, d)
 }
 
-func handleFuncDirective(ctx *Context, subCmds []string, argument string) error {
+func handleFuncDirective(builder *ConfigBuilder, subCmds []string, argument string, d *Directive) error {
 	if len(subCmds) == 0 {
-		configRule := &config.FuncRule{Name: argument}
-		rule := &FuncRule{FuncRule: configRule}
-		ctx.AddFuncRule(configRule)
-		ctx.SetActiveRule(rule)
+		builder.AddFuncRule(argument)
 		return nil
 	}
-
-	activeRule := ctx.ActiveRule()
-	if activeRule == nil {
-		return newDirectiveError(ctx.Directive, "':%s' must follow a 'func' Directive", subCmds[0])
-	}
-
-	return activeRule.ApplySubDirective(ctx, subCmds, argument)
+	return builder.ApplySubDirective(subCmds, argument, d)
 }
 
-func handleVarDirective(ctx *Context, subCmds []string, argument string) error {
+func handleVarDirective(builder *ConfigBuilder, subCmds []string, argument string, d *Directive) error {
 	if len(subCmds) == 0 {
-		configRule := &config.VarRule{Name: argument}
-		rule := &VarRule{VarRule: configRule}
-		ctx.AddVarRule(configRule)
-		ctx.SetActiveRule(rule)
+		builder.AddVarRule(argument)
 		return nil
 	}
-
-	activeRule := ctx.ActiveRule()
-	if activeRule == nil {
-		return newDirectiveError(ctx.Directive, "':%s' must follow a 'var' Directive", subCmds[0])
-	}
-
-	return activeRule.ApplySubDirective(ctx, subCmds, argument)
+	return builder.ApplySubDirective(subCmds, argument, d)
 }
 
-func handleConstDirective(ctx *Context, subCmds []string, argument string) error {
+func handleConstDirective(builder *ConfigBuilder, subCmds []string, argument string, d *Directive) error {
 	if len(subCmds) == 0 {
-		configRule := &config.ConstRule{Name: argument}
-		rule := &ConstRule{ConstRule: configRule}
-		ctx.AddConstRule(configRule)
-		ctx.SetActiveRule(rule)
+		builder.AddConstRule(argument)
 		return nil
 	}
-
-	activeRule := ctx.ActiveRule()
-	if activeRule == nil {
-		return newDirectiveError(ctx.Directive, "':%s' must follow a 'const' Directive", subCmds[0])
-	}
-
-	return activeRule.ApplySubDirective(ctx, subCmds, argument)
-}
-
-// applyRuleToRuleSet applies a sub-rule to the provided ruleset.
-func applyRuleToRuleSet(ruleset *config.RuleSet, fromName, ruleName, argument string) error {
-	slog.Debug("Applying rule to ruleset", "fromName", fromName, "ruleName", ruleName, "argument", argument)
-	if ruleset == nil {
-		return fmt.Errorf("cannot apply rule to a nil ruleset")
-	}
-
-	switch ruleName {
-	case "rename":
-		if ruleset.Explicit == nil {
-			ruleset.Explicit = make([]*config.ExplicitRule, 0)
-		}
-		ruleset.Explicit = append(ruleset.Explicit, &config.ExplicitRule{From: fromName, To: argument})
-	case "explicit":
-		if ruleset.Explicit == nil {
-			ruleset.Explicit = make([]*config.ExplicitRule, 0)
-		}
-		explicitRules := strings.SplitN(argument, " ", 2)
-		if len(explicitRules) == 2 {
-			ruleset.Explicit = append(ruleset.Explicit, &config.ExplicitRule{From: explicitRules[0], To: explicitRules[1]})
-		} else {
-			return fmt.Errorf("explicit rule argument must be in 'from to' format")
-		}
-	case "explicit:json":
-		var explicitRules []*config.ExplicitRule
-		if err := json.Unmarshal([]byte(argument), &explicitRules); err == nil {
-			ruleset.Explicit = explicitRules
-		} else {
-			return fmt.Errorf("invalid JSON for explicit:json: %w", err)
-		}
-	case "regex:json":
-		var regexRules []*config.RegexRule
-		if err := json.Unmarshal([]byte(argument), &regexRules); err == nil {
-			ruleset.Regex = regexRules
-		} else {
-			return fmt.Errorf("invalid JSON for regex:json: %w", err)
-		}
-	case "strategy:json":
-		var strategies []string
-		if err := json.Unmarshal([]byte(argument), &strategies); err == nil {
-			ruleset.Strategy = strategies
-		} else {
-			return fmt.Errorf("invalid JSON for strategy:json: %w", err)
-		}
-	case "ignores":
-		ruleset.Ignores = append(ruleset.Ignores, argument)
-	default:
-		return fmt.Errorf("unknown rule name: %s", ruleName)
-	}
-	return nil
+	return builder.ApplySubDirective(subCmds, argument, d)
 }

@@ -172,8 +172,8 @@ func TestParseTypes(t *testing.T) {
 	}
 
 	// This test now only checks for GLOBAL types. Types defined within a package
-	// are tested in TestParsePackages.
-	expectedTypes := []*config.TypeRule{
+	// are tested separately below.
+	expectedGlobalTypes := []*config.TypeRule{
 		{
 			Name:    "*",
 			Kind:    "struct",
@@ -220,12 +220,11 @@ func TestParseTypes(t *testing.T) {
 		},
 	}
 
-	assert.Equal(t, len(expectedTypes), len(cfg.Types), "Global types count mismatch")
+	assert.Equal(t, len(expectedGlobalTypes), len(cfg.Types), "Global types count mismatch")
 
-	for i, expected := range expectedTypes {
+	for i, expected := range expectedGlobalTypes {
 		if i >= len(cfg.Types) {
-			t.Errorf("Missing expected global type #%d: %s", i, expected.Name)
-			continue
+			t.Fatalf("Missing expected global type #%d: %s", i, expected.Name)
 		}
 		actual := cfg.Types[i]
 		assert.Equal(t, expected.Name, actual.Name, "Global type %d Name mismatch", i)
@@ -271,10 +270,19 @@ func TestParseTypes(t *testing.T) {
 		},
 	}
 
+	actualPackageTypes := make(map[string][]*config.TypeRule)
 	for _, pkg := range cfg.Packages {
-		if expected, ok := expectedPackageTypes[pkg.Import]; ok {
-			assert.Equal(t, len(expected), len(pkg.Types), "Package %s types count mismatch", pkg.Import)
+		if len(pkg.Types) > 0 {
+			actualPackageTypes[pkg.Import] = pkg.Types
 		}
+	}
+
+	assert.Equal(t, len(expectedPackageTypes), len(actualPackageTypes), "Count of packages with types mismatch")
+	for imp, expectedTypesInPkg := range expectedPackageTypes {
+		actualTypesInPkg, ok := actualPackageTypes[imp]
+		assert.True(t, ok, "Missing package with types: %s", imp)
+		assert.Equal(t, len(expectedTypesInPkg), len(actualTypesInPkg), "Types count in package %s mismatch", imp)
+		// A more detailed comparison could be done here if needed.
 	}
 }
 
@@ -303,8 +311,7 @@ func TestParseFunctions(t *testing.T) {
 
 	for i, expected := range expectedFunctions {
 		if i >= len(cfg.Functions) {
-			t.Errorf("Missing expected function #%d: %s", i, expected.Name)
-			continue
+			t.Fatalf("Missing expected function #%d: %s", i, expected.Name)
 		}
 		actual := cfg.Functions[i]
 		assert.Equal(t, expected.Name, actual.Name, "Function %d Name mismatch", i)
@@ -337,8 +344,7 @@ func TestParseVariables(t *testing.T) {
 
 	for i, expected := range expectedVariables {
 		if i >= len(cfg.Variables) {
-			t.Errorf("Missing expected variable #%d: %s", i, expected.Name)
-			continue
+			t.Fatalf("Missing expected variable #%d: %s", i, expected.Name)
 		}
 		actual := cfg.Variables[i]
 		assert.Equal(t, expected.Name, actual.Name, "Variable %d Name mismatch", i)
@@ -369,8 +375,7 @@ func TestParseConstants(t *testing.T) {
 
 	for i, expected := range expectedConstants {
 		if i >= len(cfg.Constants) {
-			t.Errorf("Missing expected constant #%d: %s", i, expected.Name)
-			continue
+			t.Fatalf("Missing expected constant #%d: %s", i, expected.Name)
 		}
 		actual := cfg.Constants[i]
 		assert.Equal(t, expected.Name, actual.Name, "Constant %d Name mismatch", i)
