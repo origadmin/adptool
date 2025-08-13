@@ -7,17 +7,6 @@ import (
 	"strings"
 )
 
-// Directive holds the mutable state during parsing.
-type Directive struct {
-	IsJSON   bool
-	Line     int
-	Command  string
-	Argument string
-	CmdParts []string
-	BaseCmd  string
-	SubCmds  []string
-}
-
 // DirectiveExtractor iterates over comments and extracts adptool directives.
 type DirectiveExtractor struct {
 	comments []*goast.Comment
@@ -56,33 +45,7 @@ func (de *DirectiveExtractor) Next() *Directive {
 		if commentStart != -1 {
 			rawDirective = strings.TrimSpace(rawDirective[:commentStart])
 		}
-
-		pd := parseDirective(rawDirective)
-		pd.Line = line // Assign line to Directive
-		return &pd
+		return parseDirective(rawDirective, line)
 	}
 	return nil // No more directives
-}
-
-// parseDirective extracts command, argument, base command, and command parts from a raw Directive string.
-func parseDirective(rawDirective string) Directive {
-	var pd Directive
-	parts := strings.SplitN(rawDirective, " ", 2)
-	pd.Command = parts[0]
-	pd.Argument = ""
-	if len(parts) > 1 {
-		// Strip inline comments from the argument
-		pd.Argument = parts[1]
-	}
-
-	// Check for :json suffix first
-	if strings.HasSuffix(pd.Command, ":json") {
-		pd.IsJSON = true
-		pd.Command = strings.TrimSuffix(pd.Command, ":json")
-	}
-
-	pd.CmdParts = strings.Split(pd.Command, ":")
-	pd.BaseCmd = pd.CmdParts[0]
-	pd.SubCmds = pd.CmdParts[1:]
-	return pd
 }

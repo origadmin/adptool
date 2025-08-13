@@ -1,114 +1,56 @@
 package parser
 
-import (
-	"github.com/origadmin/adptool/internal/config"
-)
-
-// Context is the single stateful object for the parsing process.
-// It holds the config being built, the active rule, and the current directive for error reporting.
-// It also manages the explicit vs. implicit context state.
+// Context is a node in the parsing state hierarchy.
+// It points to its scope's actual data container (Container).
 type Context struct {
-	Config         *config.Config
-	Directive      *Directive
-	activeRule     interface{}
-	activeMember   *config.MemberRule
-	currentPackage *config.Package
-
-	// inExplicitContext is true if the parser is within a 'context'... 'done' block.
-	inExplicitContext bool
+	explicit  bool      // True if this is an explicit //go:adapter:context
+	container Container // The actual data container (RootConfig or PackageConfig)
+	parent    *Context  // Parent context in the linked list
 }
 
-// NewContext creates a new, initialized context.
-func NewContext() *Context {
+// NewContext creates a new Context node.
+// It takes the actual data container (Container) for this scope.
+func NewContext(Container Container, explicit bool) *Context {
 	return &Context{
-		Config: config.New(),
+		explicit:  explicit,
+		container: Container,
 	}
 }
 
-// --- Scope and State Management ---
-
-// StartExplicitContext puts the parser into an explicit context mode.
-func (c *Context) StartExplicitContext() {
-	c.inExplicitContext = true
-	c.activeRule = nil
-	c.activeMember = nil
+// Container returns the data container for this context.
+func (c *Context) Container() Container {
+	return c.container
 }
 
-// EndScope clears the current scope (package or explicit context).
-func (c *Context) EndScope() {
-	c.inExplicitContext = false
-	c.currentPackage = nil
-	c.activeRule = nil
-	c.activeMember = nil
+// IsExplicit returns true if this context was explicitly declared.
+func (c *Context) IsExplicit() bool {
+	return c.explicit
 }
 
-// SetPackageScope sets the current package for subsequent rule additions.
-func (c *Context) SetPackageScope(pkg *config.Package) {
-	c.currentPackage = pkg
-	c.Config.Packages = append(c.Config.Packages, pkg)
-	c.activeRule = nil
-	c.activeMember = nil
+func (c *Context) Parent() *Context {
+	return c.parent
 }
 
-// SetActiveRule sets the main rule being processed.
-// In an implicit context, this replaces the previous active rule.
-// In an explicit context, it only sets the rule if one is not already active.
-func (c *Context) SetActiveRule(rule interface{}) {
-	if c.inExplicitContext && c.activeRule != nil {
-		return // In an explicit context, the first rule is locked in.
-	}
-	c.activeRule = rule
-	c.activeMember = nil
-}
-
-// --- Rule Addition ---
-
-// AddTypeRule adds a type rule to the correct scope(s).
-func (c *Context) AddTypeRule(rule *config.TypeRule) {
-	if c.currentPackage != nil {
-		c.currentPackage.Types = append(c.currentPackage.Types, rule)
-	} else {
-		c.Config.Types = append(c.Config.Types, rule)
+func (c *Context) StartContext() *Context {
+	return &Context{
+		explicit: true,
+		parent:   c,
 	}
 }
 
-// AddFuncRule adds a function rule to the correct scope(s).
-func (c *Context) AddFuncRule(rule *config.FuncRule) {
-	if c.currentPackage != nil {
-		c.currentPackage.Functions = append(c.currentPackage.Functions, rule)
-	} else {
-		c.Config.Functions = append(c.Config.Functions, rule)
+func (c *Context) SetContainer(container Container) {
+	c.container = container
+}
+
+func (c *Context) StartChildContext(container Container, explicit bool) *Context {
+	return &Context{
+		explicit:  explicit,
+		container: container,
+		parent:    c,
 	}
+
 }
 
-// AddVarRule adds a variable rule to the correct scope(s).
-func (c *Context) AddVarRule(rule *config.VarRule) {
-	if c.currentPackage != nil {
-		c.currentPackage.Variables = append(c.currentPackage.Variables, rule)
-	} else {
-		c.Config.Variables = append(c.Config.Variables, rule)
-	}
-}
-
-// AddConstRule adds a constant rule to the correct scope(s).
-func (c *Context) AddConstRule(rule *config.ConstRule) {
-	if c.currentPackage != nil {
-		c.currentPackage.Constants = append(c.currentPackage.Constants, rule)
-	} else {
-		c.Config.Constants = append(c.Config.Constants, rule)
-	}
-}
-
-// --- Active Rule Accessors ---
-
-func (c *Context) ActiveRule() interface{} {
-	return c.activeRule
-}
-
-func (c *Context) SetActiveMember(member *config.MemberRule) {
-	c.activeMember = member
-}
-
-func (c *Context) ActiveMember() *config.MemberRule {
-	return c.activeMember
+func (c *Context) EndContext() *Context {
+	return c.parent
 }
