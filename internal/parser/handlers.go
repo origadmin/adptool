@@ -98,7 +98,7 @@ func handleTypeDirective(builder *ConfigBuilder, subCmds []string, argument stri
 		builder.AddTypeRule(argument)
 		return nil
 	}
-	return builder.ApplySubDirective(subCmds, argument)
+	return builder.ApplySubDirective(subCmds, argument, d)
 }
 
 func handleFuncDirective(builder *ConfigBuilder, subCmds []string, argument string, d *Directive) error {
@@ -106,7 +106,7 @@ func handleFuncDirective(builder *ConfigBuilder, subCmds []string, argument stri
 		builder.AddFuncRule(argument)
 		return nil
 	}
-	return builder.ApplySubDirective(subCmds, argument)
+	return builder.ApplySubDirective(subCmds, argument, d)
 }
 
 func handleVarDirective(builder *ConfigBuilder, subCmds []string, argument string, d *Directive) error {
@@ -114,7 +114,7 @@ func handleVarDirective(builder *ConfigBuilder, subCmds []string, argument strin
 		builder.AddVarRule(argument)
 		return nil
 	}
-	return builder.ApplySubDirective(subCmds, argument)
+	return builder.ApplySubDirective(subCmds, argument, d)
 }
 
 func handleConstDirective(builder *ConfigBuilder, subCmds []string, argument string, d *Directive) error {
@@ -122,5 +122,5 @@ func handleConstDirective(builder *ConfigBuilder, subCmds []string, argument str
 		builder.AddConstRule(argument)
 		return nil
 	}
-	return builder.ApplySubDirective(subCmds, argument)
+	return builder.ApplySubDirective(subCmds, argument, d)
 }
