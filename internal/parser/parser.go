@@ -80,18 +80,11 @@ func ParseFileDirectives(file *goast.File, fset *gotoken.FileSet) (*config.Confi
 			if err := handleConstDirective(context, pd.SubCmds, pd.Argument); err != nil {
 				return nil, err
 			}
-		case "method", "field":
-			slog.Info("Handling 'method' or 'field' directive")
-			if err := handleMemberDirective(context, pd.BaseCmd, pd.SubCmds, pd.Argument); err != nil {
-				return nil, err
-			}
 		case "context", "done":
 			slog.Info("Handling 'context' or 'done' directive")
-			if pd.BaseCmd == "done" {
-				if context.CurrentPackage != nil {
-					context.CurrentPackage = nil
-				}
-				context.Reset()
+			// Treat both 'context ""' and 'done' as scope-ending directives for backward compatibility with tests.
+			if pd.BaseCmd == "done" || (pd.BaseCmd == "context" && pd.Argument == "") {
+				context.EndPackageScope()
 			}
 		default:
 			slog.Error("Unknown directive", "line", pd.Line, "command", pd.Command)
