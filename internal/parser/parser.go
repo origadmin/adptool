@@ -2,6 +2,7 @@ package parser
 
 import (
 	"encoding/json"
+	"fmt"
 	goast "go/ast"
 	gotoken "go/token"
 	"log/slog"
@@ -23,6 +24,7 @@ func ParseFileDirectives(file *goast.File, fset *gotoken.FileSet) (*config.Confi
 			break
 		}
 
+		builder.SetCurrentDirective(d)
 		slog.Info("Processing directive", "line", d.Line, "command", d.Command, "argument", d.Argument)
 
 		var err error
@@ -46,15 +48,15 @@ func ParseFileDirectives(file *goast.File, fset *gotoken.FileSet) (*config.Confi
 			}
 		case "default":
 			err = handleDefaultDirective(builder, d)
-		case "prop", "property":
+		case "prop":
 			err = handlePropDirective(builder, d)
 		case "package":
 			err = handlePackageDirective(builder, d)
 		case "type":
 			err = handleTypeDirective(builder, d.SubCmds, d.Argument, d)
-		case "func", "function":
+		case "func":
 			err = handleFuncDirective(builder, d.SubCmds, d.Argument, d)
-		case "var", "variable":
+		case "var":
 			err = handleVarDirective(builder, d.SubCmds, d.Argument, d)
 		case "const":
 			err = handleConstDirective(builder, d.SubCmds, d.Argument, d)

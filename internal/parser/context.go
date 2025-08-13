@@ -64,35 +64,38 @@ func (c *Context) SetActiveRule(rule interface{}) {
 // --- Rule Addition ---
 
 // AddTypeRule adds a type rule to the correct scope(s).
-// Per the existing test logic, package-scoped rules are also added to the global list.
 func (c *Context) AddTypeRule(rule *config.TypeRule) {
-	c.Config.Types = append(c.Config.Types, rule)
 	if c.currentPackage != nil {
 		c.currentPackage.Types = append(c.currentPackage.Types, rule)
+	} else {
+		c.Config.Types = append(c.Config.Types, rule)
 	}
 }
 
 // AddFuncRule adds a function rule to the correct scope(s).
 func (c *Context) AddFuncRule(rule *config.FuncRule) {
-	c.Config.Functions = append(c.Config.Functions, rule)
 	if c.currentPackage != nil {
 		c.currentPackage.Functions = append(c.currentPackage.Functions, rule)
+	} else {
+		c.Config.Functions = append(c.Config.Functions, rule)
 	}
 }
 
 // AddVarRule adds a variable rule to the correct scope(s).
 func (c *Context) AddVarRule(rule *config.VarRule) {
-	c.Config.Variables = append(c.Config.Variables, rule)
 	if c.currentPackage != nil {
 		c.currentPackage.Variables = append(c.currentPackage.Variables, rule)
+	} else {
+		c.Config.Variables = append(c.Config.Variables, rule)
 	}
 }
 
 // AddConstRule adds a constant rule to the correct scope(s).
 func (c *Context) AddConstRule(rule *config.ConstRule) {
-	c.Config.Constants = append(c.Config.Constants, rule)
 	if c.currentPackage != nil {
 		c.currentPackage.Constants = append(c.currentPackage.Constants, rule)
+	} else {
+		c.Config.Constants = append(c.Config.Constants, rule)
 	}
 }
 
