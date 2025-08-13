@@ -35,14 +35,8 @@ func (r *TypeRule) ApplySubDirective(builder *ConfigBuilder, subCmds []string, a
 		if len(memberSubCmds) == 0 {
 			member := &config.MemberRule{Name: argument}
 			if subCmd == "method" {
-				if r.Methods == nil {
-					r.Methods = make([]*config.MemberRule, 0)
-				}
 				r.Methods = append(r.Methods, member)
 			} else {
-				if r.Fields == nil {
-					r.Fields = make([]*config.MemberRule, 0)
-				}
 				r.Fields = append(r.Fields, member)
 			}
 			builder.SetActiveMember(member)

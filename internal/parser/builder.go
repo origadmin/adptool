@@ -10,13 +10,14 @@ import (
 )
 
 // ConfigBuilder is responsible for constructing the config.Config object.
-// It receives instructions from the parser's handlers and progressively builds the result.
-// This decouples the parsing logic from the construction of the final configuration.
+// It is the single stateful object for the parsing process, holding the config being built,
+// the active rule, and the current directive for error reporting.
 type ConfigBuilder struct {
 	config         *config.Config
 	activeRule     Rule
 	activeMember   *config.MemberRule
 	currentPackage *config.Package
+	directive      *Directive // The directive currently being processed
 }
 
 // NewConfigBuilder creates a new builder.
@@ -29,6 +30,11 @@ func NewConfigBuilder() *ConfigBuilder {
 // GetConfig returns the final, constructed config.
 func (b *ConfigBuilder) GetConfig() *config.Config {
 	return b.config
+}
+
+// SetCurrentDirective sets the directive currently being processed.
+func (b *ConfigBuilder) SetCurrentDirective(d *Directive) {
+	b.directive = d
 }
 
 // SetPackageScope sets the current package for subsequent rule additions.
@@ -95,11 +101,11 @@ func (b *ConfigBuilder) AddConstRule(name string) {
 }
 
 // ApplySubDirective applies a sub-directive to the currently active rule.
-func (b *ConfigBuilder) ApplySubDirective(subCmds []string, argument string, d *Directive) error {
+func (b *ConfigBuilder) ApplySubDirective(subCmds []string, argument string) error {
 	if b.activeRule == nil {
-		return newDirectiveError(d, "sub-directive ':%s' must follow a top-level rule directive", subCmds[0])
+		return newDirectiveError(b.directive, "sub-directive ':%s' must follow a top-level rule directive", subCmds[0])
 	}
-	return b.activeRule.ApplySubDirective(b, subCmds, argument, d)
+	return b.activeRule.ApplySubDirective(b, subCmds, argument, b.directive)
 }
 
 // SetActiveMember sets the active member for sub-directive application.
@@ -121,14 +127,8 @@ func (b *ConfigBuilder) ApplyRuleToRuleSet(ruleset *config.RuleSet, fromName, ru
 
 	switch ruleName {
 	case "rename":
-		if ruleset.Explicit == nil {
-			ruleset.Explicit = make([]*config.ExplicitRule, 0)
-		}
 		ruleset.Explicit = append(ruleset.Explicit, &config.ExplicitRule{From: fromName, To: argument})
 	case "explicit":
-		if ruleset.Explicit == nil {
-			ruleset.Explicit = make([]*config.ExplicitRule, 0)
-		}
 		explicitRules := strings.SplitN(argument, " ", 2)
 		if len(explicitRules) == 2 {
 			ruleset.Explicit = append(ruleset.Explicit, &config.ExplicitRule{From: explicitRules[0], To: explicitRules[1]})
