@@ -122,118 +122,53 @@ func handleVarsDirective(context *Context, subCmds []string, argument string) er
 // handlePackageDirective handles the parsing of package directives.
 func handlePackageDirective(context *Context, subCmds []string, argument string) error {
 	slog.Debug("Entering handlePackageDirective", "subCmds", subCmds, "argument", argument)
-	switch {
-	case len(subCmds) == 0:
+	if len(subCmds) == 0 {
 		pkgParts := strings.SplitN(argument, " ", 2)
-		if len(pkgParts) == 2 { // Context-setting form: //go:adapter:package <import_path> <alias>
-			context.CurrentPackage = &config.Package{Import: pkgParts[0], Alias: pkgParts[1]}
-		} else if len(pkgParts) == 1 { // Config-adding form: //go:adapter:package <import_path>
-			if context.Config.Packages == nil {
-				context.Config.Packages = make([]*config.Package, 0)
-			}
-			pkg := &config.Package{Import: argument}
-			context.Config.Packages = append(context.Config.Packages, pkg)
-			context.CurrentPackage = pkg
+		var pkg *config.Package
+		if len(pkgParts) == 2 {
+			pkg = &config.Package{Import: pkgParts[0], Alias: pkgParts[1]}
 		} else {
-			return newDirectiveError(context.Directive, "invalid package Directive format. Expected 'package <import_path>' or 'package <import_path> <alias>'")
+			pkg = &config.Package{Import: argument}
 		}
-		// Reset other current rules when a new package is set
+
+		if context.Config.Packages == nil {
+			context.Config.Packages = make([]*config.Package, 0)
+		}
+		context.Config.Packages = append(context.Config.Packages, pkg)
+		context.CurrentPackage = pkg
 		context.Reset()
-	case len(subCmds) == 1:
-		subCmd := subCmds[0]
-		switch subCmd {
-		case "alias":
-			context.CurrentPackage.Alias = argument
-		case "path":
-			context.CurrentPackage.Path = argument
-		case "prop":
-			name, value, err := parseNameValue(argument)
-			if err != nil {
-				return newDirectiveError(context.Directive, "invalid package vars Directive argument: %v", err)
-			}
-			entry := &config.PropsEntry{Name: name, Value: value}
-			if context.CurrentPackage.Props == nil {
-				context.CurrentPackage.Props = make([]*config.PropsEntry, 0)
-			}
-			context.CurrentPackage.Props = append(context.CurrentPackage.Props, entry)
-		case "type":
-			rule := &config.TypeRule{Name: argument, RuleSet: config.RuleSet{}}
-			if context.CurrentPackage.Types == nil {
-				context.CurrentPackage.Types = make([]*config.TypeRule, 0)
-			}
-			context.CurrentPackage.Types = append(context.CurrentPackage.Types, rule)
-			context.Reset()
-			context.CurrentTypeRule = rule
-		case "function":
-			rule := &config.FuncRule{Name: argument, RuleSet: config.RuleSet{}}
-			if context.CurrentPackage.Functions == nil {
-				context.CurrentPackage.Functions = make([]*config.FuncRule, 0)
-			}
-			context.CurrentPackage.Functions = append(context.CurrentPackage.Functions, rule)
-			context.Reset()
-			context.CurrentFuncRule = rule
-		case "variable":
-			rule := &config.VarRule{Name: argument, RuleSet: config.RuleSet{}}
-			if context.CurrentPackage.Variables == nil {
-				context.CurrentPackage.Variables = make([]*config.VarRule, 0)
-			}
-			context.CurrentPackage.Variables = append(context.CurrentPackage.Variables, rule)
-			context.Reset()
-			context.CurrentVarRule = rule
-		case "constant":
-			rule := &config.ConstRule{Name: argument, RuleSet: config.RuleSet{}}
-			if context.CurrentPackage.Constants == nil {
-				context.CurrentPackage.Constants = make([]*config.ConstRule, 0)
-			}
-			context.CurrentPackage.Constants = append(context.CurrentPackage.Constants, rule)
-			context.Reset()
-			context.CurrentConstRule = rule
-		default:
-			// This case is handled by the outer switch's default or subsequent cases
+		return nil
+	}
+
+	if context.CurrentPackage == nil {
+		return newDirectiveError(context.Directive, "'package:%s' must follow a 'package' Directive", subCmds[0])
+	}
+
+	switch subCmds[0] {
+	case "alias":
+		context.CurrentPackage.Alias = argument
+	case "path":
+		context.CurrentPackage.Path = argument
+	case "prop":
+		name, value, err := parseNameValue(argument)
+		if err != nil {
+			return newDirectiveError(context.Directive, "invalid package vars Directive argument: %v", err)
 		}
-	case len(subCmds) == 2:
-		// Handle sub-directives of types/functions/variables/constants within a package
-		if subCmds[1] == "struct" && context.CurrentTypeRule != nil {
-			context.CurrentTypeRule.Pattern = argument
-			context.CurrentTypeRule.Kind = "struct"
-		} else if subCmds[1] == "disabled" && context.CurrentTypeRule != nil {
-			context.CurrentTypeRule.Disabled = argument == "true"
-		} else if context.CurrentTypeRule != nil {
-			if err := applyRuleToRuleSet(&context.CurrentTypeRule.RuleSet, context.CurrentTypeRule.Name, subCmds[1], argument); err != nil {
-				return newDirectiveError(context.Directive, "failed to apply rule to type '%s': %v", context.CurrentTypeRule.Name, err)
-			}
-		} else if subCmds[1] == "disabled" && context.CurrentFuncRule != nil {
-			context.CurrentFuncRule.Disabled = argument == "true"
-		} else if context.CurrentFuncRule != nil {
-			if err := applyRuleToRuleSet(&context.CurrentFuncRule.RuleSet, context.CurrentFuncRule.Name, subCmds[1], argument); err != nil {
-				return newDirectiveError(context.Directive, "failed to apply rule to function '%s': %v", context.CurrentFuncRule.Name, err)
-			}
-		} else if subCmds[1] == "disabled" && context.CurrentVarRule != nil {
-			context.CurrentVarRule.Disabled = argument == "true"
-		} else if context.CurrentVarRule != nil {
-			if err := applyRuleToRuleSet(&context.CurrentVarRule.RuleSet, context.CurrentVarRule.Name, subCmds[1], argument); err != nil {
-				return newDirectiveError(context.Directive, "failed to apply rule to variable '%s': %v", context.CurrentVarRule.Name, err)
-			}
-		} else if subCmds[1] == "disabled" && context.CurrentConstRule != nil {
-			context.CurrentConstRule.Disabled = argument == "true"
-		} else if context.CurrentConstRule != nil {
-			if err := applyRuleToRuleSet(&context.CurrentConstRule.RuleSet, context.CurrentConstRule.Name, subCmds[1], argument); err != nil {
-				return newDirectiveError(context.Directive, "failed to apply rule to constant '%s': %v", context.CurrentConstRule.Name, err)
-			}
-		} else {
-			return newDirectiveError(context.Directive, "unknown package sub-directive '%s'", subCmds[1])
+		entry := &config.PropsEntry{Name: name, Value: value}
+		if context.CurrentPackage.Props == nil {
+			context.CurrentPackage.Props = make([]*config.PropsEntry, 0)
 		}
-	case len(subCmds) > 2:
-		if subCmds[1] == "method" || subCmds[1] == "field" { // Changed to include "field"
-			if context.CurrentTypeRule.Methods == nil {
-				context.CurrentTypeRule.Methods = make([]*config.MemberRule, 0)
-			}
-			// Pass the correct subCmds slice for handleMemberDirective
-			return handleMemberDirective(context, subCmds[1], subCmds[2:], argument)
-		}
-		return newDirectiveError(context.Directive, "unknown package sub-directive '%s'", subCmds[0])
+		context.CurrentPackage.Props = append(context.CurrentPackage.Props, entry)
+	case "type":
+		return handleTypeDirective(context, subCmds[1:], argument)
+	case "function", "func":
+		return handleFuncDirective(context, subCmds[1:], argument)
+	case "variable", "var":
+		return handleVarDirective(context, subCmds[1:], argument)
+	case "constant", "const":
+		return handleConstDirective(context, subCmds[1:], argument)
 	default:
-		return newDirectiveError(context.Directive, "unknown package directive '%s'", subCmds[0])
+		return newDirectiveError(context.Directive, "unknown package sub-directive '%s'", subCmds[0])
 	}
 	return nil
 }
@@ -243,110 +178,143 @@ func handleTypeDirective(context *Context, subCmds []string, argument string) er
 	slog.Debug("Entering handleTypeDirective", "subCmds", subCmds, "argument", argument)
 	if len(subCmds) == 0 {
 		rule := &config.TypeRule{Name: argument, Kind: "type", RuleSet: config.RuleSet{}}
-		context.Config.Types = append(context.Config.Types, rule) // Always add to global
+		if context.Config.Types == nil {
+			context.Config.Types = make([]*config.TypeRule, 0)
+		}
+		context.Config.Types = append(context.Config.Types, rule)
 		if context.CurrentPackage != nil {
+			if context.CurrentPackage.Types == nil {
+				context.CurrentPackage.Types = make([]*config.TypeRule, 0)
+			}
 			context.CurrentPackage.Types = append(context.CurrentPackage.Types, rule)
 		}
 		context.Reset()
 		context.CurrentTypeRule = rule
-	} else if len(subCmds) == 1 && subCmds[0] == "struct" {
-		if context.CurrentTypeRule == nil {
-			return newDirectiveError(context.Directive, "'type:struct' must follow a 'type' Directive")
-		}
+		return nil
+	}
+
+	if context.CurrentTypeRule == nil {
+		return newDirectiveError(context.Directive, "'type:%s' must follow a 'type' Directive", subCmds[0])
+	}
+
+	switch subCmds[0] {
+	case "struct":
 		context.CurrentTypeRule.Pattern = argument
 		context.CurrentTypeRule.Kind = "struct"
-	} else if len(subCmds) == 1 && subCmds[0] == "disabled" {
-		if context.CurrentTypeRule == nil {
-			return newDirectiveError(context.Directive, ":disabled' must follow a 'type' Directive")
-		}
+	case "disabled":
 		context.CurrentTypeRule.Disabled = argument == "true"
-	} else if len(subCmds) == 1 {
-		// Generic sub-rule for type (e.g., :rename, :explicit)
-		if context.CurrentTypeRule != nil {
+	case "method", "field":
+		return handleMemberDirective(context, subCmds[0], subCmds[1:], argument)
+	default:
+		if len(subCmds) == 1 {
 			if err := applyRuleToRuleSet(&context.CurrentTypeRule.RuleSet, context.CurrentTypeRule.Name, subCmds[0], argument); err != nil {
 				return newDirectiveError(context.Directive, "failed to apply rule to type '%s': %v", context.CurrentTypeRule.Name, err)
 			}
+		} else {
+			return newDirectiveError(context.Directive, "unknown type sub-directive '%s'", subCmds[0])
 		}
 	}
 	return nil
 }
 
 // handleFuncDirective handles the parsing of func directives.
-func handleFuncDirective(context *Context, subCmds []string, argument string) error { // Changed cmdParts to subCmds
+func handleFuncDirective(context *Context, subCmds []string, argument string) error {
 	slog.Debug("Entering handleFuncDirective", "subCmds", subCmds, "argument", argument)
 	if len(subCmds) == 0 {
 		rule := &config.FuncRule{Name: argument, RuleSet: config.RuleSet{}}
-		context.Config.Functions = append(context.Config.Functions, rule) // Always add to global
+		if context.Config.Functions == nil {
+			context.Config.Functions = make([]*config.FuncRule, 0)
+		}
+		context.Config.Functions = append(context.Config.Functions, rule)
 		if context.CurrentPackage != nil {
+			if context.CurrentPackage.Functions == nil {
+				context.CurrentPackage.Functions = make([]*config.FuncRule, 0)
+			}
 			context.CurrentPackage.Functions = append(context.CurrentPackage.Functions, rule)
 		}
 		context.Reset()
 		context.CurrentFuncRule = rule
-	} else if len(subCmds) == 1 && subCmds[0] == "disabled" {
+	} else if len(subCmds) == 1 {
 		if context.CurrentFuncRule == nil {
-			return newDirectiveError(context.Directive, ":disabled' must follow a 'func' Directive")
+			return newDirectiveError(context.Directive, "':%s' must follow a 'func' Directive", subCmds[0])
 		}
-		context.CurrentFuncRule.Disabled = argument == "true"
-	} else if len(subCmds) == 1 && context.CurrentFuncRule != nil {
-		// Generic sub-rule for func (e.g., :rename, :explicit)
-		if err := applyRuleToRuleSet(&context.CurrentFuncRule.RuleSet, context.CurrentFuncRule.Name, subCmds[0], argument); err != nil {
-			return newDirectiveError(context.Directive, "failed to apply rule to function '%s': %v", context.CurrentFuncRule.Name, err)
+		if subCmds[0] == "disabled" {
+			context.CurrentFuncRule.Disabled = argument == "true"
+		} else {
+			if err := applyRuleToRuleSet(&context.CurrentFuncRule.RuleSet, context.CurrentFuncRule.Name, subCmds[0], argument); err != nil {
+				return newDirectiveError(context.Directive, "failed to apply rule to function '%s': %v", context.CurrentFuncRule.Name, err)
+			}
 		}
+	} else {
+		return newDirectiveError(context.Directive, "too many sub-commands for func directive")
 	}
 	return nil
 }
 
 // handleVarDirective handles the parsing of var directives.
-func handleVarDirective(context *Context, subCmds []string, argument string) error { // Changed cmdParts to subCmds
+func handleVarDirective(context *Context, subCmds []string, argument string) error {
 	slog.Debug("Entering handleVarDirective", "subCmds", subCmds, "argument", argument)
 	if len(subCmds) == 0 {
 		rule := &config.VarRule{Name: argument, RuleSet: config.RuleSet{}}
-		context.Config.Variables = append(context.Config.Variables, rule) // Always add to global
+		if context.Config.Variables == nil {
+			context.Config.Variables = make([]*config.VarRule, 0)
+		}
+		context.Config.Variables = append(context.Config.Variables, rule)
 		if context.CurrentPackage != nil {
+			if context.CurrentPackage.Variables == nil {
+				context.CurrentPackage.Variables = make([]*config.VarRule, 0)
+			}
 			context.CurrentPackage.Variables = append(context.CurrentPackage.Variables, rule)
 		}
 		context.Reset()
 		context.CurrentVarRule = rule
-	} else if len(subCmds) == 1 && subCmds[0] == "disabled" {
+	} else if len(subCmds) == 1 {
 		if context.CurrentVarRule == nil {
-			return newDirectiveError(context.Directive, ":disabled' must follow a 'var' Directive")
+			return newDirectiveError(context.Directive, "':%s' must follow a 'var' Directive", subCmds[0])
 		}
-		context.CurrentVarRule.Disabled = argument == "true"
-	} else if len(subCmds) == 1 && context.CurrentVarRule != nil {
-		// Generic sub-rule for var (e.g., :rename, :explicit)
-		if err := applyRuleToRuleSet(&context.CurrentVarRule.RuleSet, context.CurrentVarRule.Name, subCmds[0], argument); err != nil {
-			return newDirectiveError(context.Directive, "failed to apply rule to variable '%s': %v", context.CurrentVarRule.Name, err)
+		if subCmds[0] == "disabled" {
+			context.CurrentVarRule.Disabled = argument == "true"
+		} else {
+			if err := applyRuleToRuleSet(&context.CurrentVarRule.RuleSet, context.CurrentVarRule.Name, subCmds[0], argument); err != nil {
+				return newDirectiveError(context.Directive, "failed to apply rule to variable '%s': %v", context.CurrentVarRule.Name, err)
+			}
 		}
+	} else {
+		return newDirectiveError(context.Directive, "too many sub-commands for var directive")
 	}
 	return nil
 }
 
 // handleConstDirective handles the parsing of const directives.
-func handleConstDirective(context *Context, subCmds []string, argument string) error { // Changed cmdParts to subCmds
+func handleConstDirective(context *Context, subCmds []string, argument string) error {
 	slog.Debug("Entering handleConstDirective", "subCmds", subCmds, "argument", argument)
 	if len(subCmds) == 0 {
 		rule := &config.ConstRule{Name: argument, RuleSet: config.RuleSet{}}
-		context.Config.Constants = append(context.Config.Constants, rule) // Always add to global
+		if context.Config.Constants == nil {
+			context.Config.Constants = make([]*config.ConstRule, 0)
+		}
+		context.Config.Constants = append(context.Config.Constants, rule)
 		if context.CurrentPackage != nil {
+			if context.CurrentPackage.Constants == nil {
+				context.CurrentPackage.Constants = make([]*config.ConstRule, 0)
+			}
 			context.CurrentPackage.Constants = append(context.CurrentPackage.Constants, rule)
 		}
 		context.Reset()
 		context.CurrentConstRule = rule
-	} else if len(subCmds) == 1 && subCmds[0] == "disabled" {
+	} else if len(subCmds) == 1 {
 		if context.CurrentConstRule == nil {
-			return newDirectiveError(context.Directive, ":disabled' must follow a 'const' Directive")
+			return newDirectiveError(context.Directive, "':%s' must follow a 'const' Directive", subCmds[0])
 		}
-		context.CurrentConstRule.Disabled = argument == "true"
-	} else if len(subCmds) == 1 && subCmds[0] == "ignores" {
-		if context.CurrentConstRule == nil {
-			return newDirectiveError(context.Directive, ":ignores' must follow a 'const' Directive")
+		if subCmds[0] == "disabled" {
+			context.CurrentConstRule.Disabled = argument == "true"
+		} else {
+			if err := applyRuleToRuleSet(&context.CurrentConstRule.RuleSet, context.CurrentConstRule.Name, subCmds[0], argument); err != nil {
+				return newDirectiveError(context.Directive, "failed to apply rule to constant '%s': %v", context.CurrentConstRule.Name, err)
+			}
 		}
-		context.CurrentConstRule.RuleSet.Ignores = append(context.CurrentConstRule.RuleSet.Ignores, argument)
-	} else if len(subCmds) == 1 && context.CurrentConstRule != nil {
-		// Generic sub-rule for const (e.g., :rename, :explicit)
-		if err := applyRuleToRuleSet(&context.CurrentConstRule.RuleSet, context.CurrentConstRule.Name, subCmds[0], argument); err != nil {
-			return newDirectiveError(context.Directive, "failed to apply rule to constant '%s': %v", context.CurrentConstRule.Name, err)
-		}
+	} else {
+		return newDirectiveError(context.Directive, "too many sub-commands for const directive")
 	}
 	return nil
 }
@@ -357,31 +325,41 @@ func handleMemberDirective(context *Context, baseCmd string, subCmds []string, a
 	if context.CurrentTypeRule == nil {
 		return newDirectiveError(context.Directive, "'%s' Directive must follow a 'type' Directive", baseCmd)
 	}
+
 	if len(subCmds) == 0 {
 		member := &config.MemberRule{Name: argument, RuleSet: config.RuleSet{}}
 		if baseCmd == "method" {
+			if context.CurrentTypeRule.Methods == nil {
+				context.CurrentTypeRule.Methods = make([]*config.MemberRule, 0)
+			}
 			context.CurrentTypeRule.Methods = append(context.CurrentTypeRule.Methods, member)
-		} else {
+		} else { // field
+			if context.CurrentTypeRule.Fields == nil {
+				context.CurrentTypeRule.Fields = make([]*config.MemberRule, 0)
+			}
 			context.CurrentTypeRule.Fields = append(context.CurrentTypeRule.Fields, member)
 		}
 		context.CurrentMemberRule = member
-	} else if len(subCmds) == 1 && subCmds[0] == "disabled" {
+	} else if len(subCmds) == 1 {
 		if context.CurrentMemberRule == nil {
-			return newDirectiveError(context.Directive, ":disabled' must follow a member Directive")
+			return newDirectiveError(context.Directive, "':%s' must follow a member Directive", subCmds[0])
 		}
-		context.CurrentMemberRule.Disabled = argument == "true"
-	} else if len(subCmds) == 1 && context.CurrentMemberRule != nil {
-		// Generic sub-rule for method/field (e.g., :rename, :explicit)
-		if err := applyRuleToRuleSet(&context.CurrentMemberRule.RuleSet, context.CurrentMemberRule.Name, subCmds[0], argument); err != nil {
-			return newDirectiveError(context.Directive, "failed to apply rule to member '%s': %v", context.CurrentMemberRule.Name, err)
+		if subCmds[0] == "disabled" {
+			context.CurrentMemberRule.Disabled = argument == "true"
+		} else {
+			if err := applyRuleToRuleSet(&context.CurrentMemberRule.RuleSet, context.CurrentMemberRule.Name, subCmds[0], argument); err != nil {
+				return newDirectiveError(context.Directive, "failed to apply rule to member '%s': %v", context.CurrentMemberRule.Name, err)
+			}
 		}
+	} else {
+		return newDirectiveError(context.Directive, "too many sub-commands for member directive")
 	}
 	return nil
 }
 
 // handleRule applies a sub-rule to the appropriate ruleset.
 func handleRule(ruleset *config.RuleSet, fromName, ruleName, argument string) {
-	slog.Debug("Entering handleRule", "fromName", fromName, "ruleName", ruleName, "argument", argument)
+	slog.Debug("Entering handleRule", "fromName", fromName, "argument", argument)
 	if ruleset == nil {
 		return
 	}

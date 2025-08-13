@@ -184,8 +184,8 @@ func TestParseTypes(t *testing.T) {
 			Kind:    "type",
 			Methods: []*config.MemberRule{
 				{
-					Name:    ".DoSomethingA",
-					RuleSet: config.RuleSet{Explicit: []*config.ExplicitRule{{From: ".DoSomethingA", To: "DoSomethingA_New"}}},
+					Name:    "DoSomethingA",
+					RuleSet: config.RuleSet{Explicit: []*config.ExplicitRule{{From: "DoSomethingA", To: "DoSomethingA_New"}}},
 				},
 			},
 		},
@@ -196,7 +196,7 @@ func TestParseTypes(t *testing.T) {
 			Pattern: "copy",
 			Fields: []*config.MemberRule{
 				{
-					Name:    ".FieldB",
+					Name:    "FieldB",
 					RuleSet: config.RuleSet{},
 				},
 			},
@@ -219,7 +219,7 @@ func TestParseTypes(t *testing.T) {
 			Kind:    "type",
 			Methods: []*config.MemberRule{
 				{
-					Name:    ".DoSomethingCtx",
+					Name:    "DoSomethingCtx",
 					RuleSet: config.RuleSet{},
 				},
 			},
@@ -231,7 +231,7 @@ func TestParseTypes(t *testing.T) {
 			Pattern: "copy",
 			Fields: []*config.MemberRule{
 				{
-					Name:    ".NestedField",
+					Name:    "NestedField",
 					RuleSet: config.RuleSet{},
 				},
 			},
