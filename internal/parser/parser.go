@@ -2,7 +2,6 @@ package parser
 
 import (
 	"encoding/json"
-	"fmt"
 	goast "go/ast"
 	gotoken "go/token"
 	"log/slog"
@@ -13,84 +12,64 @@ import (
 
 const directivePrefix = "//go:adapter:"
 
-// ParseFileDirectives parses a Go source file (provided as an AST) and builds a config.Config object
-// containing only the adptool directives found in that file.
-// It does not perform any merging with global configurations.
+// ParseFileDirectives parses a Go source file and builds a config.Config object.
 func ParseFileDirectives(file *goast.File, fset *gotoken.FileSet) (*config.Config, error) {
 	extractor := NewDirectiveExtractor(file, fset)
-	context := NewContext()
+	builder := NewConfigBuilder()
+
 	for {
-		context.Directive = extractor.Next()
-		if context.Directive == nil {
+		d := extractor.Next()
+		if d == nil {
 			break
 		}
-		pd := context.Directive
-		slog.Info("Processing directive", "line", pd.Line, "command", pd.Command, "argument", pd.Argument)
-		switch pd.BaseCmd {
-		case "ignore": // Handle local ignore Directive
-			slog.Info("Handling 'ignore' directive")
-			context.Config.Ignores = append(context.Config.Ignores, pd.Argument)
-		case "ignores": // Handle global ignore Directive
-			slog.Info("Handling 'ignores' directive")
-			if pd.IsJSON {
+
+		slog.Info("Processing directive", "line", d.Line, "command", d.Command, "argument", d.Argument)
+
+		var err error
+		switch d.BaseCmd {
+		case "ignore":
+			builder.config.Ignores = append(builder.config.Ignores, d.Argument)
+		case "ignores":
+			if d.IsJSON {
 				var patterns []string
-				if err := json.Unmarshal([]byte(pd.Argument), &patterns); err != nil {
-					return nil, err
+				if jsonErr := json.Unmarshal([]byte(d.Argument), &patterns); jsonErr != nil {
+					err = jsonErr
+				} else {
+					builder.config.Ignores = append(builder.config.Ignores, patterns...)
 				}
-				context.Config.Ignores = append(context.Config.Ignores, patterns...)
 			} else {
-				patterns := strings.Split(pd.Argument, ",")
+				patterns := strings.Split(d.Argument, ",")
 				for i := range patterns {
 					patterns[i] = strings.TrimSpace(patterns[i])
 				}
-				context.Config.Ignores = append(context.Config.Ignores, patterns...)
+				builder.config.Ignores = append(builder.config.Ignores, patterns...)
 			}
 		case "default":
-			slog.Info("Handling 'default' directive")
-			if err := handleDefaultDirective(context, pd.SubCmds, pd.Argument); err != nil {
-				return nil, err
-			}
+			err = handleDefaultDirective(builder, d)
 		case "prop":
-			slog.Info("Handling 'prop' directive")
-			if err := handleVarsDirective(context, pd.SubCmds, pd.Argument); err != nil {
-				return nil, err
-			}
+			err = handleVarsDirective(builder, d)
 		case "package":
-			slog.Info("Handling 'package' directive")
-			if err := handlePackageDirective(context, pd.SubCmds, pd.Argument); err != nil {
-				return nil, err
-			}
+			err = handlePackageDirective(builder, d)
 		case "type":
-			slog.Info("Handling 'type' directive")
-			if err := handleTypeDirective(context, pd.SubCmds, pd.Argument); err != nil {
-				return nil, err
-			}
+			err = handleTypeDirective(builder, d.SubCmds, d.Argument, d)
 		case "func":
-			slog.Info("Handling 'func' directive")
-			if err := handleFuncDirective(context, pd.SubCmds, pd.Argument); err != nil {
-				return nil, err
-			}
+			err = handleFuncDirective(builder, d.SubCmds, d.Argument, d)
 		case "var":
-			slog.Info("Handling 'var' directive")
-			if err := handleVarDirective(context, pd.SubCmds, pd.Argument); err != nil {
-				return nil, err
-			}
+			err = handleVarDirective(builder, d.SubCmds, d.Argument, d)
 		case "const":
-			slog.Info("Handling 'const' directive")
-			if err := handleConstDirective(context, pd.SubCmds, pd.Argument); err != nil {
-				return nil, err
-			}
-		case "context", "done":
-			slog.Info("Handling 'context' or 'done' directive")
-			// Treat both 'context ""' and 'done' as scope-ending directives for backward compatibility with tests.
-			if pd.BaseCmd == "done" || (pd.BaseCmd == "context" && pd.Argument == "") {
-				context.EndPackageScope()
+			err = handleConstDirective(builder, d.SubCmds, d.Argument, d)
+		case "done", "context": // Treat 'context ""' as done for backward compatibility
+			if d.BaseCmd == "done" || (d.BaseCmd == "context" && d.Argument == "") {
+				builder.EndPackageScope()
 			}
 		default:
-			slog.Error("Unknown directive", "line", pd.Line, "command", pd.Command)
-			return nil, fmt.Errorf("line %d: unknown Directive '%s'", pd.Line, pd.Command)
+			err = newDirectiveError(d, "unknown directive '%s'", d.Command)
+		}
+
+		if err != nil {
+			return nil, err
 		}
 	}
 
-	return context.Config, nil
+	return builder.GetConfig(), nil
 }
