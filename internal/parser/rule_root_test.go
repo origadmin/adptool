@@ -99,6 +99,50 @@ func TestRootConfigParseDirectiveDefaults(t *testing.T) {
 	}
 }
 
+func TestRootConfigParseDirectiveMultiScope(t *testing.T) {
+	tests := []struct {
+		name             string
+		directiveString  []string
+		expectedDefaults *config.Defaults
+		expectError      bool
+		errorContains    string
+	}{
+		{
+			name: "packages directive (should not be handled by ParseDirective)",
+			directiveString: []string{
+				"//go:adapter:default:mode:strategy my-strategy",
+				"//go:adapter:default:mode:prefix my-prefix",
+				"//go:adapter:default:json {\"Mode\":{\"Strategy\":\"json-strategy\",\"Prefix\":\"json-prefix\"}}",
+			},
+			expectedDefaults: &config.Defaults{
+				Mode: &config.Mode{
+					Strategy: "my-strategy",
+					Prefix:   "my-prefix",
+				},
+			},
+			expectError:   false,
+			errorContains: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rc := &RootConfig{Config: config.New()}
+			for _, directiveString := range tt.directiveString {
+				dir := decodeTestDirective(directiveString)
+				err := rc.ParseDirective(&dir)
+				if tt.expectError {
+					assert.Error(t, err)
+					assert.Contains(t, err.Error(), tt.errorContains)
+				} else {
+					assert.NoError(t, err)
+					assert.NotNil(t, rc.Config)
+				}
+			}
+		})
+	}
+}
+
 func TestRootConfigParseDirectiveProps(t *testing.T) {
 	// Test cases for props directive
 	tests := []struct {
