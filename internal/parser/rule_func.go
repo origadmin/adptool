@@ -16,38 +16,31 @@ func (r *FuncRule) ParseDirective(directive *Directive) error {
 }
 
 func (r *FuncRule) AddPackage(pkg *PackageRule) error {
-	//TODO implement me
-	panic("implement me")
+	return fmt.Errorf("FuncRule cannot contain a PackageRule")
 }
 
 func (r *FuncRule) AddTypeRule(rule *TypeRule) error {
-	//TODO implement me
-	panic("implement me")
+	return fmt.Errorf("FuncRule cannot contain a TypeRule")
 }
 
 func (r *FuncRule) AddFuncRule(rule *FuncRule) error {
-	//TODO implement me
-	panic("implement me")
+	return fmt.Errorf("FuncRule cannot contain a FuncRule")
 }
 
 func (r *FuncRule) AddVarRule(rule *VarRule) error {
-	//TODO implement me
-	panic("implement me")
+	return fmt.Errorf("FuncRule cannot contain a VarRule")
 }
 
 func (r *FuncRule) AddConstRule(rule *ConstRule) error {
-	//TODO implement me
-	panic("implement me")
+	return fmt.Errorf("FuncRule cannot contain a ConstRule")
 }
 
 func (r *FuncRule) AddMethodRule(rule *MethodRule) error {
-	//TODO implement me
-	panic("implement me")
+	return fmt.Errorf("FuncRule cannot contain a MethodRule")
 }
 
 func (r *FuncRule) AddFieldRule(rule *FieldRule) error {
-	//TODO implement me
-	panic("implement me")
+	return fmt.Errorf("FuncRule cannot contain a FieldRule")
 }
 
 func (r *FuncRule) Finalize(parent Container) error {
