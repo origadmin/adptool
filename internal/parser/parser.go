@@ -46,25 +46,23 @@ func ParseFileDirectives(file *goast.File, fset *gotoken.FileSet) (*config.Confi
 
 // parseFile parses a Go source file and returns the built configuration.
 func (p *parser) parseFile(file *goast.File, fset *gotoken.FileSet) (*config.Config, error) {
-	extractor := NewDirectiveExtractor(file, fset)
+	extractor := NewDirectiveIterator(file, fset)
 	var directive *Directive
-
-	currentContext := p.rootContext
 	for directive = range extractor.Seq() {
 		slog.Info("Processing directive", "line", directive.Line, "command", directive.Command, "argument", directive.Argument)
 		// Not a container-creating command. Handle context, done, sub-directives.
 		var err error
 		switch directive.BaseCmd {
 		case "context":
-			if currentContext.IsExplicit() && p.rootContext.Container() == nil { // Simplified check for empty explicit context
+			if p.rootContext.IsExplicit() && p.rootContext.Container() == nil { // Simplified check for empty explicit context
 				return nil, newDirectiveError(directive, "consecutive 'context' directives without intervening rules are not allowed")
 			}
-			currentContext.SetExplicit(true)
+			p.rootContext.SetExplicit(true)
 		case "done":
-			if !currentContext.IsExplicit() {
+			if !p.rootContext.IsExplicit() {
 				return nil, newDirectiveError(directive, "'done' directive without a matching explicit 'context'")
 			}
-			currentContext.SetExplicit(false)
+			p.rootContext.SetExplicit(false)
 		default:
 			// Delegate to the current context's container for any other commands.
 			if err = p.rootContext.Container().ParseDirective(directive); err != nil {
@@ -73,12 +71,12 @@ func (p *parser) parseFile(file *goast.File, fset *gotoken.FileSet) (*config.Con
 		}
 	}
 	// Finalize the root config
-	if err := currentContext.Container().Finalize(); err != nil {
+	if err := p.rootContext.Container().Finalize(); err != nil {
 		return nil, err
 	}
 
 	// Check for unclosed explicit contexts
-	if currentContext.Parent() != nil { // Check if we returned to the original root context
+	if p.rootContext.Parent() != nil { // Check if we returned to the original root context
 		return nil, fmt.Errorf("unclosed 'context' block(s) detected at end of file")
 	}
 
