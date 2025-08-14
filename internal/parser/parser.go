@@ -1,77 +1,110 @@
 package parser
 
 import (
-	"encoding/json"
 	"fmt"
 	goast "go/ast"
 	gotoken "go/token"
 	"log/slog"
-	"strings"
+	// Assuming these are the actual types from the config package
+	// For now, using the placeholder types defined in context.go
+	// "github.com/origadmin/adptool/internal/config"
 
 	"github.com/origadmin/adptool/internal/config"
 )
 
 const directivePrefix = "//go:adapter:"
 
-// ParseFileDirectives parses a Go source file and builds a config.Config object.
+// parser orchestrates the parsing of Go directives into a structured configuration.
+type parser struct {
+	rootConfig  *RootConfig // The root configuration object
+	rootContext *Context    // The current active parsing context (head of the linked list)
+}
+
+// newParser creates a new parser instance.
+func newParser() *parser {
+	rootCfg := NewRootConfig()            // Use constructor
+	rootCtx := NewContext(rootCfg, false) // Create the initial context for the root
+
+	return &parser{
+		rootContext: rootCtx,
+		rootConfig:  rootCfg,
+	}
+}
+
+func NewRootConfig() *RootConfig {
+	return &RootConfig{
+		Config: config.New(),
+	}
+}
+
+// ParseFileDirectives parses a Go source file and returns the built configuration.
+// This is the exported entry point.
 func ParseFileDirectives(file *goast.File, fset *gotoken.FileSet) (*config.Config, error) {
+	p := newParser() // Create a new parser instance
+	return p.parseFile(file, fset)
+}
+
+// parseFile parses a Go source file and returns the built configuration.
+func (p *parser) parseFile(file *goast.File, fset *gotoken.FileSet) (*config.Config, error) {
 	extractor := NewDirectiveExtractor(file, fset)
-	builder := NewConfigBuilder()
+	var directive *Directive
 
-	for {
-		d := extractor.Next()
-		if d == nil {
-			break
-		}
+	currentContext := p.rootContext
+	for directive = range extractor.Seq() {
+		slog.Info("Processing directive", "line", directive.Line, "command", directive.Command, "argument", directive.Argument)
 
-		builder.SetCurrentDirective(d)
-		slog.Info("Processing directive", "line", d.Line, "command", d.Command, "argument", d.Argument)
-
+		// If not a container-creating directive, handle other commands.
 		var err error
-		switch d.BaseCmd {
-		case "ignore":
-			builder.config.Ignores = append(builder.config.Ignores, d.Argument)
-		case "ignores":
-			if d.IsJSON {
-				var patterns []string
-				if jsonErr := json.Unmarshal([]byte(d.Argument), &patterns); jsonErr != nil {
-					err = jsonErr
-				} else {
-					builder.config.Ignores = append(builder.config.Ignores, patterns...)
-				}
-			} else {
-				patterns := strings.Split(d.Argument, ",")
-				for i := range patterns {
-					patterns[i] = strings.TrimSpace(patterns[i])
-				}
-				builder.config.Ignores = append(builder.config.Ignores, patterns...)
+		var name string
+		switch directive.BaseCmd {
+		case "context":
+			if currentContext.IsExplicit() && p.rootContext.Container() == nil { // Simplified check for empty explicit context
+				return nil, newDirectiveError(directive, "consecutive 'context' directives without intervening rules are not allowed")
 			}
-		case "default":
-			err = handleDefaultDirective(builder, d)
-		case "prop":
-			err = handlePropDirective(builder, d)
-		case "package":
-			err = handlePackageDirective(builder, d)
+			currentContext.SetExplicit(true)
+		case "done":
+			if !currentContext.IsExplicit() {
+				return nil, newDirectiveError(directive, "'done' directive without a matching explicit 'context'")
+			}
+			currentContext.SetExplicit(false)
 		case "type":
-			err = handleTypeDirective(builder, d.SubCmds, d.Argument, d)
-		case "func":
-			err = handleFuncDirective(builder, d.SubCmds, d.Argument, d)
-		case "var":
-			err = handleVarDirective(builder, d.SubCmds, d.Argument, d)
-		case "const":
-			err = handleConstDirective(builder, d.SubCmds, d.Argument, d)
-		case "done", "context": // Treat 'context ""' as done for backward compatibility
-			if d.BaseCmd == "done" || (d.BaseCmd == "context" && d.Argument == "") {
-				builder.EndPackageScope()
-			}
+			name = "type"
+		case "package":
+			name = "package"
+		case "prop", "property":
+			name = "prop"
+		case "func", "function":
+			name = "func"
+		case "var", "variable":
+			name = "var"
+		case "const", "constant":
+			name = "const"
+		case "method", "field":
+			name = ""
 		default:
-			err = newDirectiveError(d, "unknown directive '%s'", d.Command)
+			// Delegate to the current context's container for any other commands.
+			if err = currentContext.Container().ParseDirective(directive); err != nil {
+				return nil, err
+			}
 		}
 
-		if err != nil {
-			return nil, err
+		if name != "" {
+			// If successful, it's a container-creating directive (e.g., "type", "func").
+			activeContext := p.rootContext.StartOrActiveContext(BuildContainer(name))
+			if err := activeContext.Container().ParseDirective(directive); err != nil {
+				return nil, err
+			}
 		}
 	}
+	// Finalize the root config
+	if err := currentContext.Container().Finalize(); err != nil {
+		return nil, err
+	}
 
-	return builder.GetConfig(), nil
+	// Check for unclosed explicit contexts
+	if currentContext.Parent() != nil { // Check if we returned to the original root context
+		return nil, fmt.Errorf("unclosed 'context' block(s) detected at end of file")
+	}
+
+	return p.rootConfig.Config, nil
 }

@@ -46,9 +46,9 @@ func (c *Context) IsExplicit() bool {
 	return c.explicit
 }
 
-// WithExplicit sets the explicit flag for the context and returns the context.
-func (c *Context) WithExplicit() *Context {
-	c.explicit = true
+// SetExplicit sets the explicit flag for the context and returns the context.
+func (c *Context) SetExplicit(explicit bool) *Context {
+	c.explicit = explicit
 	return c
 }
 
@@ -69,11 +69,13 @@ func (c *Context) Parent() *Context {
 
 // StartOrActiveContext gets an active child context or creates a new one.
 // It first checks if an active child context already exists and returns it.
-// If not, it creates a new one using the provided container.
-func (c *Context) StartOrActiveContext(container Container) *Context {
+// If not, it creates a new one by calling the provided factory function.
+func (c *Context) StartOrActiveContext(newContainerFunc func() Container) *Context {
 	if active := c.ActiveContext(); active != nil {
 		return active
 	}
+	// Execute the factory function only when a new container is needed.
+	container := newContainerFunc()
 	return c.StartContext(container)
 }
 
