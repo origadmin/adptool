@@ -1,27 +1,12 @@
 package parser
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 
 	"github.com/origadmin/adptool/internal/config"
 )
-
-func decodeTestDirective(directiveString string) Directive {
-	if !strings.HasPrefix(directiveString, directivePrefix) {
-		return Directive{}
-	}
-
-	rawDirective := strings.TrimPrefix(directiveString, directivePrefix)
-	commentStart := strings.Index(rawDirective, "//")
-	if commentStart != -1 {
-		rawDirective = strings.TrimSpace(rawDirective[:commentStart])
-	}
-
-	return extractDirective(rawDirective, 0)
-}
 
 func TestRootConfigParseDirectiveDefaults(t *testing.T) {
 	// Test cases for defaults directive
@@ -324,11 +309,11 @@ func TestRootConfigParseDirectiveScopeErrors(t *testing.T) {
 // directives and verifies the accumulated final state of the RootConfig.
 func TestRootConfigParseDirectiveAccumulation(t *testing.T) {
 	tests := []struct {
-		name          string
-		directives    []string // Sequence of directive strings to parse
+		name           string
+		directives     []string       // Sequence of directive strings to parse
 		expectedConfig *config.Config // The expected final state of RootConfig.Config
-		expectError   bool
-		errorContains string
+		expectError    bool
+		errorContains  string
 	}{
 		{
 			name: "accumulate defaults and properties",
