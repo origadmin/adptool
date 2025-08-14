@@ -14,7 +14,7 @@ type PackageRule struct {
 }
 
 func (p *PackageRule) ParseDirective(directive *Directive) error {
-	switch directive.Command {
+	switch directive.BaseCmd {
 	case "import":
 		if directive.Argument == "" {
 			return fmt.Errorf("import directive requires an argument (path)")
