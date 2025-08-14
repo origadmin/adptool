@@ -319,3 +319,97 @@ func TestRootConfigParseDirectiveScopeErrors(t *testing.T) {
 		})
 	}
 }
+
+// TestRootConfigParseDirectiveAccumulation tests the sequential parsing of multiple
+// directives and verifies the accumulated final state of the RootConfig.
+func TestRootConfigParseDirectiveAccumulation(t *testing.T) {
+	tests := []struct {
+		name          string
+		directives    []string // Sequence of directive strings to parse
+		expectedConfig *config.Config // The expected final state of RootConfig.Config
+		expectError   bool
+		errorContains string
+	}{
+		{
+			name: "accumulate defaults and properties",
+			directives: []string{
+				"//go:adapter:default:mode:strategy my-strategy",
+				"//go:adapter:property key1 value1",
+				"//go:adapter:default:mode:prefix my-prefix",
+				"//go:adapter:property key2 value2",
+			},
+			expectedConfig: &config.Config{
+				Defaults: &config.Defaults{
+					Mode: &config.Mode{
+						Strategy: "my-strategy",
+						Prefix:   "my-prefix",
+					},
+				},
+				Props: []*config.PropsEntry{
+					{Name: "key1", Value: "value1"},
+					{Name: "key2", Value: "value2"},
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "accumulate ignores and override default strategy",
+			directives: []string{
+				"//go:adapter:default:mode:strategy initial-strategy",
+				"//go:adapter:ignores *.log",
+				"//go:adapter:default:mode:strategy final-strategy", // This should override
+				"//go:adapter:ignores temp/",
+			},
+			expectedConfig: &config.Config{
+				Defaults: &config.Defaults{
+					Mode: &config.Mode{
+						Strategy: "final-strategy",
+					},
+				},
+				Ignores: []string{"*.log", "temp/"},
+			},
+			expectError: false,
+		},
+		{
+			name: "error in sequence should stop processing",
+			directives: []string{
+				"//go:adapter:default:mode:strategy good-strategy",
+				"//go:adapter:property invalid_prop", // This should cause an error
+				"//go:adapter:ignores should-not-be-processed",
+			},
+			expectedConfig: nil, // Expect nil or partial config due to error
+			expectError:    true,
+			errorContains:  "invalid prop directive argument",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rc := &RootConfig{Config: config.New()} // Initialize a fresh RootConfig for each test case
+			var actualErr error
+
+			for i, dirString := range tt.directives {
+				dir := decodeTestDirective(dirString)
+				err := rc.ParseDirective(&dir)
+				if err != nil {
+					actualErr = err
+					t.Logf("Error encountered at directive %d (%s): %v", i, dirString, err)
+					break // Stop processing directives on first error
+				}
+			}
+
+			if tt.expectError {
+				assert.Error(t, actualErr)
+				assert.Contains(t, actualErr.Error(), tt.errorContains)
+			} else {
+				assert.NoError(t, actualErr)
+				assert.NotNil(t, rc.Config)
+				// Use testify's assert.Equal for deep comparison of the final config
+				assert.Equal(t, tt.expectedConfig.Defaults.Mode, rc.Config.Defaults.Mode)
+				assert.ElementsMatch(t, tt.expectedConfig.Props, rc.Config.Props)
+				assert.ElementsMatch(t, tt.expectedConfig.Ignores, rc.Config.Ignores)
+				// Add assertions for other fields as needed
+			}
+		})
+	}
+}
