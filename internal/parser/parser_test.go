@@ -1,4 +1,4 @@
-package parser_test
+package parser
 
 import (
 	"path/filepath"
@@ -8,8 +8,6 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/origadmin/adptool/internal/config"
-	"github.com/origadmin/adptool/internal/loader"
-	"github.com/origadmin/adptool/internal/parser"
 )
 
 // getModuleRoot returns the absolute path to the adptool module root.
@@ -22,12 +20,12 @@ func getModuleRoot() string {
 
 func TestParseDefaults(t *testing.T) {
 	filePath := filepath.Join(getModuleRoot(), "testdata", "parser_test_defaults.go")
-	file, fset, err := loader.LoadGoFile(filePath)
+	file, fset, err := loadGoFile(filePath)
 	if err != nil {
 		t.Fatalf("Failed to load Go file %s: %v", filePath, err)
 	}
 
-	cfg, err := parser.ParseFileDirectives(file, fset)
+	cfg, err := ParseFileDirectives(file, fset)
 	if err != nil {
 		t.Fatalf("Failed to parse directives: %v", err)
 	}
@@ -48,12 +46,12 @@ func TestParseDefaults(t *testing.T) {
 
 func TestParseProps(t *testing.T) {
 	filePath := filepath.Join(getModuleRoot(), "testdata", "parser_test_props.go")
-	file, fset, err := loader.LoadGoFile(filePath)
+	file, fset, err := loadGoFile(filePath)
 	if err != nil {
 		t.Fatalf("Failed to load Go file %s: %v", filePath, err)
 	}
 
-	cfg, err := parser.ParseFileDirectives(file, fset)
+	cfg, err := ParseFileDirectives(file, fset)
 	if err != nil {
 		t.Fatalf("Failed to parse directives: %v", err)
 	}
@@ -74,12 +72,12 @@ func TestParseProps(t *testing.T) {
 
 func TestParsePackages(t *testing.T) {
 	filePath := filepath.Join(getModuleRoot(), "testdata", "parser_test_packages.go")
-	file, fset, err := loader.LoadGoFile(filePath)
+	file, fset, err := loadGoFile(filePath)
 	if err != nil {
 		t.Fatalf("Failed to load Go file %s: %v", filePath, err)
 	}
 
-	cfg, err := parser.ParseFileDirectives(file, fset)
+	cfg, err := ParseFileDirectives(file, fset)
 	if err != nil {
 		t.Fatalf("Failed to parse directives: %v", err)
 	}
@@ -161,12 +159,12 @@ func TestParsePackages(t *testing.T) {
 
 func TestParseTypes(t *testing.T) {
 	filePath := filepath.Join(getModuleRoot(), "testdata", "parser_test_types.go")
-	file, fset, err := loader.LoadGoFile(filePath)
+	file, fset, err := loadGoFile(filePath)
 	if err != nil {
 		t.Fatalf("Failed to load Go file %s: %v", filePath, err)
 	}
 
-	cfg, err := parser.ParseFileDirectives(file, fset)
+	cfg, err := ParseFileDirectives(file, fset)
 	if err != nil {
 		t.Fatalf("Failed to parse directives: %v", err)
 	}
@@ -288,12 +286,12 @@ func TestParseTypes(t *testing.T) {
 
 func TestParseFunctions(t *testing.T) {
 	filePath := filepath.Join(getModuleRoot(), "testdata", "parser_test_functions.go")
-	file, fset, err := loader.LoadGoFile(filePath)
+	file, fset, err := loadGoFile(filePath)
 	if err != nil {
 		t.Fatalf("Failed to load Go file %s: %v", filePath, err)
 	}
 
-	cfg, err := parser.ParseFileDirectives(file, fset)
+	cfg, err := ParseFileDirectives(file, fset)
 	if err != nil {
 		t.Fatalf("Failed to parse directives: %v", err)
 	}
@@ -321,12 +319,12 @@ func TestParseFunctions(t *testing.T) {
 
 func TestParseVariables(t *testing.T) {
 	filePath := filepath.Join(getModuleRoot(), "testdata", "parser_test_variables.go")
-	file, fset, err := loader.LoadGoFile(filePath)
+	file, fset, err := loadGoFile(filePath)
 	if err != nil {
 		t.Fatalf("Failed to load Go file %s: %v", filePath, err)
 	}
 
-	cfg, err := parser.ParseFileDirectives(file, fset)
+	cfg, err := ParseFileDirectives(file, fset)
 	if err != nil {
 		t.Fatalf("Failed to parse directives: %v", err)
 	}
@@ -354,12 +352,12 @@ func TestParseVariables(t *testing.T) {
 
 func TestParseConstants(t *testing.T) {
 	filePath := filepath.Join(getModuleRoot(), "testdata", "parser_test_constants.go")
-	file, fset, err := loader.LoadGoFile(filePath)
+	file, fset, err := loadGoFile(filePath)
 	if err != nil {
 		t.Fatalf("Failed to load Go file %s: %v", filePath, err)
 	}
 
-	cfg, err := parser.ParseFileDirectives(file, fset)
+	cfg, err := ParseFileDirectives(file, fset)
 	if err != nil {
 		t.Fatalf("Failed to parse directives: %v", err)
 	}
@@ -385,12 +383,12 @@ func TestParseConstants(t *testing.T) {
 
 func TestParseIgnores(t *testing.T) {
 	filePath := filepath.Join(getModuleRoot(), "testdata", "parser_test_ignores.go")
-	file, fset, err := loader.LoadGoFile(filePath)
+	file, fset, err := loadGoFile(filePath)
 	if err != nil {
 		t.Fatalf("Failed to load Go file %s: %v", filePath, err)
 	}
 
-	cfg, err := parser.ParseFileDirectives(file, fset)
+	cfg, err := ParseFileDirectives(file, fset)
 	if err != nil {
 		t.Fatalf("Failed to parse directives: %v", err)
 	}
