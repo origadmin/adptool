@@ -47,15 +47,15 @@ func ParseFileDirectives(file *goast.File, fset *gotoken.FileSet) (*config.Confi
 // parseFile parses a Go source file and returns the built configuration.
 func (p *parser) parseFile(file *goast.File, fset *gotoken.FileSet) (*config.Config, error) {
 	extractor := NewDirectiveIterator(file, fset)
-	var directive *Directive
 	currentContext := p.rootContext
-	for directive = range extractor.Seq() {
+	var err error
+	for directive := range extractor.Seq() {
 		slog.Info("Processing directive", "line", directive.Line, "command", directive.Command, "argument", directive.Argument)
-		// Not a container-creating command. Handle context, done, sub-directives.
+
 		var err error
-		switch directive.BaseCmd {
+		switch directive.Command {
 		case "context":
-			if currentContext.IsExplicit() && currentContext.Container() == nil { // Simplified check for empty explicit context
+			if currentContext.IsExplicit() && currentContext.Container() == nil {
 				return nil, newDirectiveError(directive, "consecutive 'context' directives without intervening rules are not allowed")
 			}
 			currentContext.SetExplicit(true)
@@ -63,22 +63,55 @@ func (p *parser) parseFile(file *goast.File, fset *gotoken.FileSet) (*config.Con
 			if !currentContext.IsExplicit() {
 				return nil, newDirectiveError(directive, "'done' directive without a matching explicit 'context'")
 			}
-			currentContext.SetExplicit(false)
+			currentContext, err = currentContext.EndContext()
+			if err != nil {
+				return nil, fmt.Errorf("error ending context: %w", err)
+			}
+		// Directives that create new containers (scopes)
+		case "packages":
+			newContainer := NewContainer(RuleTypePackage)
+			currentContext = currentContext.StartContext(newContainer)
+
+		case "types":
+			newContainer := NewContainer(RuleTypeType)
+			currentContext = currentContext.StartContext(newContainer)
+
+		case "functions":
+			newContainer := NewContainer(RuleTypeFunc)
+			currentContext = currentContext.StartContext(newContainer)
+
+		case "variables":
+			newContainer := NewContainer(RuleTypeVar)
+			currentContext = currentContext.StartContext(newContainer)
+
+		case "constants":
+			newContainer := NewContainer(RuleTypeConst)
+			currentContext = currentContext.StartContext(newContainer)
 		default:
-			// Delegate to the current context's container for any other commands.
-			if err = p.rootContext.Container().ParseDirective(directive); err != nil {
+			if err = currentContext.Container().ParseDirective(directive); err != nil {
 				return nil, err
 			}
 		}
 	}
-	// Finalize the root config
-	if err := p.rootContext.Container().Finalize(); err != nil {
+
+	// After processing all directives, ensure all contexts are properly ended.
+	for currentContext != p.rootContext {
+		slog.Info("Finalizing unclosed context at end of file", "container", currentContext.Container())
+		currentContext, err = currentContext.EndContext()
+		if err != nil {
+			return nil, fmt.Errorf("error finalizing context: %w", err)
+		}
+	}
+
+	// Finalize the root config. The parent for the root is nil.
+	if err := p.rootContext.Container().Finalize(nil); err != nil {
 		return nil, err
 	}
 
-	// Check for unclosed explicit contexts
-	if p.rootContext.Parent() != nil { // Check if we returned to the original root context
-		return nil, fmt.Errorf("unclosed 'context' block(s) detected at end of file")
+	// This check might be redundant now if the loop above guarantees we are at rootContext.
+	// However, it's a good final sanity check.
+	if p.rootContext.Parent() != nil {
+		return nil, fmt.Errorf("unclosed 'context' block(s) detected at end of file (post-finalization check)")
 	}
 
 	return p.rootConfig.Config, nil

@@ -2,6 +2,7 @@
 package parser
 
 import (
+	"fmt"
 	"log/slog"
 )
 
@@ -86,8 +87,8 @@ func (c *Context) ActiveContext() *Context {
 	for i := len(c.activeStacks) - 1; i >= 0; i-- {
 		stack := c.activeStacks[i]
 		if stack.active {
-			if deepActive := stack.ActiveContext(); deepActive != nil {
-				return deepActive
+			if deepContext := stack.ActiveContext(); deepContext != nil {
+				return deepContext
 			}
 			return stack
 		}
@@ -98,7 +99,7 @@ func (c *Context) ActiveContext() *Context {
 // StartContext creates a new child context, makes it the sole active context among
 // its siblings, and returns it.
 func (c *Context) StartContext(container Container) *Context {
-	child := &Context{
+	activeContext := &Context{
 		explicit:  false,
 		active:    true,
 		container: container,
@@ -118,13 +119,25 @@ func (c *Context) StartContext(container Container) *Context {
 		slog.Warn("more than one active stack was found and deactivated", "count", actives)
 	}
 
-	c.activeStacks = append(c.activeStacks, child)
-	return child
+	c.activeStacks = append(c.activeStacks, activeContext)
+	return activeContext
 }
 
 // EndContext deactivates the current context and returns its parent.
 // This is used to exit a scope.
-func (c *Context) EndContext() *Context {
-	c.active = false
-	return c.parent
+// EndContext deactivates the current context, finalizes its container,
+// and returns its parent context. This is used to exit a scope.
+func (c *Context) EndContext() (*Context, error) {
+	c.active = false // Deactivate the current context
+
+	// Finalize the current container and pass its data to the parent
+	if c.parent != nil { // Only finalize if there's a parent to pass data to
+		currentContainer := c.Container()
+		parentContainer := c.parent.Container()
+		if err := currentContainer.Finalize(parentContainer); err != nil {
+			return nil, fmt.Errorf("failed to finalize container: %w", err)
+		}
+	}
+
+	return c.parent, nil
 }

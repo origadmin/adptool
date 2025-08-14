@@ -11,8 +11,8 @@ type FuncRule struct {
 }
 
 func (r *FuncRule) ParseDirective(directive *Directive) error {
-	//TODO implement me
-	panic("implement me")
+	// Delegate to the common RuleSet parser
+	return parseRuleSetDirective(&r.RuleSet, directive)
 }
 
 func (r *FuncRule) AddPackage(pkg *PackageRule) error {
@@ -50,9 +50,11 @@ func (r *FuncRule) AddFieldRule(rule *FieldRule) error {
 	panic("implement me")
 }
 
-func (r *FuncRule) Finalize() error {
-	//TODO implement me
-	panic("implement me")
+func (r *FuncRule) Finalize(parent Container) error {
+	if parent == nil {
+		return fmt.Errorf("FuncRule cannot finalize without a parent container")
+	}
+	return parent.AddFuncRule(r)
 }
 
 func (r *FuncRule) AddRule(rule any) error {
