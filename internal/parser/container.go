@@ -70,7 +70,7 @@ type Container interface {
 	AddFieldRule(rule *FieldRule) error
 	// Finalize performs any post-processing or validation for this container
 	// after all its direct rules have been added.
-	Finalize() error
+	Finalize(parent Container) error
 }
 
 // --- Invalid Rule ---
@@ -111,6 +111,6 @@ func (i *InvalidRule) AddFieldRule(rule *FieldRule) error {
 }
 
 // Finalize for an invalid rule is a no-op.
-func (i *InvalidRule) Finalize() error {
-	return nil
+func (i *InvalidRule) Finalize(parent Container) error {
+	return fmt.Errorf("cannot add rule to an invalid container")
 }

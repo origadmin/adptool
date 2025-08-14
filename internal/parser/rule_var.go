@@ -17,8 +17,8 @@ func (r *VarRule) AddPackage(pkg *PackageRule) error {
 }
 
 func (r *VarRule) ParseDirective(directive *Directive) error {
-	//TODO implement me
-	panic("implement me")
+	// Delegate to the common RuleSet parser
+	return parseRuleSetDirective(&r.RuleSet, directive)
 }
 
 func (r *VarRule) AddTypeRule(rule *TypeRule) error {
@@ -51,9 +51,11 @@ func (r *VarRule) AddFieldRule(rule *FieldRule) error {
 	panic("implement me")
 }
 
-func (r *VarRule) Finalize() error {
-	//TODO implement me
-	panic("implement me")
+func (r *VarRule) Finalize(parent Container) error {
+	if parent == nil {
+		return fmt.Errorf("VarRule cannot finalize without a parent container")
+	}
+	return parent.AddVarRule(r)
 }
 
 func (r *VarRule) AddRule(rule any) error {

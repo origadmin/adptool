@@ -2,6 +2,7 @@ package parser
 
 import (
 	"fmt"
+
 	"github.com/origadmin/adptool/internal/config"
 )
 
@@ -11,8 +12,8 @@ type TypeRule struct {
 }
 
 func (r *TypeRule) ParseDirective(directive *Directive) error {
-	//TODO implement me
-	panic("implement me")
+	// Delegate to the common RuleSet parser
+	return parseRuleSetDirective(&r.RuleSet, directive)
 }
 
 func (r *TypeRule) AddPackage(pkg *PackageRule) error {
@@ -50,17 +51,21 @@ func (r *TypeRule) AddFieldRule(rule *FieldRule) error {
 	panic("implement me")
 }
 
-func (r *TypeRule) Finalize() error {
-	//TODO implement me
-	panic("implement me")
+func (r *TypeRule) Finalize(parent Container) error {
+	if parent == nil {
+		return fmt.Errorf("TypeRule cannot finalize without a parent container")
+	}
+	return parent.AddTypeRule(r)
 }
 
-func (p *TypeRule) AddRule(rule any) error {
-	switch r := rule.(type) {
+func (r *TypeRule) AddRule(rule any) error {
+	switch v := rule.(type) {
 	case *MethodRule:
-		return p.AddMethodRule(r)
+		r.TypeRule.Methods = append(r.TypeRule.Methods, v.MemberRule)
+		return nil
 	case *FieldRule:
-		return p.AddFieldRule(r)
+		r.TypeRule.Fields = append(r.TypeRule.Fields, v.MemberRule)
+		return nil
 	default:
 		return fmt.Errorf("TypeRule cannot contain a rule of type %T", rule)
 	}

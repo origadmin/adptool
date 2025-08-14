@@ -11,8 +11,8 @@ type MethodRule struct {
 }
 
 func (m *MethodRule) ParseDirective(directive *Directive) error {
-	//TODO implement me
-	panic("implement me")
+	// Delegate to the common RuleSet parser
+	return parseRuleSetDirective(&m.RuleSet, directive)
 }
 
 func (m *MethodRule) AddRule(rule any) error {
@@ -54,7 +54,9 @@ func (m *MethodRule) AddFieldRule(rule *FieldRule) error {
 	panic("implement me")
 }
 
-func (m *MethodRule) Finalize() error {
-	//TODO implement me
-	panic("implement me")
+func (m *MethodRule) Finalize(parent Container) error {
+	if parent == nil {
+		return fmt.Errorf("MethodRule cannot finalize without a parent container")
+	}
+	return parent.AddMethodRule(m)
 }
