@@ -46,9 +46,10 @@ func (c *Context) IsExplicit() bool {
 	return c.explicit
 }
 
-// SetExplicit sets the explicit flag for the context.
-func (c *Context) SetExplicit(explicit bool) {
-	c.explicit = explicit
+// WithExplicit sets the explicit flag for the context and returns the context.
+func (c *Context) WithExplicit() *Context {
+	c.explicit = true
+	return c
 }
 
 // IsActive returns true if the context is currently active.
