@@ -17,16 +17,28 @@ type Directive struct {
 	IsJSON  bool     // True if the original command had a ":json" suffix.
 }
 
-func (d Directive) Sub() (*Directive, bool) {
-	if len(d.SubCmds) == 0 {
-		return nil, false
-	}
+func (d Directive) Root() *Directive {
+	newDirective := d                                    // Copy the original directive
+	cmdParts := strings.Split(newDirective.Command, ":") // Use a local variable for cmdParts
+	newDirective.BaseCmd = cmdParts[0]
+	newDirective.SubCmds = cmdParts[1:]
+	return &newDirective
+}
 
+func (d Directive) HasSub() bool {
+	return len(d.SubCmds) > 0
+}
+
+func (d Directive) Sub() *Directive {
 	newDirective := d // Copy the original directive
 	newDirective.BaseCmd = d.SubCmds[0]
 	newDirective.SubCmds = d.SubCmds[1:]
 	// Command, Argument, IsJSON remain the same as the original directive.
-	return &newDirective, true
+	return &newDirective
+}
+
+func (d Directive) ShouldUnmarshal() bool {
+	return d.IsJSON && len(d.SubCmds) == 0
 }
 
 // extractDirective extracts command, argument, and their parsed components from a raw directive string.

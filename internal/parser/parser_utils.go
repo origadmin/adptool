@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"errors"
 	"fmt"
 	goast "go/ast"
 	goparser "go/parser"
@@ -18,7 +19,7 @@ func newDirectiveError(directive *Directive, format string, args ...interface{})
 func parseNameValue(argument string) (name, value string, err error) {
 	parts := strings.SplitN(argument, " ", 2)
 	if len(parts) != 2 {
-		return "", "", fmt.Errorf("argument must be in 'name value' format")
+		return "", "", errors.New("argument must be in 'name value' format")
 	}
 	return parts[0], parts[1], nil
 }
