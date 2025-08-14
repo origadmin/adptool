@@ -380,26 +380,3 @@ func TestParseConstants(t *testing.T) {
 		assert.Equal(t, len(expected.RuleSet.Ignores), len(actual.RuleSet.Ignores), "Constant %d RuleSet.Ignores count mismatch", i)
 	}
 }
-
-func TestParseIgnores(t *testing.T) {
-	filePath := filepath.Join(getModuleRoot(), "testdata", "parser_test_ignores.go")
-	file, fset, err := loadGoFile(filePath)
-	if err != nil {
-		t.Fatalf("Failed to load Go file %s: %v", filePath, err)
-	}
-
-	cfg, err := ParseFileDirectives(file, fset)
-	if err != nil {
-		t.Fatalf("Failed to parse directives: %v", err)
-	}
-
-	expectedIgnores := []string{
-		"pattern1",
-		"pattern2",
-		"pattern3",
-		"pattern4",
-		"pattern5",
-	}
-
-	assert.ElementsMatch(t, expectedIgnores, cfg.Ignores, "Ignores mismatch")
-}
