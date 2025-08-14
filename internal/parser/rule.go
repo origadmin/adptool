@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -46,6 +47,13 @@ func NewContainerFactory(cmd RuleType) ContainerFactory {
 
 // parseRuleSetDirective handles directives that apply to a config.RuleSet.
 func parseRuleSetDirective(rs *config.RuleSet, directive *Directive) error {
+	if directive.ShouldUnmarshal() { // Handle JSON block for defaults
+		err := json.Unmarshal([]byte(directive.Argument), rs)
+		if err != nil {
+			return err
+		}
+		return nil
+	}
 	switch directive.Command {
 	case "strategy":
 		if directive.Argument == "" {
@@ -99,11 +107,21 @@ func parseRuleSetDirective(rs *config.RuleSet, directive *Directive) error {
 	case "regex_mode":
 		rs.RegexMode = directive.Argument
 		return nil
+	case "ignore":
+		if directive.Argument == "" {
+			return fmt.Errorf("ignore directive requires an argument (pattern)")
+		}
+		rs.Ignores = append(rs.Ignores, directive.Argument)
+		return nil
 	case "ignores":
 		if directive.Argument == "" {
 			return fmt.Errorf("ignores directive requires an argument (pattern)")
 		}
-		rs.Ignores = append(rs.Ignores, directive.Argument)
+		ignores, err := handleIgnoreDirective(directive)
+		if err != nil {
+			return err
+		}
+		rs.Ignores = append(rs.Ignores, ignores...)
 		return nil
 	case "ignores_mode":
 		rs.IgnoresMode = directive.Argument
@@ -113,6 +131,13 @@ func parseRuleSetDirective(rs *config.RuleSet, directive *Directive) error {
 			return fmt.Errorf("transform directive requires a sub-command")
 		}
 		sub := directive.Sub()
+		if sub.ShouldUnmarshal() {
+			err := json.Unmarshal([]byte(directive.Argument), rs.Transforms)
+			if err != nil {
+				return err
+			}
+			return nil
+		}
 		switch sub.BaseCmd {
 		case "before":
 			rs.Transforms.Before = sub.Argument
