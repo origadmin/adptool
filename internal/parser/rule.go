@@ -35,9 +35,9 @@ func init() {
 	})
 }
 
-// BuildContainer resolves a command string (including abbreviations) and returns the
+// NewContainerFactory resolves a command string (including abbreviations) and returns the
 // corresponding RuleType constant.
-func BuildContainer(cmd RuleType) func() Container {
+func NewContainerFactory(cmd RuleType) ContainerFactory {
 	return func() Container {
 		return NewContainer(cmd)
 	}
