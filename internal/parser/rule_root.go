@@ -77,31 +77,18 @@ type RootConfig struct {
 	*config.Config
 }
 
-// parseConfigIgnore for the ignores directive
-//go:adapter:ignore pattern1
-//go:adapter:ignores pattern2,pattern3
-//go:adapter:ignores:json ["pattern4", "pattern5"]
-func parseConfigIgnore(directive *Directive) ([]string, error) {
-	if directive.Argument == "" {
-		return nil, fmt.Errorf("ignores directive requires an argument (pattern)")
-	}
-	if directive.IsJSON {
-		var ignores []string
-		err := json.Unmarshal([]byte(directive.Argument), &ignores)
-		if err != nil {
-			return nil, err
-		}
-		return ignores, nil
-	}
-	return strings.Split(directive.Argument, " "), nil
-}
 func (r *RootConfig) ParseDirective(directive *Directive) error {
+	if r.Config.Defaults == nil {
+		r.Config.Defaults = config.NewDefaults()
+		r.Config.Props = []*config.PropsEntry{}
+	}
 	switch directive.BaseCmd {
 	case "default":
-		if r.Config.Defaults == nil {
-			r.Config.Defaults = config.NewDefaults()
+		// If it's just "//go:adapter:default" with no argument and not JSON
+		if directive.Argument == "" {
+			return fmt.Errorf("default directive requires an argument (key value)")
 		}
-		if directive.IsJSON { // Handle JSON block for defaults
+		if directive.ShouldUnmarshal() { // Handle JSON block for defaults
 			err := json.Unmarshal([]byte(directive.Argument), r.Config.Defaults)
 			if err != nil {
 				return err
@@ -109,34 +96,27 @@ func (r *RootConfig) ParseDirective(directive *Directive) error {
 			return nil
 		}
 		// If there are sub-commands (e.g., "default:strategy")
-		if len(directive.SubCmds) > 0 {
-			sub, ok := directive.Sub()
-			if !ok { // Should not happen if len(SubCmds) > 0
-				return fmt.Errorf("internal error: Sub() returned false for non-empty SubCmds")
-			}
-			return handleDefaultDirective(r.Config.Defaults, sub)
+		if !directive.HasSub() { // Should not happen if len(SubCmds) > 0
+			return fmt.Errorf("default directive does not accept a direct argument unless it's a JSON block or has sub-commands")
 		}
-		// If it's just "//go:adapter:default" with no argument and not JSON
-		if directive.Argument != "" {
-			return newDirectiveError(directive, "default directive does not accept a direct argument unless it's a JSON block or has sub-commands")
-		}
-		return nil // Successfully processed a no-op default directive
+		return handleDefaultDirective(r.Config.Defaults, directive.Sub())
 	case "ignore":
-		ignores, err := parseConfigIgnore(directive)
-		if err != nil {
-			return err
+		if directive.Argument == "" {
+			return fmt.Errorf("ignore directive requires an argument (pattern)")
 		}
-		r.Config.Ignores = append(r.Config.Ignores, ignores...)
+		r.Config.Ignores = append(r.Config.Ignores, directive.Argument)
+		return nil
 	case "ignores":
 		if directive.Argument == "" {
 			return fmt.Errorf("ignores directive requires an argument (pattern)")
 		}
-		r.Config.Ignores = append(r.Config.Ignores, directive.Argument)
+		ignores, err := handleIgnoreDirective(directive)
+		if err != nil {
+			return err
+		}
+		r.Config.Ignores = append(r.Config.Ignores, ignores...)
 		return nil
 	case "property":
-		if r.Config.Props == nil {
-			r.Config.Props = []*config.PropsEntry{}
-		}
 		if directive.Argument == "" {
 			return fmt.Errorf("props directive requires an argument (key value)")
 		}
@@ -151,10 +131,9 @@ func (r *RootConfig) ParseDirective(directive *Directive) error {
 	// not by ParseDirective of the current container.
 	case "packages", "types", "functions", "variables", "constants":
 		return fmt.Errorf("directive '%s' starts a new scope and should not be parsed by RootConfig.ParseDirective", directive.Command)
-		// Handle other potential directives that might be part of RuleSet if embedded directly
-		// For now, return an error for unknown directives.
+	default:
+		return fmt.Errorf("unrecognized directive '%s' for RootConfig", directive.Command)
 	}
-	return fmt.Errorf("unrecognized directive '%s' for RootConfig", directive.Command)
 }
 
 func (r *RootConfig) AddRule(rule any) error {

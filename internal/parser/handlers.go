@@ -1,7 +1,9 @@
 package parser
 
 import (
+	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/origadmin/adptool/internal/config"
 )
@@ -20,19 +22,29 @@ func handleDefaultDirective(defaults *config.Defaults, directive *Directive) err
 	if defaults.Mode == nil {
 		defaults.Mode = &config.Mode{}
 	}
+
 	switch directive.BaseCmd {
-	case "strategy":
-		defaults.Mode.Strategy = directive.Argument
-	case "prefix":
-		defaults.Mode.Prefix = directive.Argument
-	case "suffix":
-		defaults.Mode.Suffix = directive.Argument
-	case "explicit":
-		defaults.Mode.Explicit = directive.Argument
-	case "regex":
-		defaults.Mode.Regex = directive.Argument
-	case "ignores":
-		defaults.Mode.Ignores = directive.Argument
+	case "mode":
+		if !directive.HasSub() {
+			return newDirectiveError(directive, "mode directive cannot have sub-directives")
+		}
+		subCmd := directive.Sub()
+		switch subCmd.BaseCmd {
+		case "strategy":
+			defaults.Mode.Strategy = subCmd.Argument
+		case "prefix":
+			defaults.Mode.Prefix = subCmd.Argument
+		case "suffix":
+			defaults.Mode.Suffix = subCmd.Argument
+		case "explicit":
+			defaults.Mode.Explicit = subCmd.Argument
+		case "regex":
+			defaults.Mode.Regex = subCmd.Argument
+		case "ignores":
+			defaults.Mode.Ignores = subCmd.Argument
+		default:
+			return fmt.Errorf("unrecognized directive '%s' for mode", subCmd.BaseCmd)
+		}
 	default:
 		return fmt.Errorf("unrecognized directive '%s' for Defaults", directive.BaseCmd)
 	}
@@ -50,10 +62,29 @@ func handlePropDirective(directive *Directive) ([]*config.PropsEntry, error) {
 	}
 	name, value, err := parseNameValue(directive.Argument)
 	if err != nil {
-		return nil, newDirectiveError(directive, "invalid prop directive argument: %v", err)
+		return nil, fmt.Errorf("invalid prop directive argument: %v", err)
 	}
 	entry := &config.PropsEntry{Name: name, Value: value}
 	return []*config.PropsEntry{entry}, nil
+}
+
+// handleIgnoreDirective for the ignores directive
+//go:adapter:ignore pattern1
+//go:adapter:ignores pattern2 pattern3
+//go:adapter:ignores:json ["pattern4", "pattern5"]
+func handleIgnoreDirective(directive *Directive) ([]string, error) {
+	if directive.Argument == "" {
+		return nil, fmt.Errorf("ignores directive requires an argument (pattern)")
+	}
+	if directive.IsJSON {
+		var ignores []string
+		err := json.Unmarshal([]byte(directive.Argument), &ignores)
+		if err != nil {
+			return nil, err
+		}
+		return ignores, nil
+	}
+	return strings.Split(directive.Argument, " "), nil
 }
 
 //func handlePackageDirective(builder *ConfigBuilder, d *Directive) error {
