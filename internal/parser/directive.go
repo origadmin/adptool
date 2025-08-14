@@ -29,8 +29,8 @@ func (d Directive) Sub() (*Directive, bool) {
 	return &newDirective, true
 }
 
-// parseDirective extracts command, argument, and their parsed components from a raw directive string.
-func parseDirective(rawDirective string, line int) Directive {
+// extractDirective extracts command, argument, and their parsed components from a raw directive string.
+func extractDirective(rawDirective string, line int) Directive {
 	var directive Directive
 	parts := strings.SplitN(rawDirective, " ", 2)
 	directive.Line = line
