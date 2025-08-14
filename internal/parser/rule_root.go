@@ -17,14 +17,19 @@ func parseRuleSetDirective(rs *config.RuleSet, directive *Directive) error {
 			return fmt.Errorf("strategy directive requires an argument")
 		}
 		rs.Strategy = append(rs.Strategy, directive.Argument)
+		return nil
 	case "prefix":
 		rs.Prefix = directive.Argument
+		return nil
 	case "prefix_mode":
 		rs.PrefixMode = directive.Argument
+		return nil
 	case "suffix":
 		rs.Suffix = directive.Argument
+		return nil
 	case "suffix_mode":
 		rs.SuffixMode = directive.Argument
+		return nil
 	case "explicit":
 		// Explicit rules are key=value pairs, need to parse directive.Argument
 		if directive.Argument == "" {
@@ -38,8 +43,10 @@ func parseRuleSetDirective(rs *config.RuleSet, directive *Directive) error {
 			From: parts[0],
 			To:   parts[1],
 		})
+		return nil
 	case "explicit_mode":
 		rs.ExplicitMode = directive.Argument
+		return nil
 	case "regex":
 		// Regex rules are pattern=replace pairs
 		if directive.Argument == "" {
@@ -53,23 +60,44 @@ func parseRuleSetDirective(rs *config.RuleSet, directive *Directive) error {
 			Pattern: parts[0],
 			Replace: parts[1],
 		})
+		return nil
 	case "regex_mode":
 		rs.RegexMode = directive.Argument
+		return nil
 	case "ignores":
 		if directive.Argument == "" {
 			return fmt.Errorf("ignores directive requires an argument (pattern)")
 		}
 		rs.Ignores = append(rs.Ignores, directive.Argument)
+		return nil
 	case "ignores_mode":
 		rs.IgnoresMode = directive.Argument
+		return nil
+	case "transform":
+		if !directive.HasSub() {
+			return fmt.Errorf("transform directive requires a sub-command")
+		}
+		sub := directive.Sub()
+		switch sub.BaseCmd {
+		case "before":
+			rs.Transforms.Before = sub.Argument
+		case "after":
+			rs.Transforms.After = sub.Argument
+		default:
+			return fmt.Errorf("unrecognized directive '%s' for RuleSet.Transforms", sub.Command)
+		}
+		return nil
 	case "transform_before":
 		rs.TransformBefore = directive.Argument
+		rs.Transforms.Before = directive.Argument
+		return nil
 	case "transform_after":
 		rs.TransformAfter = directive.Argument
+		rs.Transforms.After = directive.Argument
+		return nil
 	default:
 		return fmt.Errorf("unrecognized directive '%s' for RuleSet", directive.Command)
 	}
-	return nil
 }
 
 // RootConfig is a wrapper around config.Config to implement the Container interface.

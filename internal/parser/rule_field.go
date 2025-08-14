@@ -20,38 +20,31 @@ func (f *FieldRule) AddRule(rule any) error {
 }
 
 func (f *FieldRule) AddPackage(pkg *PackageRule) error {
-	//TODO implement me
-	panic("implement me")
+	return fmt.Errorf("FieldRule cannot contain a PackageRule")
 }
 
 func (f *FieldRule) AddTypeRule(rule *TypeRule) error {
-	//TODO implement me
-	panic("implement me")
+	return fmt.Errorf("FieldRule cannot contain a TypeRule")
 }
 
 func (f *FieldRule) AddFuncRule(rule *FuncRule) error {
-	//TODO implement me
-	panic("implement me")
+	return fmt.Errorf("FieldRule cannot contain a FuncRule")
 }
 
 func (f *FieldRule) AddVarRule(rule *VarRule) error {
-	//TODO implement me
-	panic("implement me")
+	return fmt.Errorf("FieldRule cannot contain a VarRule")
 }
 
 func (f *FieldRule) AddConstRule(rule *ConstRule) error {
-	//TODO implement me
-	panic("implement me")
+	return fmt.Errorf("FieldRule cannot contain a ConstRule")
 }
 
 func (f *FieldRule) AddMethodRule(rule *MethodRule) error {
-	//TODO implement me
-	panic("implement me")
+	return fmt.Errorf("FieldRule cannot contain a MethodRule")
 }
 
 func (f *FieldRule) AddFieldRule(rule *FieldRule) error {
-	//TODO implement me
-	panic("implement me")
+	return fmt.Errorf("FieldRule cannot contain a FieldRule")
 }
 
 func (f *FieldRule) Finalize(parent Container) error {

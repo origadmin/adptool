@@ -12,8 +12,7 @@ type ConstRule struct {
 }
 
 func (r *ConstRule) AddPackage(pkg *PackageRule) error {
-	//TODO implement me
-	panic("implement me")
+	return fmt.Errorf("ConstRule cannot contain a PackageRule")
 }
 
 func (r *ConstRule) ParseDirective(directive *Directive) error {
@@ -22,33 +21,27 @@ func (r *ConstRule) ParseDirective(directive *Directive) error {
 }
 
 func (r *ConstRule) AddTypeRule(rule *TypeRule) error {
-	//TODO implement me
-	panic("implement me")
+	return fmt.Errorf("ConstRule cannot contain a TypeRule")
 }
 
 func (r *ConstRule) AddFuncRule(rule *FuncRule) error {
-	//TODO implement me
-	panic("implement me")
+	return fmt.Errorf("ConstRule cannot contain a FuncRule")
 }
 
 func (r *ConstRule) AddVarRule(rule *VarRule) error {
-	//TODO implement me
-	panic("implement me")
+	return fmt.Errorf("ConstRule cannot contain a VarRule")
 }
 
 func (r *ConstRule) AddConstRule(rule *ConstRule) error {
-	//TODO implement me
-	panic("implement me")
+	return fmt.Errorf("ConstRule cannot contain a ConstRule")
 }
 
 func (r *ConstRule) AddMethodRule(rule *MethodRule) error {
-	//TODO implement me
-	panic("implement me")
+	return fmt.Errorf("ConstRule cannot contain a MethodRule")
 }
 
 func (r *ConstRule) AddFieldRule(rule *FieldRule) error {
-	//TODO implement me
-	panic("implement me")
+	return fmt.Errorf("ConstRule cannot contain a FieldRule")
 }
 
 func (r *ConstRule) Finalize(parent Container) error {
