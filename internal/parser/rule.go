@@ -54,7 +54,7 @@ func parseRuleSetDirective(rs *config.RuleSet, directive *Directive) error {
 		}
 		return nil
 	}
-	switch directive.Command {
+	switch directive.BaseCmd {
 	case "strategy":
 		if directive.Argument == "" {
 			return fmt.Errorf("strategy directive requires an argument")
