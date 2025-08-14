@@ -2,6 +2,8 @@
 package parser
 
 import (
+	"strings"
+
 	"github.com/stretchr/testify/mock"
 )
 
@@ -59,4 +61,18 @@ func (m *MockContainer) AddRule(rule any) error {
 func (m *MockContainer) Finalize(parent Container) error {
 	args := m.Called(parent)
 	return args.Error(0)
+}
+
+func decodeTestDirective(directiveString string) Directive {
+	if !strings.HasPrefix(directiveString, directivePrefix) {
+		return Directive{}
+	}
+
+	rawDirective := strings.TrimPrefix(directiveString, directivePrefix)
+	commentStart := strings.Index(rawDirective, "//")
+	if commentStart != -1 {
+		rawDirective = strings.TrimSpace(rawDirective[:commentStart])
+	}
+
+	return extractDirective(rawDirective, 0)
 }
