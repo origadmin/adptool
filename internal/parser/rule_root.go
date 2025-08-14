@@ -139,20 +139,16 @@ func (r *RootConfig) ParseDirective(directive *Directive) error {
 func (r *RootConfig) AddRule(rule any) error {
 	switch v := rule.(type) {
 	case *PackageRule:
-		r.Config.Packages = append(r.Config.Packages, v.Package)
-		return nil
+
+		return r.AddPackage(v)
 	case *TypeRule:
-		r.Config.Types = append(r.Config.Types, v.TypeRule)
-		return nil
+		return r.AddTypeRule(v)
 	case *FuncRule:
-		r.Config.Functions = append(r.Config.Functions, v.FuncRule)
-		return nil
+		return r.AddFuncRule(v)
 	case *VarRule:
-		r.Config.Variables = append(r.Config.Variables, v.VarRule)
-		return nil
+		return r.AddVarRule(v)
 	case *ConstRule:
-		r.Config.Constants = append(r.Config.Constants, v.ConstRule)
-		return nil
+		return r.AddConstRule(v)
 	default:
 		return fmt.Errorf("RootConfig cannot contain a rule of type %T", rule)
 	}
