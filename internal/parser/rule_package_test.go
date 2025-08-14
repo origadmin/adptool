@@ -150,3 +150,151 @@ func TestPackageRule_Finalize(t *testing.T) {
 		mockParent.AssertExpectations(t)
 	})
 }
+
+// TestPackageRule_ParseDirective tests the ParseDirective method of PackageRule.
+func TestPackageRule_ParseDirective(t *testing.T) {
+	tests := []struct {
+		name          string
+		directives    []string // Sequence of directive strings to parse
+		expectedPackage *config.Package // The expected final state of PackageRule.Package
+		expectError   bool
+		errorContains string
+	}{
+		{
+			name: "single import directive",
+			directives: []string{
+				"//go:adapter:import github.com/my/package",
+			},
+			expectedPackage: &config.Package{
+				Import: "github.com/my/package",
+			},
+			expectError: false,
+		},
+		{
+			name: "override import directive",
+			directives: []string{
+				"//go:adapter:import old/package",
+				"//go:adapter:import new/package",
+			},
+			expectedPackage: &config.Package{
+				Import: "new/package",
+			},
+			expectError: false,
+		},
+		{
+			name: "single path directive",
+			directives: []string{
+				"//go:adapter:path /path/to/package",
+			},
+			expectedPackage: &config.Package{
+				Path: "/path/to/package",
+			},
+			expectError: false,
+		},
+		{
+			name: "single alias directive",
+			directives: []string{
+				"//go:adapter:alias mypkg",
+			},
+			expectedPackage: &config.Package{
+				Alias: "mypkg",
+			},
+			expectError: false,
+		},
+		{
+			name: "single props directive",
+			directives: []string{
+				"//go:adapter:props key1=value1",
+			},
+			expectedPackage: &config.Package{
+				Props: []*config.PropsEntry{{Name: "key1", Value: "value1"}},
+			},
+			expectError: false,
+		},
+		{
+			name: "accumulate multiple props directives",
+			directives: []string{
+				"//go:adapter:props key1=value1",
+				"//go:adapter:props key2=value2",
+			},
+			expectedPackage: &config.Package{
+				Props: []*config.PropsEntry{
+					{Name: "key1", Value: "value1"},
+					{Name: "key2", Value: "value2"},
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "invalid props directive",
+			directives: []string{
+				"//go:adapter:props invalid_format",
+			},
+			expectedPackage: nil, // Expect partial or nil due to error
+			expectError: true,
+			errorContains: "invalid props directive argument",
+		},
+		{
+			name: "scope-starting directive should error",
+			directives: []string{
+				"//go:adapter:types",
+			},
+			expectedPackage: nil, // Expect partial or nil due to error
+			expectError: true,
+			errorContains: "directive 'types' starts a new scope",
+		},
+		{
+			name: "unrecognized directive should error",
+			directives: []string{
+				"//go:adapter:unknown-command value",
+			},
+			expectedPackage: nil, // Expect partial or nil due to error
+			expectError: true,
+			errorContains: "unrecognized directive 'unknown-command' for PackageRule",
+		},
+		{
+			name: "error in sequence should stop processing",
+			directives: []string{
+				"//go:adapter:import good/import",
+				"//go:adapter:props invalid_prop", // This should cause an error
+				"//go:adapter:alias should-not-be-processed",
+			},
+			expectedPackage: &config.Package{ // State before error
+				Import: "good/import",
+			},
+			expectError: true,
+			errorContains: "invalid props directive argument",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pkgRule := &PackageRule{Package: &config.Package{}} // Fresh rule for each test
+			var actualErr error
+
+			for i, dirString := range tt.directives {
+				dir := decodeTestDirective(dirString) // Assuming decodeTestDirective is available
+				err := pkgRule.ParseDirective(&dir)
+				if err != nil {
+					actualErr = err
+					t.Logf("Error encountered at directive %d (%s): %v", i, dirString, err)
+					break // Stop processing directives on first error
+				}
+			}
+
+			if tt.expectError {
+				assert.Error(t, actualErr)
+				assert.Contains(t, actualErr.Error(), tt.errorContains)
+			} else {
+				assert.NoError(t, actualErr)
+				assert.NotNil(t, pkgRule.Package)
+				assert.Equal(t, tt.expectedPackage.Import, pkgRule.Package.Import)
+				assert.Equal(t, tt.expectedPackage.Path, pkgRule.Package.Path)
+				assert.Equal(t, tt.expectedPackage.Alias, pkgRule.Package.Alias)
+				assert.ElementsMatch(t, tt.expectedPackage.Props, pkgRule.Package.Props)
+				// Note: PackageRule.ParseDirective does not handle Types, Functions, Variables, Constants directly.
+				// Those are handled by AddRule methods and the main parser loop.
+			}
+		})
+	}
+}
