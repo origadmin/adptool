@@ -1,0 +1,136 @@
+package parser
+
+import (
+	"fmt"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+
+	"github.com/origadmin/adptool/internal/config"
+)
+
+// TestTypeRule_AddRuleErrors tests that TypeRule's Add*Rule methods return errors for unsupported types.
+func TestTypeRule_AddRuleErrors(t *testing.T) {
+	typeRule := &TypeRule{TypeRule: &config.TypeRule{Name: "MyType"}}
+
+	tests := []struct {
+		name        string
+		addFunc     func() error
+		expectedErr string
+	}{
+		{
+			name:        "AddPackage should return error",
+			addFunc:     func() error { return typeRule.AddPackage(&PackageRule{}) },
+			expectedErr: "TypeRule cannot contain a PackageRule",
+		},
+		{
+			name:        "AddTypeRule should return error",
+			addFunc:     func() error { return typeRule.AddTypeRule(&TypeRule{}) },
+			expectedErr: "TypeRule cannot contain a TypeRule",
+		},
+		{
+			name:        "AddFuncRule should return error",
+			addFunc:     func() error { return typeRule.AddFuncRule(&FuncRule{}) },
+			expectedErr: "TypeRule cannot contain a FuncRule",
+		},
+		{
+			name:        "AddVarRule should return error",
+			addFunc:     func() error { return typeRule.AddVarRule(&VarRule{}) },
+			expectedErr: "TypeRule cannot contain a VarRule",
+		},
+		{
+			name:        "AddConstRule should return error",
+			addFunc:     func() error { return typeRule.AddConstRule(&ConstRule{}) },
+			expectedErr: "TypeRule cannot contain a ConstRule",
+		},
+		{
+			name:        "AddRule (unsupported) should return error",
+			addFunc:     func() error { return typeRule.AddRule(struct{}{}) },
+			expectedErr: "TypeRule cannot contain a rule of type struct {}",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.addFunc()
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), tt.expectedErr)
+		})
+	}
+}
+
+// TestTypeRule_AddSupportedRules tests adding supported rules to TypeRule.
+func TestTypeRule_AddSupportedRules(t *testing.T) {
+	t.Run("Add single MethodRule", func(t *testing.T) {
+		typeRule := &TypeRule{TypeRule: &config.TypeRule{Name: "MyType"}}
+		methodRule := &MethodRule{MemberRule: &config.MemberRule{Name: "MyMethod"}}
+
+		err := typeRule.AddMethodRule(methodRule)
+		assert.NoError(t, err)
+		assert.Len(t, typeRule.TypeRule.Methods, 1)
+		assert.Equal(t, methodRule.MemberRule, typeRule.TypeRule.Methods[0])
+	})
+
+	t.Run("Add single FieldRule", func(t *testing.T) {
+		typeRule := &TypeRule{TypeRule: &config.TypeRule{Name: "MyType"}}
+		fieldRule := &FieldRule{MemberRule: &config.MemberRule{Name: "MyField"}}
+
+		err := typeRule.AddFieldRule(fieldRule)
+		assert.NoError(t, err)
+		assert.Len(t, typeRule.TypeRule.Fields, 1)
+		assert.Equal(t, fieldRule.MemberRule, typeRule.TypeRule.Fields[0])
+	})
+
+	t.Run("Accumulate multiple Method and Field rules", func(t *testing.T) {
+		typeRule := &TypeRule{TypeRule: &config.TypeRule{Name: "MyType"}}
+
+		method1 := &MethodRule{MemberRule: &config.MemberRule{Name: "Method1"}}
+		field1 := &FieldRule{MemberRule: &config.MemberRule{Name: "Field1"}}
+		method2 := &MethodRule{MemberRule: &config.MemberRule{Name: "Method2"}}
+		field2 := &FieldRule{MemberRule: &config.MemberRule{Name: "Field2"}}
+
+		assert.NoError(t, typeRule.AddMethodRule(method1))
+		assert.NoError(t, typeRule.AddFieldRule(field1))
+		assert.NoError(t, typeRule.AddMethodRule(method2))
+		assert.NoError(t, typeRule.AddFieldRule(field2))
+
+		assert.Len(t, typeRule.TypeRule.Methods, 2)
+		assert.Equal(t, method1.MemberRule, typeRule.TypeRule.Methods[0])
+		assert.Equal(t, method2.MemberRule, typeRule.TypeRule.Methods[1])
+
+		assert.Len(t, typeRule.TypeRule.Fields, 2)
+		assert.Equal(t, field1.MemberRule, typeRule.TypeRule.Fields[0])
+		assert.Equal(t, field2.MemberRule, typeRule.TypeRule.Fields[1])
+	})
+}
+
+// TestTypeRule_Finalize tests the Finalize method of TypeRule.
+func TestTypeRule_Finalize(t *testing.T) {
+	typeRule := &TypeRule{TypeRule: &config.TypeRule{Name: "MyType"}}
+
+	t.Run("Finalize with nil parent should return error", func(t *testing.T) {
+		err := typeRule.Finalize(nil)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "TypeRule cannot finalize without a parent container")
+	})
+
+	t.Run("Finalize with valid parent should call AddTypeRule", func(t *testing.T) {
+		mockParent := new(MockContainer)
+		mockParent.On("AddTypeRule", typeRule).Return(nil).Once()
+
+		err := typeRule.Finalize(mockParent)
+		assert.NoError(t, err)
+		mockParent.AssertExpectations(t)
+	})
+
+	t.Run("Finalize with parent that errors on AddTypeRule", func(t *testing.T) {
+		mockParent := new(MockContainer)
+		expectedErr := fmt.Errorf("parent cannot add type rule")
+		mockParent.On("AddTypeRule", typeRule).Return(expectedErr).Once()
+
+		err := typeRule.Finalize(mockParent)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), expectedErr.Error())
+		mockParent.AssertExpectations(t)
+	})
+}
