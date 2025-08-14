@@ -77,52 +77,6 @@ type RootConfig struct {
 	*config.Config
 }
 
-// parserConfigDefault for the default directive
-// Example:
-//go:adapter:default:mode:strategy replace
-//go:adapter:default:mode:prefix append
-//go:adapter:default:mode:suffix append
-//go:adapter:default:mode:explicit merge
-//go:adapter:default:mode:regex merge
-//go:adapter:default:mode:ignores merge
-func parserConfigDefault(defaults *config.Defaults, directive *Directive) error {
-	switch directive.BaseCmd {
-	case "mode":
-		if defaults.Mode == nil {
-			defaults.Mode = &config.Mode{}
-		}
-		if directive.Argument == "" {
-			return fmt.Errorf("default directive requires an argument")
-		}
-		sub, ok := directive.Sub()
-		if sub.IsJSON && !ok {
-			err := json.Unmarshal([]byte(sub.Argument), defaults.Mode)
-			if err != nil {
-				return err
-			}
-		} else if !ok {
-			return newDirectiveError(directive, "invalid mode '%s' for Defaults", sub.BaseCmd)
-		}
-		switch sub.BaseCmd {
-		case "strategy":
-			defaults.Mode.Strategy = sub.Argument
-		case "prefix":
-			defaults.Mode.Prefix = sub.Argument
-		case "suffix":
-			defaults.Mode.Suffix = sub.Argument
-		case "explicit":
-			defaults.Mode.Explicit = sub.Argument
-		case "regex":
-			defaults.Mode.Regex = sub.Argument
-		case "ignores":
-			defaults.Mode.Ignores = sub.Argument
-		default:
-			return fmt.Errorf("unrecognized mode '%s' for Defaults", sub.BaseCmd)
-		}
-	}
-	return nil
-}
-
 // parseConfigIgnore for the ignores directive
 //go:adapter:ignore pattern1
 //go:adapter:ignores pattern2,pattern3
@@ -156,7 +110,7 @@ func (r *RootConfig) ParseDirective(directive *Directive) error {
 		} else if !ok {
 			return newDirectiveError(directive, "invalid default '%s' for Defaults", sub.BaseCmd)
 		}
-		return parserConfigDefault(r.Config.Defaults, sub)
+		return handleDefaultDirective(r.Config.Defaults, sub)
 	case "ignore":
 		ignores, err := parseConfigIgnore(directive)
 		if err != nil {
@@ -170,17 +124,17 @@ func (r *RootConfig) ParseDirective(directive *Directive) error {
 		r.Config.Ignores = append(r.Config.Ignores, directive.Argument)
 		return nil
 	case "property":
+		if r.Config.Props == nil {
+			r.Config.Props = []*config.PropsEntry{}
+		}
 		if directive.Argument == "" {
-			return fmt.Errorf("props directive requires an argument (key=value)")
+			return fmt.Errorf("props directive requires an argument (key value)")
 		}
-		parts := strings.SplitN(directive.Argument, " ", 2)
-		if len(parts) != 2 {
-			return fmt.Errorf("invalid props directive argument '%s', expected key value", directive.Argument)
+		props, err := handlePropDirective(directive)
+		if err != nil {
+			return err
 		}
-		r.Config.Props = append(r.Config.Props, &config.PropsEntry{
-			Name:  parts[0],
-			Value: parts[1],
-		})
+		r.Config.Props = append(r.Config.Props, props...)
 		return nil
 	// Directives that start new containers (packages, types, funcs, vars, consts)
 	// are handled by the parser's main loop (parseFile) via StartContext,
