@@ -1,9 +1,9 @@
-// Package parser implements the functions, types, and interfaces for the module.
 package parser
 
 import (
 	goast "go/ast"
 	gotoken "go/token"
+	"iter"
 	"strings"
 )
 
@@ -27,25 +27,56 @@ func NewDirectiveExtractor(file *goast.File, fset *gotoken.FileSet) *DirectiveEx
 	}
 }
 
-// Next returns the next parsed Directive, its line number, and an error if any.
-// It returns nil, 0, nil when there are no more directives.
-func (de *DirectiveExtractor) Next() *Directive {
-	for de.index < len(de.comments) {
-		comment := de.comments[de.index]
-		de.index++
+// Seq returns an iter.Seq that yields *Directive objects.
+// This allows DirectiveExtractor to be used in a for...range like pattern.
+func (de *DirectiveExtractor) Seq() iter.Seq[*Directive] {
+	return func(yield func(*Directive) bool) {
+		for de.index < len(de.comments) {
+			comment := de.comments[de.index]
+			de.index++
 
-		line := de.fset.Position(comment.Pos()).Line
+			line := de.fset.Position(comment.Pos()).Line
 
-		if !strings.HasPrefix(comment.Text, directivePrefix) {
-			continue
+			if !strings.HasPrefix(comment.Text, directivePrefix) {
+				continue
+			}
+
+			rawDirective := strings.TrimPrefix(comment.Text, directivePrefix)
+			commentStart := strings.Index(rawDirective, "//")
+			if commentStart != -1 {
+				rawDirective = strings.TrimSpace(rawDirective[:commentStart])
+			}
+
+			pd := parseDirective(rawDirective, line) // parseDirective returns Directive (value type)
+			if !yield(&pd) {                         // Yield the directive and check if iteration should continue
+				return
+			}
 		}
-
-		rawDirective := strings.TrimPrefix(comment.Text, directivePrefix)
-		commentStart := strings.Index(rawDirective, "//")
-		if commentStart != -1 {
-			rawDirective = strings.TrimSpace(rawDirective[:commentStart])
-		}
-		return parseDirective(rawDirective, line)
 	}
-	return nil // No more directives
 }
+
+// Next is no longer needed for the Seq pattern, but kept for backward compatibility if needed.
+// It returns the next parsed Directive and a boolean indicating if there are more directives.
+// func (de *DirectiveExtractor) Next() (*Directive, bool) {
+// 	for de.index < len(de.comments) {
+// 		comment := de.comments[de.index]
+// 		de.index++
+
+// 		line := de.fset.Position(comment.Pos()).Line
+
+// 		if !strings.HasPrefix(comment.Text, directivePrefix) {
+// 			continue
+// 		}
+
+// 		rawDirective := strings.TrimPrefix(comment.Text, directivePrefix)
+// 		commentStart := strings.Index(rawDirective, "//")
+// 		if commentStart != -1 {
+// 			rawDirective = strings.TrimSpace(rawDirective[:commentStart])
+// 		}
+
+// 		pd := parseDirective(rawDirective) // parseDirective now returns Directive (value type)
+// 		pd.Line = line                     // Assign line to Directive
+// 		return &pd, true                   // Return pointer and true for more directives
+// 	}
+// 	return nil, false // No more directives
+// }

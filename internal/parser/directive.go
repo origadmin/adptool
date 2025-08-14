@@ -18,7 +18,7 @@ type Directive struct {
 }
 
 // parseDirective extracts command, argument, and their parsed components from a raw directive string.
-func parseDirective(rawDirective string, line int) *Directive {
+func parseDirective(rawDirective string, line int) Directive {
 	var directive Directive
 	parts := strings.SplitN(rawDirective, " ", 2)
 	directive.Line = line
@@ -38,5 +38,5 @@ func parseDirective(rawDirective string, line int) *Directive {
 	directive.BaseCmd = cmdParts[0]
 	directive.SubCmds = cmdParts[1:]
 
-	return &directive
+	return directive
 }
