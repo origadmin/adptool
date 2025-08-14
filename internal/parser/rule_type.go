@@ -12,8 +12,40 @@ type TypeRule struct {
 }
 
 func (r *TypeRule) ParseDirective(directive *Directive) error {
+	if directive.BaseCmd != "type" {
+		return fmt.Errorf("TypeRule can only contain type directives")
+	}
+	if !directive.HasSub() {
+		if directive.Argument == "" {
+			return fmt.Errorf("type directive requires an argument (name)")
+		}
+		r.TypeRule.Name = directive.Argument
+		return nil
+	}
+	subDirective := directive.Sub()
+	switch subDirective.BaseCmd {
+	case "struct":
+		r.TypeRule.Kind = "struct"
+		r.TypeRule.Pattern = directive.Argument
+		return nil
+	case "rename":
+		r.TypeRule.Explicit = append(r.TypeRule.Explicit, &config.ExplicitRule{
+			From: r.TypeRule.Name,
+			To:   subDirective.Argument,
+		})
+		return nil
+	case "disabled":
+		r.TypeRule.Disabled = subDirective.Argument == "true"
+		return nil
+	case "method":
+		// todo
+		return nil
+	case "field":
+		//todo
+		return nil
+	}
 	// Delegate to the common RuleSet parser
-	return parseRuleSetDirective(&r.RuleSet, directive)
+	return parseRuleSetDirective(&r.RuleSet, subDirective)
 }
 
 func (r *TypeRule) AddPackage(pkg *PackageRule) error {

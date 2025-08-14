@@ -16,8 +16,19 @@ func (r *ConstRule) AddPackage(pkg *PackageRule) error {
 }
 
 func (r *ConstRule) ParseDirective(directive *Directive) error {
+	if directive.BaseCmd != "const" {
+		return fmt.Errorf("ConstRule can only contain const directives")
+	}
+	if !directive.HasSub() {
+		if directive.Argument == "" {
+			return fmt.Errorf("type directive requires an argument (name)")
+		}
+		r.ConstRule.Name = directive.Argument
+		return nil
+	}
+
 	// Delegate to the common RuleSet parser
-	return parseRuleSetDirective(&r.RuleSet, directive)
+	return parseRuleSetDirective(&r.RuleSet, directive.Sub())
 }
 
 func (r *ConstRule) AddTypeRule(rule *TypeRule) error {

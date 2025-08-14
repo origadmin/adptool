@@ -2,6 +2,7 @@ package parser
 
 import (
 	"fmt"
+
 	"github.com/origadmin/adptool/internal/config"
 )
 
@@ -11,8 +12,19 @@ type FuncRule struct {
 }
 
 func (r *FuncRule) ParseDirective(directive *Directive) error {
+	if directive.BaseCmd != "func" {
+		return fmt.Errorf("FuncRule can only contain func directives")
+	}
+	if !directive.HasSub() {
+		if directive.Argument == "" {
+			return fmt.Errorf("type directive requires an argument (name)")
+		}
+		r.FuncRule.Name = directive.Argument
+		return nil
+	}
+
 	// Delegate to the common RuleSet parser
-	return parseRuleSetDirective(&r.RuleSet, directive)
+	return parseRuleSetDirective(&r.RuleSet, directive.Sub())
 }
 
 func (r *FuncRule) AddPackage(pkg *PackageRule) error {
