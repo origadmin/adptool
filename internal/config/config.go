@@ -13,6 +13,13 @@ func New() *Config {
 	}
 }
 
+// NewDefaults creates a new, fully initialized Defaults object.
+func NewDefaults() *Defaults {
+	return &Defaults{
+		Mode: &Mode{}, // Initialize Mode to avoid nil pointer dereference
+	}
+}
+
 // Config is the root of the .adptool.yaml configuration file.
 type Config struct {
 	Ignores   []string      `yaml:"ignores,omitempty" mapstructure:"ignores,omitempty" json:"ignores,omitempty" toml:"ignores,omitempty"`

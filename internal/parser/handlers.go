@@ -1,7 +1,6 @@
 package parser
 
 import (
-	"encoding/json"
 	"fmt"
 
 	"github.com/origadmin/adptool/internal/config"
@@ -18,39 +17,24 @@ import (
 //go:adapter:default:mode:regex merge
 //go:adapter:default:mode:ignores merge
 func handleDefaultDirective(defaults *config.Defaults, directive *Directive) error {
+	if defaults.Mode == nil {
+		defaults.Mode = &config.Mode{}
+	}
 	switch directive.BaseCmd {
-	case "mode":
-		if defaults.Mode == nil {
-			defaults.Mode = &config.Mode{}
-		}
-		if directive.Argument == "" {
-			return fmt.Errorf("default directive requires an argument")
-		}
-		sub, ok := directive.Sub()
-		if sub.IsJSON && !ok {
-			err := json.Unmarshal([]byte(sub.Argument), defaults.Mode)
-			if err != nil {
-				return err
-			}
-		} else if !ok {
-			return newDirectiveError(directive, "invalid mode '%s' for Defaults", sub.BaseCmd)
-		}
-		switch sub.BaseCmd {
-		case "strategy":
-			defaults.Mode.Strategy = sub.Argument
-		case "prefix":
-			defaults.Mode.Prefix = sub.Argument
-		case "suffix":
-			defaults.Mode.Suffix = sub.Argument
-		case "explicit":
-			defaults.Mode.Explicit = sub.Argument
-		case "regex":
-			defaults.Mode.Regex = sub.Argument
-		case "ignores":
-			defaults.Mode.Ignores = sub.Argument
-		default:
-			return fmt.Errorf("unrecognized mode '%s' for Defaults", sub.BaseCmd)
-		}
+	case "strategy":
+		defaults.Mode.Strategy = directive.Argument
+	case "prefix":
+		defaults.Mode.Prefix = directive.Argument
+	case "suffix":
+		defaults.Mode.Suffix = directive.Argument
+	case "explicit":
+		defaults.Mode.Explicit = directive.Argument
+	case "regex":
+		defaults.Mode.Regex = directive.Argument
+	case "ignores":
+		defaults.Mode.Ignores = directive.Argument
+	default:
+		return fmt.Errorf("unrecognized directive '%s' for Defaults", directive.BaseCmd)
 	}
 	return nil
 }

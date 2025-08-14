@@ -17,24 +17,15 @@ type Directive struct {
 	IsJSON  bool     // True if the original command had a ":json" suffix.
 }
 
-func (d Directive) Root() *Directive {
-	newDirective := d                         // Copy the original directive
-	cmdParts := strings.Split(d.Command, ":") // Use a local variable for cmdParts
-	newDirective.BaseCmd = cmdParts[0]
-	newDirective.SubCmds = cmdParts[1:]
-	return &newDirective
-}
-
-// Sub creates a new Directive with the given sub-command appended to its BaseCmd.
-// The new Directive's Command will be BaseCmd:subCmd, and SubCmds will be updated.
-// The original Directive's Line, Argument, and IsJSON are preserved.
 func (d Directive) Sub() (*Directive, bool) {
 	if len(d.SubCmds) == 0 {
-		return &Directive{}, false
+		return nil, false
 	}
+
 	newDirective := d // Copy the original directive
 	newDirective.BaseCmd = d.SubCmds[0]
 	newDirective.SubCmds = d.SubCmds[1:]
+	// Command, Argument, IsJSON remain the same as the original directive.
 	return &newDirective, true
 }
 
