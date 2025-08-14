@@ -35,13 +35,13 @@ func RegisterContainer(rt RuleType, factoryFunc ContainerFactory) {
 
 // NewContainer creates a new Container instance for a given RuleType.
 // It returns nil if the type is not registered or invalid.
-func NewContainer(rt RuleType) Container {
-	if rt <= RuleTypeUnknown || int(rt) >= len(defaultFactory.registry) || defaultFactory.registry[rt] == nil {
+func NewContainer(ruleType RuleType) Container {
+	if ruleType <= RuleTypeUnknown || int(ruleType) >= len(defaultFactory.registry) || defaultFactory.registry[ruleType] == nil {
 		// This should not happen in normal operation as the parser should have
 		// already validated the rule type via BuildContainer.
 		return invalidRuleInstance
 	}
-	return defaultFactory.registry[rt]()
+	return defaultFactory.registry[ruleType]()
 }
 
 // Container defines the interface for any object that can hold parsed rules

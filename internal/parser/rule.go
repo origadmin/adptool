@@ -39,9 +39,9 @@ func init() {
 
 // NewContainerFactory resolves a command string (including abbreviations) and returns the
 // corresponding RuleType constant.
-func NewContainerFactory(cmd RuleType) ContainerFactory {
+func NewContainerFactory(ruleType RuleType) ContainerFactory {
 	return func() Container {
-		return NewContainer(cmd)
+		return NewContainer(ruleType)
 	}
 }
 
@@ -144,7 +144,7 @@ func parseRuleSetDirective(rs *config.RuleSet, directive *Directive) error {
 		case "after":
 			rs.Transforms.After = sub.Argument
 		default:
-			return fmt.Errorf("unrecognized directive '%s' for RuleSet.Transforms", sub.Command)
+			return fmt.Errorf("unrecognized directive '%s' for RuleSet.Transforms", sub.BaseCmd)
 		}
 		return nil
 	case "transform_before":
@@ -156,6 +156,6 @@ func parseRuleSetDirective(rs *config.RuleSet, directive *Directive) error {
 		rs.Transforms.After = directive.Argument
 		return nil
 	default:
-		return fmt.Errorf("unrecognized directive '%s' for RuleSet", directive.Command)
+		return fmt.Errorf("unrecognized directive '%s' for RuleSet", directive.BaseCmd)
 	}
 }

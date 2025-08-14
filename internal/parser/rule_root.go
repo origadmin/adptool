@@ -66,9 +66,10 @@ func (r *RootConfig) ParseDirective(directive *Directive) error {
 	// are handled by the parser's main loop (parseFile) via StartContext,
 	// not by ParseDirective of the current container.
 	case "packages", "types", "functions", "variables", "constants":
-		return fmt.Errorf("directive '%s' starts a new scope and should not be parsed by RootConfig.ParseDirective", directive.Command)
+		return fmt.Errorf("directive '%s' starts a new scope and should not be parsed by RootConfig.ParseDirective",
+			directive.BaseCmd)
 	default:
-		return fmt.Errorf("unrecognized directive '%s' for RootConfig", directive.Command)
+		return fmt.Errorf("unrecognized directive '%s' for RootConfig", directive.BaseCmd)
 	}
 }
 

@@ -50,10 +50,12 @@ func (p *parser) parseFile(file *goast.File, fset *gotoken.FileSet) (*config.Con
 	currentContext := p.rootContext
 	var err error
 	for directive := range extractor.Seq() {
-		slog.Info("Processing directive", "line", directive.Line, "command", directive.Command, "argument", directive.Argument)
+		slog.Info("Processing directive", "line", directive.Line, "command", directive.BaseCmd, "argument",
+			directive.Argument)
 
 		var err error
-		switch directive.Command {
+		var rt RuleType
+		switch directive.BaseCmd {
 		case "context":
 			if currentContext.IsExplicit() && currentContext.Container() == nil {
 				return nil, newDirectiveError(directive, "consecutive 'context' directives without intervening rules are not allowed")
@@ -67,28 +69,37 @@ func (p *parser) parseFile(file *goast.File, fset *gotoken.FileSet) (*config.Con
 			if err != nil {
 				return nil, fmt.Errorf("error ending context: %w", err)
 			}
-		// Directives that create new containers (scopes)
-		case "packages":
-			newContainer := NewContainer(RuleTypePackage)
-			currentContext = currentContext.StartContext(newContainer)
-
-		case "types":
-			newContainer := NewContainer(RuleTypeType)
-			currentContext = currentContext.StartContext(newContainer)
-
-		case "functions":
-			newContainer := NewContainer(RuleTypeFunc)
-			currentContext = currentContext.StartContext(newContainer)
-
-		case "variables":
-			newContainer := NewContainer(RuleTypeVar)
-			currentContext = currentContext.StartContext(newContainer)
-
-		case "constants":
-			newContainer := NewContainer(RuleTypeConst)
-			currentContext = currentContext.StartContext(newContainer)
+		case "package":
+			//newContainer := NewContainer(RuleTypePackage)
+			//currentContext = currentContext.StartContext(newContainer)
+			rt = RuleTypePackage
+		case "type":
+			//newContainer := NewContainer(RuleTypeType)
+			//currentContext = currentContext.StartContext(newContainer)
+			rt = RuleTypeType
+			// Directives that create new containers (scopes)
+		case "function", "func":
+			//newContainer := NewContainer(RuleTypeFunc)
+			//currentContext = currentContext.StartContext(newContainer)
+			rt = RuleTypeFunc
+		case "variable", "var":
+			//newContainer := NewContainer(RuleTypeVar)
+			//currentContext = currentContext.StartContext(newContainer)
+			rt = RuleTypeVar
+		case "constant", "const":
+			//newContainer := NewContainer(RuleTypeConst)
+			//currentContext = currentContext.StartContext(newContainer)
+			rt = RuleTypeConst
 		default:
 			if err = currentContext.Container().ParseDirective(directive); err != nil {
+				return nil, err
+			}
+		}
+		if rt != RuleTypeUnknown {
+			// Create a new rule based on the directive and add it to the current container.
+			context := currentContext.StartOrActiveContext(NewContainerFactory(rt))
+			err := context.Container().ParseDirective(directive)
+			if err != nil {
 				return nil, err
 			}
 		}

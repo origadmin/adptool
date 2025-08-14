@@ -45,7 +45,7 @@ func TestParseDefaults(t *testing.T) {
 }
 
 func TestParseProps(t *testing.T) {
-	filePath := filepath.Join(getModuleRoot(), "testdata", "parser_test_props.go")
+	filePath := filepath.Join(getModuleRoot(), "testdata", "parser_test_properties.go")
 	file, fset, err := loadGoFile(filePath)
 	if err != nil {
 		t.Fatalf("Failed to load Go file %s: %v", filePath, err)

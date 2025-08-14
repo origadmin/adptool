@@ -11,13 +11,24 @@ type VarRule struct {
 	*config.VarRule
 }
 
-func (r *VarRule) AddPackage(pkg *PackageRule) error {
-	return fmt.Errorf("VarRule cannot contain a PackageRule")
+func (r *VarRule) ParseDirective(directive *Directive) error {
+	if directive.BaseCmd != "var" && directive.BaseCmd != "variable" {
+		return fmt.Errorf("VarRule can only contain var directives")
+	}
+	if !directive.HasSub() {
+		if directive.Argument == "" {
+			return fmt.Errorf("type directive requires an argument (name)")
+		}
+		r.VarRule.Name = directive.Argument
+		return nil
+	}
+
+	// Delegate to the common RuleSet parser
+	return parseRuleSetDirective(&r.RuleSet, directive.Sub())
 }
 
-func (r *VarRule) ParseDirective(directive *Directive) error {
-	// Delegate to the common RuleSet parser
-	return parseRuleSetDirective(&r.RuleSet, directive)
+func (r *VarRule) AddPackage(pkg *PackageRule) error {
+	return fmt.Errorf("VarRule cannot contain a PackageRule")
 }
 
 func (r *VarRule) AddTypeRule(rule *TypeRule) error {
