@@ -72,38 +72,31 @@ func (p *PackageRule) AddRule(rule any) error {
 }
 
 func (p *PackageRule) AddPackage(pkg *PackageRule) error {
-	//TODO implement me
-	panic("implement me")
+	return fmt.Errorf("PackageRule cannot contain another PackageRule")
 }
 
 func (p *PackageRule) AddTypeRule(rule *TypeRule) error {
-	//TODO implement me
-	panic("implement me")
+	return p.AddRule(rule)
 }
 
 func (p *PackageRule) AddFuncRule(rule *FuncRule) error {
-	//TODO implement me
-	panic("implement me")
+	return p.AddRule(rule)
 }
 
 func (p *PackageRule) AddVarRule(rule *VarRule) error {
-	//TODO implement me
-	panic("implement me")
+	return p.AddRule(rule)
 }
 
 func (p *PackageRule) AddConstRule(rule *ConstRule) error {
-	//TODO implement me
-	panic("implement me")
+	return p.AddRule(rule)
 }
 
 func (p *PackageRule) AddMethodRule(rule *MethodRule) error {
-	//TODO implement me
-	panic("implement me")
+	return fmt.Errorf("PackageRule cannot contain a MethodRule")
 }
 
 func (p *PackageRule) AddFieldRule(rule *FieldRule) error {
-	//TODO implement me
-	panic("implement me")
+	return fmt.Errorf("PackageRule cannot contain a FieldRule")
 }
 
 func (p *PackageRule) Finalize(parent Container) error {
