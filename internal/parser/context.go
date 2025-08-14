@@ -86,6 +86,9 @@ func (c *Context) ActiveContext() *Context {
 	for i := len(c.activeStacks) - 1; i >= 0; i-- {
 		stack := c.activeStacks[i]
 		if stack.active {
+			if deepActive := stack.ActiveContext(); deepActive != nil {
+				return deepActive
+			}
 			return stack
 		}
 	}
