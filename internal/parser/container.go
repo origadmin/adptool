@@ -9,8 +9,10 @@ type Container interface {
 	// It takes the builder to interact with the broader parsing state if necessary (e.g., to set an active member).
 	ParseDirective(directive *Directive) error
 
-	// AddPackage adds a nested package configuration to this container.
-	AddPackage(pkg Container) error
+	//AddRule(r interface{}) error
+
+	// AddPackage adds a PackageConfig package configuration to this container.
+	//AddPackage(pkg *PackageConfig) error
 
 	// AddTypeRule adds a TypeRule to this container.
 	AddTypeRule(rule *TypeRule) error
@@ -20,7 +22,9 @@ type Container interface {
 	AddVarRule(rule *VarRule) error
 	// AddConstRule adds a ConstRule to this container.
 	AddConstRule(rule *ConstRule) error
+	// AddMethodRule adds a MethodRule to this container.
 	AddMethodRule(rule *MethodRule) error
+	// AddFieldRule adds a FieldRule to this container.
 	AddFieldRule(rule *FieldRule) error
 	// Finalize performs any post-processing or validation for this container
 	// after all its direct rules have been added.
@@ -271,6 +275,46 @@ type VarRule struct {
 	*config.VarRule
 }
 
+func (r *VarRule) ParseDirective(directive *Directive) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (r *VarRule) AddTypeRule(rule *TypeRule) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (r *VarRule) AddFuncRule(rule *FuncRule) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (r *VarRule) AddVarRule(rule *VarRule) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (r *VarRule) AddConstRule(rule *ConstRule) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (r *VarRule) AddMethodRule(rule *MethodRule) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (r *VarRule) AddFieldRule(rule *FieldRule) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (r *VarRule) Finalize() error {
+	//TODO implement me
+	panic("implement me")
+}
+
 // ApplySubDirective applies a sub-command to the VarRule.
 func (r *VarRule) ApplySubDirective(subCmds []string, argument string, d *Directive) error {
 	//return applySimpleRuleSubDirective(&r.RuleSet, &r.Name, &r.Disabled, builder, subCmds, argument, d)
@@ -280,6 +324,46 @@ func (r *VarRule) ApplySubDirective(subCmds []string, argument string, d *Direct
 // ConstRule is a wrapper around config.ConstRule to implement the Rule interface.
 type ConstRule struct {
 	*config.ConstRule
+}
+
+func (r *ConstRule) ParseDirective(directive *Directive) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (r *ConstRule) AddTypeRule(rule *TypeRule) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (r *ConstRule) AddFuncRule(rule *FuncRule) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (r *ConstRule) AddVarRule(rule *VarRule) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (r *ConstRule) AddConstRule(rule *ConstRule) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (r *ConstRule) AddMethodRule(rule *MethodRule) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (r *ConstRule) AddFieldRule(rule *FieldRule) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (r *ConstRule) Finalize() error {
+	//TODO implement me
+	panic("implement me")
 }
 
 // ApplySubDirective applies a sub-command to the ConstRule.

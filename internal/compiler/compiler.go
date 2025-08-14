@@ -211,41 +211,45 @@ func parseAndSubstitute(s string, resolvedVars map[string]string, resolutionStac
 // compileRuleSet performs variable substitution on a RuleSet.
 func compileRuleSet(rs *config.RuleSet, resolvedVars map[string]string) (*config.RuleSet, error) {
 	if rs == nil {
-		return config.NewRuleSet(), nil // Return an initialized empty RuleSet if nil
+		return &config.RuleSet{
+			Strategy: []string{},
+			Explicit: []*config.ExplicitRule{},
+			Regex:    []*config.RegexRule{},
+			Ignores:  []string{},
+		}, nil
 	}
 
 	// Create a copy to avoid modifying the original (if it's a parent RuleSet)
-	// This is crucial for correct inheritance where parent RuleSets are reused.
 	copiedRs := &config.RuleSet{
-		Strategy:        make([]string, len(rs.Strategy)),
-		Prefix:          rs.Prefix,
-		PrefixMode:      rs.PrefixMode,
-		Suffix:          rs.Suffix,
-		SuffixMode:      rs.SuffixMode,
-		Explicit:        make([]*config.ExplicitRule, len(rs.Explicit)),
-		ExplicitMode:    rs.ExplicitMode,
-		Regex:           make([]*config.RegexRule, len(rs.Regex)),
-		RegexMode:       rs.RegexMode,
-		Ignore:          make([]string, len(rs.Ignore)),
-		IgnoreMode:      rs.IgnoreMode,
-		TransformBefore: rs.TransformBefore,
-		TransformAfter:  rs.TransformAfter,
+		Strategy:     make([]string, len(rs.Strategy)),
+		Prefix:       rs.Prefix,
+		PrefixMode:   rs.PrefixMode,
+		Suffix:       rs.Suffix,
+		SuffixMode:   rs.SuffixMode,
+		Explicit:     make([]*config.ExplicitRule, len(rs.Explicit)),
+		ExplicitMode: rs.ExplicitMode,
+		Regex:        make([]*config.RegexRule, len(rs.Regex)),
+		RegexMode:    rs.RegexMode,
+		Ignores:      make([]string, len(rs.Ignores)),
+		IgnoresMode:  rs.IgnoresMode,
 	}
 
-	// Copy slices
+	// Deep copy for slices and pointers
 	copy(copiedRs.Strategy, rs.Strategy)
-	copy(copiedRs.Ignore, rs.Ignore)
+	copy(copiedRs.Ignores, rs.Ignores)
 
 	for i, r := range rs.Explicit {
-		copiedRs.Explicit[i] = &config.ExplicitRule{
-			From: r.From,
-			To:   r.To,
-		}
+		copiedRs.Explicit[i] = &config.ExplicitRule{From: r.From, To: r.To}
 	}
 	for i, r := range rs.Regex {
-		copiedRs.Regex[i] = &config.RegexRule{
-			Pattern: r.Pattern,
-			Replace: r.Replace,
+		copiedRs.Regex[i] = &config.RegexRule{Pattern: r.Pattern, Replace: r.Replace}
+	}
+
+	// Handle the new nested Transform struct
+	if rs.Transform != nil {
+		copiedRs.Transform = &config.Transform{
+			Before: rs.Transform.Before,
+			After:  rs.Transform.After,
 		}
 	}
 
@@ -259,13 +263,17 @@ func compileRuleSet(rs *config.RuleSet, resolvedVars map[string]string) (*config
 	if err != nil {
 		return nil, err
 	}
-	copiedRs.TransformBefore, err = substituteString(copiedRs.TransformBefore, resolvedVars)
-	if err != nil {
-		return nil, err
-	}
-	copiedRs.TransformAfter, err = substituteString(copiedRs.TransformAfter, resolvedVars)
-	if err != nil {
-		return nil, err
+
+	// Substitute variables in the new Transform struct
+	if copiedRs.Transform != nil {
+		copiedRs.Transform.Before, err = substituteString(copiedRs.Transform.Before, resolvedVars)
+		if err != nil {
+			return nil, err
+		}
+		copiedRs.Transform.After, err = substituteString(copiedRs.Transform.After, resolvedVars)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// Substitute variables in ExplicitRule and RegexRule fields
