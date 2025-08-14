@@ -99,18 +99,28 @@ func (r *RootConfig) ParseDirective(directive *Directive) error {
 	switch directive.BaseCmd {
 	case "default":
 		if r.Config.Defaults == nil {
-			r.Config.Defaults = &config.Defaults{}
+			r.Config.Defaults = config.NewDefaults()
 		}
-		sub, ok := directive.Sub()
-		if sub.IsJSON && !ok {
-			err := json.Unmarshal([]byte(sub.Argument), r.Config.Defaults)
+		if directive.IsJSON { // Handle JSON block for defaults
+			err := json.Unmarshal([]byte(directive.Argument), r.Config.Defaults)
 			if err != nil {
 				return err
 			}
-		} else if !ok {
-			return newDirectiveError(directive, "invalid default '%s' for Defaults", sub.BaseCmd)
+			return nil
 		}
-		return handleDefaultDirective(r.Config.Defaults, sub)
+		// If there are sub-commands (e.g., "default:strategy")
+		if len(directive.SubCmds) > 0 {
+			sub, ok := directive.Sub()
+			if !ok { // Should not happen if len(SubCmds) > 0
+				return fmt.Errorf("internal error: Sub() returned false for non-empty SubCmds")
+			}
+			return handleDefaultDirective(r.Config.Defaults, sub)
+		}
+		// If it's just "//go:adapter:default" with no argument and not JSON
+		if directive.Argument != "" {
+			return newDirectiveError(directive, "default directive does not accept a direct argument unless it's a JSON block or has sub-commands")
+		}
+		return nil // Successfully processed a no-op default directive
 	case "ignore":
 		ignores, err := parseConfigIgnore(directive)
 		if err != nil {
