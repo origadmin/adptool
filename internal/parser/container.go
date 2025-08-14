@@ -10,30 +10,38 @@ type ContainerFactory func() Container
 // --- Factory ---
 
 type factory struct {
-	registry map[string]ContainerFactory
+	// The registry is now a slice of factory functions, indexed by RuleType.
+	registry []ContainerFactory
 }
 
 var defaultFactory = &factory{
-	registry: make(map[string]ContainerFactory),
+	registry: make([]ContainerFactory, 10), // Initial capacity
 }
 
-// RegisterContainer makes a container type available by name.
-// This is the public registration function that delegates to the internal factory.
-func RegisterContainer(name string, factoryFunc ContainerFactory) {
-	if _, dup := defaultFactory.registry[name]; dup {
-		panic("RegisterContainer: called twice for container " + name)
+// RegisterContainer registers a factory function for a given RuleType.
+// It will resize the registry slice if necessary.
+func RegisterContainer(rt RuleType, factoryFunc ContainerFactory) {
+	if int(rt) >= len(defaultFactory.registry) {
+		// Resize the slice to be large enough.
+		newRegistry := make([]ContainerFactory, rt+1)
+		copy(newRegistry, defaultFactory.registry)
+		defaultFactory.registry = newRegistry
 	}
-	defaultFactory.registry[name] = factoryFunc
+	if defaultFactory.registry[rt] != nil {
+		panic(fmt.Sprintf("RegisterContainer: called twice for rule type %d", rt))
+	}
+	defaultFactory.registry[rt] = factoryFunc
 }
 
-// NewContainer creates a new Container instance from its registered name.
-// If the name is not found, it returns a special InvalidRule singleton.
-func NewContainer(name string) Container {
-	factoryFunc, ok := defaultFactory.registry[name]
-	if !ok {
+// NewContainer creates a new Container instance for a given RuleType.
+// It returns nil if the type is not registered or invalid.
+func NewContainer(rt RuleType) Container {
+	if rt <= RuleTypeUnknown || int(rt) >= len(defaultFactory.registry) || defaultFactory.registry[rt] == nil {
+		// This should not happen in normal operation as the parser should have
+		// already validated the rule type via BuildContainer.
 		return invalidRuleInstance
 	}
-	return factoryFunc()
+	return defaultFactory.registry[rt]()
 }
 
 // Container defines the interface for any object that can hold parsed rules
