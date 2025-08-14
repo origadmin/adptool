@@ -47,8 +47,8 @@ func (de *DirectiveIterator) Seq() iter.Seq[*Directive] {
 				rawDirective = strings.TrimSpace(rawDirective[:commentStart])
 			}
 
-			pd := parseDirective(rawDirective, line) // parseDirective returns Directive (value type)
-			if !yield(&pd) {                         // Yield the directive and check if iteration should continue
+			pd := extractDirective(rawDirective, line) // parseDirective returns Directive (value type)
+			if !yield(&pd) {                           // Yield the directive and check if iteration should continue
 				return
 			}
 		}
