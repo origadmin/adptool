@@ -2,6 +2,7 @@ package parser
 
 import (
 	"fmt"
+
 	"github.com/origadmin/adptool/internal/config"
 )
 
@@ -52,6 +53,16 @@ func (p *PackageRule) AddVarRule(rule *VarRule) error {
 }
 
 func (p *PackageRule) AddConstRule(rule *ConstRule) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (p *PackageRule) AddMethodRule(rule *MethodRule) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (p *PackageRule) AddFieldRule(rule *FieldRule) error {
 	//TODO implement me
 	panic("implement me")
 }

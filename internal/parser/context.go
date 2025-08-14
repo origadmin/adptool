@@ -70,12 +70,12 @@ func (c *Context) Parent() *Context {
 // StartOrActiveContext gets an active child context or creates a new one.
 // It first checks if an active child context already exists and returns it.
 // If not, it creates a new one by calling the provided factory function.
-func (c *Context) StartOrActiveContext(newContainerFunc func() Container) *Context {
+func (c *Context) StartOrActiveContext(factory ContainerFactory) *Context {
 	if active := c.ActiveContext(); active != nil {
 		return active
 	}
 	// Execute the factory function only when a new container is needed.
-	container := newContainerFunc()
+	container := factory()
 	return c.StartContext(container)
 }
 
