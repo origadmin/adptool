@@ -12,8 +12,7 @@ type VarRule struct {
 }
 
 func (r *VarRule) AddPackage(pkg *PackageRule) error {
-	//TODO implement me
-	panic("implement me")
+	return fmt.Errorf("VarRule cannot contain a PackageRule")
 }
 
 func (r *VarRule) ParseDirective(directive *Directive) error {
@@ -22,33 +21,27 @@ func (r *VarRule) ParseDirective(directive *Directive) error {
 }
 
 func (r *VarRule) AddTypeRule(rule *TypeRule) error {
-	//TODO implement me
-	panic("implement me")
+	return fmt.Errorf("VarRule cannot contain a TypeRule")
 }
 
 func (r *VarRule) AddFuncRule(rule *FuncRule) error {
-	//TODO implement me
-	panic("implement me")
+	return fmt.Errorf("VarRule cannot contain a FuncRule")
 }
 
 func (r *VarRule) AddVarRule(rule *VarRule) error {
-	//TODO implement me
-	panic("implement me")
+	return fmt.Errorf("VarRule cannot contain a VarRule")
 }
 
 func (r *VarRule) AddConstRule(rule *ConstRule) error {
-	//TODO implement me
-	panic("implement me")
+	return fmt.Errorf("VarRule cannot contain a ConstRule")
 }
 
 func (r *VarRule) AddMethodRule(rule *MethodRule) error {
-	//TODO implement me
-	panic("implement me")
+	return fmt.Errorf("VarRule cannot contain a MethodRule")
 }
 
 func (r *VarRule) AddFieldRule(rule *FieldRule) error {
-	//TODO implement me
-	panic("implement me")
+	return fmt.Errorf("VarRule cannot contain a FieldRule")
 }
 
 func (r *VarRule) Finalize(parent Container) error {
