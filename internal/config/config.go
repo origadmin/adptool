@@ -78,19 +78,22 @@ type Transform struct {
 
 // RuleSet is the fundamental, reusable building block for defining transformation rules.
 type RuleSet struct {
-	Strategy        []string        `yaml:"strategy,omitempty" mapstructure:"strategy,omitempty" json:"strategy,omitempty" toml:"strategy,omitempty"`
-	Prefix          string          `yaml:"prefix,omitempty" mapstructure:"prefix,omitempty" json:"prefix,omitempty" toml:"prefix,omitempty"`
-	PrefixMode      string          `yaml:"prefix_mode,omitempty" mapstructure:"prefix_mode,omitempty" json:"prefix_mode,omitempty" toml:"prefix_mode,omitempty"`
-	Suffix          string          `yaml:"suffix,omitempty" mapstructure:"suffix,omitempty" json:"suffix,omitempty" toml:"suffix,omitempty"`
-	SuffixMode      string          `yaml:"suffix_mode,omitempty" mapstructure:"suffix_mode,omitempty" json:"suffix_mode,omitempty" toml:"suffix_mode,omitempty"`
-	Explicit        []*ExplicitRule `yaml:"explicit,omitempty" mapstructure:"explicit,omitempty" json:"explicit,omitempty" toml:"explicit,omitempty"`
-	ExplicitMode    string          `yaml:"explicit_mode,omitempty" mapstructure:"explicit_mode,omitempty" json:"explicit_mode,omitempty" toml:"explicit_mode,omitempty"`
-	Regex           []*RegexRule    `yaml:"regex,omitempty" mapstructure:"regex,omitempty" json:"regex,omitempty" toml:"regex,omitempty"`
-	RegexMode       string          `yaml:"regex_mode,omitempty" mapstructure:"regex_mode,omitempty" json:"regex_mode,omitempty" toml:"regex_mode,omitempty"`
-	Ignores         []string        `yaml:"ignores,omitempty" mapstructure:"ignores,omitempty" json:"ignores,omitempty" toml:"ignores,omitempty"`
-	IgnoresMode     string          `yaml:"ignores_mode,omitempty" mapstructure:"ignores_mode,omitempty" json:"ignores_mode,omitempty" toml:"ignores_mode,omitempty"`
-	TransformBefore string          `yaml:"transform_before,omitempty" mapstructure:"transform_before,omitempty" json:"transform_before,omitempty" toml:"transform_before,omitempty"`
-	TransformAfter  string          `yaml:"transform_after,omitempty" mapstructure:"transform_after,omitempty" json:"transform_after,omitempty" toml:"transform_after,omitempty"`
+	Strategy     []string        `yaml:"strategy,omitempty" mapstructure:"strategy,omitempty" json:"strategy,omitempty" toml:"strategy,omitempty"`
+	Prefix       string          `yaml:"prefix,omitempty" mapstructure:"prefix,omitempty" json:"prefix,omitempty" toml:"prefix,omitempty"`
+	PrefixMode   string          `yaml:"prefix_mode,omitempty" mapstructure:"prefix_mode,omitempty" json:"prefix_mode,omitempty" toml:"prefix_mode,omitempty"`
+	Suffix       string          `yaml:"suffix,omitempty" mapstructure:"suffix,omitempty" json:"suffix,omitempty" toml:"suffix,omitempty"`
+	SuffixMode   string          `yaml:"suffix_mode,omitempty" mapstructure:"suffix_mode,omitempty" json:"suffix_mode,omitempty" toml:"suffix_mode,omitempty"`
+	Explicit     []*ExplicitRule `yaml:"explicit,omitempty" mapstructure:"explicit,omitempty" json:"explicit,omitempty" toml:"explicit,omitempty"`
+	ExplicitMode string          `yaml:"explicit_mode,omitempty" mapstructure:"explicit_mode,omitempty" json:"explicit_mode,omitempty" toml:"explicit_mode,omitempty"`
+	Regex        []*RegexRule    `yaml:"regex,omitempty" mapstructure:"regex,omitempty" json:"regex,omitempty" toml:"regex,omitempty"`
+	RegexMode    string          `yaml:"regex_mode,omitempty" mapstructure:"regex_mode,omitempty" json:"regex_mode,omitempty" toml:"regex_mode,omitempty"`
+	Ignores      []string        `yaml:"ignores,omitempty" mapstructure:"ignores,omitempty" json:"ignores,omitempty" toml:"ignores,omitempty"`
+	IgnoresMode  string          `yaml:"ignores_mode,omitempty" mapstructure:"ignores_mode,omitempty" json:"ignores_mode,omitempty" toml:"ignores_mode,omitempty"`
+	Transforms   *Transform      `yaml:"transforms,omitempty" mapstructure:"transforms,omitempty" json:"transforms,omitempty" toml:"transforms,omitempty"`
+	// Deprecated: use Transforms instead.
+	TransformBefore string `yaml:"transform_before,omitempty" mapstructure:"transform_before,omitempty" json:"transform_before,omitempty" toml:"transform_before,omitempty"`
+	// Deprecated: use Transforms instead.
+	TransformAfter string `yaml:"transform_after,omitempty" mapstructure:"transform_after,omitempty" json:"transform_after,omitempty" toml:"transform_after,omitempty"`
 }
 
 // ExplicitRule defines a direct from/to renaming rule.
