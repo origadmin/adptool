@@ -52,10 +52,8 @@ func (p *parser) parseFile(file *goast.File, fset *gotoken.FileSet) (*config.Con
 	currentContext := p.rootContext
 	for directive = range extractor.Seq() {
 		slog.Info("Processing directive", "line", directive.Line, "command", directive.Command, "argument", directive.Argument)
-
-		// If not a container-creating directive, handle other commands.
+		// Not a container-creating command. Handle context, done, sub-directives.
 		var err error
-		var name string
 		switch directive.BaseCmd {
 		case "context":
 			if currentContext.IsExplicit() && p.rootContext.Container() == nil { // Simplified check for empty explicit context
@@ -67,31 +65,9 @@ func (p *parser) parseFile(file *goast.File, fset *gotoken.FileSet) (*config.Con
 				return nil, newDirectiveError(directive, "'done' directive without a matching explicit 'context'")
 			}
 			currentContext.SetExplicit(false)
-		case "type":
-			name = "type"
-		case "package":
-			name = "package"
-		case "prop", "property":
-			name = "prop"
-		case "func", "function":
-			name = "func"
-		case "var", "variable":
-			name = "var"
-		case "const", "constant":
-			name = "const"
-		case "method", "field":
-			name = ""
 		default:
 			// Delegate to the current context's container for any other commands.
-			if err = currentContext.Container().ParseDirective(directive); err != nil {
-				return nil, err
-			}
-		}
-
-		if name != "" {
-			// If successful, it's a container-creating directive (e.g., "type", "func").
-			activeContext := p.rootContext.StartOrActiveContext(BuildContainer(name))
-			if err := activeContext.Container().ParseDirective(directive); err != nil {
+			if err = p.rootContext.Container().ParseDirective(directive); err != nil {
 				return nil, err
 			}
 		}
