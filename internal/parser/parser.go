@@ -48,21 +48,22 @@ func ParseFileDirectives(file *goast.File, fset *gotoken.FileSet) (*config.Confi
 func (p *parser) parseFile(file *goast.File, fset *gotoken.FileSet) (*config.Config, error) {
 	extractor := NewDirectiveIterator(file, fset)
 	var directive *Directive
+	currentContext := p.rootContext
 	for directive = range extractor.Seq() {
 		slog.Info("Processing directive", "line", directive.Line, "command", directive.Command, "argument", directive.Argument)
 		// Not a container-creating command. Handle context, done, sub-directives.
 		var err error
 		switch directive.BaseCmd {
 		case "context":
-			if p.rootContext.IsExplicit() && p.rootContext.Container() == nil { // Simplified check for empty explicit context
+			if currentContext.IsExplicit() && currentContext.Container() == nil { // Simplified check for empty explicit context
 				return nil, newDirectiveError(directive, "consecutive 'context' directives without intervening rules are not allowed")
 			}
-			p.rootContext.SetExplicit(true)
+			currentContext.SetExplicit(true)
 		case "done":
-			if !p.rootContext.IsExplicit() {
+			if !currentContext.IsExplicit() {
 				return nil, newDirectiveError(directive, "'done' directive without a matching explicit 'context'")
 			}
-			p.rootContext.SetExplicit(false)
+			currentContext.SetExplicit(false)
 		default:
 			// Delegate to the current context's container for any other commands.
 			if err = p.rootContext.Container().ParseDirective(directive); err != nil {
