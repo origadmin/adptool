@@ -17,38 +17,33 @@ func (r *TypeRule) ParseDirective(directive *Directive) error {
 }
 
 func (r *TypeRule) AddPackage(pkg *PackageRule) error {
-	//TODO implement me
-	panic("implement me")
+	return fmt.Errorf("TypeRule cannot contain a PackageRule")
 }
 
 func (r *TypeRule) AddTypeRule(rule *TypeRule) error {
-	//TODO implement me
-	panic("implement me")
+	return fmt.Errorf("TypeRule cannot contain a TypeRule")
 }
 
 func (r *TypeRule) AddFuncRule(rule *FuncRule) error {
-	//TODO implement me
-	panic("implement me")
+	return fmt.Errorf("TypeRule cannot contain a FuncRule")
 }
 
 func (r *TypeRule) AddVarRule(rule *VarRule) error {
-	//TODO implement me
-	panic("implement me")
+	return fmt.Errorf("TypeRule cannot contain a VarRule")
 }
 
 func (r *TypeRule) AddConstRule(rule *ConstRule) error {
-	//TODO implement me
-	panic("implement me")
+	return fmt.Errorf("TypeRule cannot contain a ConstRule")
 }
 
 func (r *TypeRule) AddMethodRule(rule *MethodRule) error {
-	//TODO implement me
-	panic("implement me")
+	r.TypeRule.Methods = append(r.TypeRule.Methods, rule.MemberRule)
+	return nil
 }
 
 func (r *TypeRule) AddFieldRule(rule *FieldRule) error {
-	//TODO implement me
-	panic("implement me")
+	r.TypeRule.Fields = append(r.TypeRule.Fields, rule.MemberRule)
+	return nil
 }
 
 func (r *TypeRule) Finalize(parent Container) error {
@@ -61,11 +56,9 @@ func (r *TypeRule) Finalize(parent Container) error {
 func (r *TypeRule) AddRule(rule any) error {
 	switch v := rule.(type) {
 	case *MethodRule:
-		r.TypeRule.Methods = append(r.TypeRule.Methods, v.MemberRule)
-		return nil
+		return r.AddMethodRule(v)
 	case *FieldRule:
-		r.TypeRule.Fields = append(r.TypeRule.Fields, v.MemberRule)
-		return nil
+		return r.AddFieldRule(v)
 	default:
 		return fmt.Errorf("TypeRule cannot contain a rule of type %T", rule)
 	}
