@@ -185,6 +185,18 @@ func TestRootConfigParseDirectiveIgnores(t *testing.T) {
 			expectError:     true,
 			errorContains:   "ignores directive requires an argument (pattern)",
 		},
+		{
+			name:            "Multiple ignores",
+			directiveString: "//go:adapter:ignores *.log temp/ *.tmp",
+			expectedIgnores: []string{"*.log", "temp/", "*.tmp"},
+			expectError:     false,
+		},
+		{
+			name:            "Ignores with JSON argument",
+			directiveString: "//go:adapter:ignores:json [\"pattern1\", \"pattern2\"]",
+			expectedIgnores: []string{"pattern1", "pattern2"},
+			expectError:     false,
+		},
 	}
 
 	for _, tt := range tests {
