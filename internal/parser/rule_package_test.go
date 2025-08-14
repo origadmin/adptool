@@ -154,16 +154,16 @@ func TestPackageRule_Finalize(t *testing.T) {
 // TestPackageRule_ParseDirective tests the ParseDirective method of PackageRule.
 func TestPackageRule_ParseDirective(t *testing.T) {
 	tests := []struct {
-		name          string
-		directives    []string // Sequence of directive strings to parse
+		name            string
+		directives      []string        // Sequence of directive strings to parse
 		expectedPackage *config.Package // The expected final state of PackageRule.Package
-		expectError   bool
-		errorContains string
+		expectError     bool
+		errorContains   string
 	}{
 		{
 			name: "single import directive",
 			directives: []string{
-				"//go:adapter:import github.com/my/package",
+				"//go:adapter:package:import github.com/my/package",
 			},
 			expectedPackage: &config.Package{
 				Import: "github.com/my/package",
@@ -173,8 +173,8 @@ func TestPackageRule_ParseDirective(t *testing.T) {
 		{
 			name: "override import directive",
 			directives: []string{
-				"//go:adapter:import old/package",
-				"//go:adapter:import new/package",
+				"//go:adapter:package:import old/package",
+				"//go:adapter:package:import new/package",
 			},
 			expectedPackage: &config.Package{
 				Import: "new/package",
@@ -184,7 +184,7 @@ func TestPackageRule_ParseDirective(t *testing.T) {
 		{
 			name: "single path directive",
 			directives: []string{
-				"//go:adapter:path /path/to/package",
+				"//go:adapter:package:path /path/to/package",
 			},
 			expectedPackage: &config.Package{
 				Path: "/path/to/package",
@@ -194,7 +194,7 @@ func TestPackageRule_ParseDirective(t *testing.T) {
 		{
 			name: "single alias directive",
 			directives: []string{
-				"//go:adapter:alias mypkg",
+				"//go:adapter:package:alias mypkg",
 			},
 			expectedPackage: &config.Package{
 				Alias: "mypkg",
@@ -204,7 +204,7 @@ func TestPackageRule_ParseDirective(t *testing.T) {
 		{
 			name: "single props directive",
 			directives: []string{
-				"//go:adapter:props key1=value1",
+				"//go:adapter:package:props key1=value1",
 			},
 			expectedPackage: &config.Package{
 				Props: []*config.PropsEntry{{Name: "key1", Value: "value1"}},
@@ -214,8 +214,8 @@ func TestPackageRule_ParseDirective(t *testing.T) {
 		{
 			name: "accumulate multiple props directives",
 			directives: []string{
-				"//go:adapter:props key1=value1",
-				"//go:adapter:props key2=value2",
+				"//go:adapter:package:props key1=value1",
+				"//go:adapter:package:props key2=value2",
 			},
 			expectedPackage: &config.Package{
 				Props: []*config.PropsEntry{
@@ -228,41 +228,41 @@ func TestPackageRule_ParseDirective(t *testing.T) {
 		{
 			name: "invalid props directive",
 			directives: []string{
-				"//go:adapter:props invalid_format",
+				"//go:adapter:package:props invalid_format",
 			},
 			expectedPackage: nil, // Expect partial or nil due to error
-			expectError: true,
-			errorContains: "invalid props directive argument",
+			expectError:     true,
+			errorContains:   "invalid props directive argument",
 		},
 		{
 			name: "scope-starting directive should error",
 			directives: []string{
-				"//go:adapter:types",
+				"//go:adapter:package:types",
 			},
 			expectedPackage: nil, // Expect partial or nil due to error
-			expectError: true,
-			errorContains: "directive 'types' starts a new scope",
+			expectError:     true,
+			errorContains:   "directive 'package:types' starts a new scope and should not be parsed by PackageRule.ParseDirective",
 		},
 		{
 			name: "unrecognized directive should error",
 			directives: []string{
-				"//go:adapter:unknown-command value",
+				"//go:adapter:package:unknown-command value",
 			},
 			expectedPackage: nil, // Expect partial or nil due to error
-			expectError: true,
-			errorContains: "unrecognized directive 'unknown-command' for PackageRule",
+			expectError:     true,
+			errorContains:   "unrecognized directive 'package:unknown-command' for PackageRule",
 		},
 		{
 			name: "error in sequence should stop processing",
 			directives: []string{
-				"//go:adapter:import good/import",
-				"//go:adapter:props invalid_prop", // This should cause an error
-				"//go:adapter:alias should-not-be-processed",
+				"//go:adapter:package:import good/import",
+				"//go:adapter:package:props invalid_prop", // This should cause an error
+				"//go:adapter:package:alias should-not-be-processed",
 			},
 			expectedPackage: &config.Package{ // State before error
 				Import: "good/import",
 			},
-			expectError: true,
+			expectError:   true,
 			errorContains: "invalid props directive argument",
 		},
 	}
@@ -274,7 +274,15 @@ func TestPackageRule_ParseDirective(t *testing.T) {
 
 			for i, dirString := range tt.directives {
 				dir := decodeTestDirective(dirString) // Assuming decodeTestDirective is available
-				err := pkgRule.ParseDirective(&dir)
+				if dir.BaseCmd != "package" {
+					actualErr = fmt.Errorf("unexpected base command: %s", dir.BaseCmd)
+					t.Logf("Error encountered at directive %d (%s): %v", i, dirString, actualErr)
+					break // Stop processing directives on first error
+				}
+				if !dir.HasSub() {
+					continue
+				}
+				err := pkgRule.ParseDirective(dir.Sub())
 				if err != nil {
 					actualErr = err
 					t.Logf("Error encountered at directive %d (%s): %v", i, dirString, err)
