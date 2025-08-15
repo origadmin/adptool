@@ -2,7 +2,7 @@ package parser
 
 import (
 	"encoding/json"
-	"fmt"
+	
 	"strings"
 
 	"github.com/origadmin/adptool/internal/config"
@@ -50,14 +50,14 @@ func parseRuleSetDirective(rs *config.RuleSet, directive *Directive) error {
 	if directive.ShouldUnmarshal() { // Handle JSON block for defaults
 		err := json.Unmarshal([]byte(directive.Argument), rs)
 		if err != nil {
-			return fmt.Errorf("failed to unmarshal JSON for RuleSet: %w", NewParserError("failed to unmarshal JSON for RuleSet"))
+			return NewParserErrorWithContext(directive, "failed to unmarshal JSON for RuleSet: %w", err)
 		}
 		return nil
 	}
 	switch directive.BaseCmd {
 	case "strategy":
 		if directive.Argument == "" {
-			return newDirectiveError(directive, "strategy directive requires an argument")
+			return NewParserErrorWithContext(directive, "strategy directive requires an argument")
 		}
 		rs.Strategy = append(rs.Strategy, directive.Argument)
 		return nil
@@ -76,11 +76,11 @@ func parseRuleSetDirective(rs *config.RuleSet, directive *Directive) error {
 	case "explicit":
 		// Explicit rules are key=value pairs, need to parse directive.Argument
 		if directive.Argument == "" {
-			return newDirectiveError(directive, "explicit directive requires an argument (from=to)")
+			return NewParserErrorWithContext(directive, "explicit directive requires an argument (from=to)")
 		}
 		parts := strings.SplitN(directive.Argument, "=", 2)
 		if len(parts) != 2 {
-			return newDirectiveError(directive, "invalid explicit directive argument '%s', expected from=to", directive.Argument)
+			return NewParserErrorWithContext(directive, "invalid explicit directive argument '%s', expected from=to", directive.Argument)
 		}
 		rs.Explicit = append(rs.Explicit, &config.ExplicitRule{
 			From: parts[0],
@@ -93,11 +93,11 @@ func parseRuleSetDirective(rs *config.RuleSet, directive *Directive) error {
 	case "regex":
 		// Regex rules are pattern=replace pairs
 		if directive.Argument == "" {
-			return newDirectiveError(directive, "regex directive requires an argument (pattern=replace)")
+			return NewParserErrorWithContext(directive, "regex directive requires an argument (pattern=replace)")
 		}
 		parts := strings.SplitN(directive.Argument, "=", 2)
 		if len(parts) != 2 {
-			return newDirectiveError(directive, "invalid regex directive argument '%s', expected pattern=replace", directive.Argument)
+			return NewParserErrorWithContext(directive, "invalid regex directive argument '%s', expected pattern=replace", directive.Argument)
 		}
 		rs.Regex = append(rs.Regex, &config.RegexRule{
 			Pattern: parts[0],
@@ -109,17 +109,17 @@ func parseRuleSetDirective(rs *config.RuleSet, directive *Directive) error {
 		return nil
 	case "ignore":
 		if directive.Argument == "" {
-			return newDirectiveError(directive, "ignore directive requires an argument (pattern)")
+			return NewParserErrorWithContext(directive, "ignore directive requires an argument (pattern)")
 		}
 		rs.Ignores = append(rs.Ignores, directive.Argument)
 		return nil
 	case "ignores":
 		if directive.Argument == "" {
-			return newDirectiveError(directive, "ignores directive requires an argument (pattern)")
+			return NewParserErrorWithContext(directive, "ignores directive requires an argument (pattern)")
 		}
 		ignores, err := handleIgnoreDirective(directive)
 		if err != nil {
-			return fmt.Errorf("failed to handle ignore directive: %w", newDirectiveError(directive, "failed to handle ignore directive"))
+			return NewParserErrorWithContext(directive, "failed to handle ignore directive: %w", err)
 		}
 		rs.Ignores = append(rs.Ignores, ignores...)
 		return nil
@@ -128,13 +128,13 @@ func parseRuleSetDirective(rs *config.RuleSet, directive *Directive) error {
 		return nil
 	case "transform":
 		if !directive.HasSub() {
-			return newDirectiveError(directive, "transform directive requires a sub-command")
+			return NewParserErrorWithContext(directive, "transform directive requires a sub-command")
 		}
 		sub := directive.Sub()
 			if sub.ShouldUnmarshal() {
 		err := json.Unmarshal([]byte(directive.Argument), rs.Transforms)
 		if err != nil {
-			return fmt.Errorf("failed to unmarshal JSON for RuleSet.Transforms: %w", newDirectiveError(directive, "failed to unmarshal JSON for RuleSet.Transforms"))
+			return NewParserErrorWithContext(directive, "failed to unmarshal JSON for RuleSet.Transforms: %w", err)
 		}
 		return nil
 	}
@@ -144,7 +144,7 @@ func parseRuleSetDirective(rs *config.RuleSet, directive *Directive) error {
 		case "after":
 			rs.Transforms.After = sub.Argument
 		default:
-			return newDirectiveError(sub, "unrecognized directive '%s' for RuleSet.Transforms", sub.BaseCmd)
+			return NewParserErrorWithContext(sub, "unrecognized directive '%s' for RuleSet.Transforms", sub.BaseCmd)
 		}
 		return nil
 	case "transform_before":
@@ -156,6 +156,6 @@ func parseRuleSetDirective(rs *config.RuleSet, directive *Directive) error {
 		rs.Transforms.After = directive.Argument
 		return nil
 	default:
-		return newDirectiveError(directive, "unrecognized directive '%s' for RuleSet", directive.BaseCmd)
+		return NewParserErrorWithContext(directive, "unrecognized directive '%s' for RuleSet", directive.BaseCmd)
 	}
 }

@@ -83,34 +83,34 @@ var invalidRuleInstance = &InvalidRule{}
 
 // ParseDirective for an invalid rule always returns an error.
 func (i *InvalidRule) ParseDirective(directive *Directive) error {
-	return newDirectiveError(directive, "unrecognized directive command: %s", directive.Command)
+	return NewParserErrorWithContext(directive, "unrecognized directive command: %s", directive.Command)
 }
 func (i *InvalidRule) AddRule(rule any) error {
-	return NewParserError("cannot add rule to an invalid container")
+	return NewParserErrorWithContext(i, "cannot add rule to an invalid container")
 }
 func (i *InvalidRule) AddPackage(pkg *PackageRule) error {
-	return NewParserError("cannot add rule to an invalid container")
+	return NewParserErrorWithContext(i, "cannot add rule to an invalid container")
 }
 func (i *InvalidRule) AddTypeRule(rule *TypeRule) error {
-	return NewParserError("cannot add rule to an invalid container")
+	return NewParserErrorWithContext(i, "cannot add rule to an invalid container")
 }
 func (i *InvalidRule) AddFuncRule(rule *FuncRule) error {
-	return NewParserError("cannot add rule to an invalid container")
+	return NewParserErrorWithContext(i, "cannot add rule to an invalid container")
 }
 func (i *InvalidRule) AddVarRule(rule *VarRule) error {
-	return NewParserError("cannot add rule to an invalid container")
+	return NewParserErrorWithContext(i, "cannot add rule to an invalid container")
 }
 func (i *InvalidRule) AddConstRule(rule *ConstRule) error {
-	return NewParserError("cannot add rule to an invalid container")
+	return NewParserErrorWithContext(i, "cannot add rule to an invalid container")
 }
 func (i *InvalidRule) AddMethodRule(rule *MethodRule) error {
-	return NewParserError("cannot add rule to an invalid container")
+	return NewParserErrorWithContext(i, "cannot add rule to an invalid container")
 }
 func (i *InvalidRule) AddFieldRule(rule *FieldRule) error {
-	return NewParserError("cannot add rule to an invalid container")
+	return NewParserErrorWithContext(i, "cannot add rule to an invalid container")
 }
 
 // Finalize for an invalid rule is a no-op.
 func (i *InvalidRule) Finalize(parent Container) error {
-	return NewParserError("cannot add rule to an invalid container")
+	return NewParserErrorWithContext(i, "cannot add rule to an invalid container")
 }
