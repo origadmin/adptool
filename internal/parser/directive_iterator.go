@@ -7,29 +7,32 @@ import (
 	"strings"
 )
 
-// DirectiveIterator iterates over comments and extracts adptool directives.
-type DirectiveIterator struct {
+type DirectiveIterator iter.Seq[*Directive]
+
+// directiveIterator iterates over comments and extracts adptool directives.
+type directiveIterator struct {
 	comments []*goast.Comment
 	fset     *gotoken.FileSet
 	index    int
 }
 
-// NewDirectiveIterator creates a new DirectiveIterator.
-func NewDirectiveIterator(file *goast.File, fset *gotoken.FileSet) *DirectiveIterator {
+// NewDirectiveIterator creates a new directiveIterator.
+func NewDirectiveIterator(file *goast.File, fset *gotoken.FileSet) DirectiveIterator {
 	var comments []*goast.Comment
 	for _, cg := range file.Comments {
 		comments = append(comments, cg.List...)
 	}
-	return &DirectiveIterator{
+	di := &directiveIterator{
 		comments: comments,
 		fset:     fset,
 		index:    0,
 	}
+	return di.Seq()
 }
 
 // Seq returns an iter.Seq that yields *Directive objects.
-// This allows DirectiveIterator to be used in a for...range like pattern.
-func (de *DirectiveIterator) Seq() iter.Seq[*Directive] {
+// This allows directiveIterator to be used in a for...range like pattern.
+func (de *directiveIterator) Seq() DirectiveIterator {
 	return func(yield func(*Directive) bool) {
 		for de.index < len(de.comments) {
 			comment := de.comments[de.index]
