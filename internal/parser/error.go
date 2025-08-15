@@ -2,6 +2,7 @@ package parser
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"runtime"
 )
@@ -10,19 +11,24 @@ import (
 // It includes a message, an optional wrapped error, the directive that caused it,
 // and a stack trace for better debugging.
 type parserError struct {
-	Msg        string // Human-readable error message
-	Context    any    // Additional context for the error
-	StackTrace []byte // Captured stack trace
+	msg        string // Human-readable error message
+	context    any    // Additional context for the error
+	stackTrace []byte // Captured stack trace
 }
 
 // Error implements the error interface for ParserError.
 func (e *parserError) Error() string {
-	var buf bytes.Buffer
-	buf.WriteString(e.Msg) // Print Msg first
+	return e.msg
+}
 
-	if e.Context != nil {
-		buf.WriteString(" [Context: ") // Separator and start of context block
-		switch ctx := e.Context.(type) {
+// String implements the fmt.Stringer interface, providing a detailed error message for debugging.
+func (e *parserError) String() string {
+	var buf bytes.Buffer
+	buf.WriteString(e.msg) // Print msg first
+
+	if e.context != nil {
+		buf.WriteString(" [context: ") // Separator and start of context block
+		switch ctx := e.context.(type) {
 		case *Directive:
 			buf.WriteString(fmt.Sprintf("Directive (line %d, original_cmd: %s, current_level_cmd: %s, argument: %s)",
 				ctx.Line, ctx.Command, ctx.BaseCmd, ctx.Argument))
@@ -34,14 +40,23 @@ func (e *parserError) Error() string {
 		buf.WriteString("]") // End of context block
 	}
 
-	// Add StackTrace
-	if len(e.StackTrace) > 0 {
+	// Add stackTrace
+	if len(e.stackTrace) > 0 {
 		buf.WriteString("\n--- Stack Trace ---\n")
-		buf.Write(e.StackTrace)
+		buf.Write(e.stackTrace)
 		buf.WriteString("\n-------------------\n")
 	}
 
 	return buf.String()
+}
+
+// Is implements the errors.Is interface, comparing parserError instances by their message.
+func (e *parserError) Is(target error) bool {
+	var pe *parserError
+	if errors.As(target, &pe) {
+		return e.msg == pe.msg
+	}
+	return false
 }
 
 // newDirectiveError is a helper to create a ParserError specifically for directive-related issues.
@@ -51,9 +66,9 @@ func newDirectiveError(directive *Directive, format string, args ...any) error {
 	stackBuf := make([]byte, 4096) // Capture stack here
 	n := runtime.Stack(stackBuf, false)
 	return &parserError{ // Directly create parserError
-		Msg:        msg,
-		Context:    directive, // Set Context to directive
-		StackTrace: stackBuf[:n],
+		msg:        msg,
+		context:    directive, // Set context to directive
+		stackTrace: stackBuf[:n],
 	}
 }
 
@@ -65,9 +80,9 @@ func NewParserError(format string, args ...any) error {
 	stackBuf := make([]byte, 4096)
 	n := runtime.Stack(stackBuf, false) // Capture stack trace, exclude goroutine info
 	return &parserError{
-		Msg:        msg,
-		Context:    nil, // No context by default for general errors
-		StackTrace: stackBuf[:n],
+		msg:        msg,
+		context:    nil, // No context by default for general errors
+		stackTrace: stackBuf[:n],
 	}
 }
 
@@ -78,8 +93,8 @@ func NewParserErrorWithContext(context any, format string, args ...any) error {
 	stackBuf := make([]byte, 4096)
 	n := runtime.Stack(stackBuf, false) // Capture stack trace, exclude goroutine info
 	return &parserError{
-		Msg:        msg,
-		Context:    context, // Set the provided context
-		StackTrace: stackBuf[:n],
+		msg:        msg,
+		context:    context, // Set the provided context
+		stackTrace: stackBuf[:n],
 	}
 }
