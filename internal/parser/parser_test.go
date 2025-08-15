@@ -80,7 +80,7 @@ func TestParsePackages(t *testing.T) {
 
 	cfg, err := ParseFileDirectives(file, fset)
 	if err != nil {
-		t.Fatalf("Failed to parse directives: %v", err)
+		t.Fatalf("Failed to parse directives: %v", parseErrorLog(err))
 	}
 
 	expectedPackages := []*config.Package{

@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"fmt"
 	goast "go/ast"
 	gotoken "go/token"
 	"log/slog"
@@ -43,6 +44,49 @@ func ParseFileDirectives(file *goast.File, fset *gotoken.FileSet) (*config.Confi
 	return p.parseFile(file, fset)
 }
 
+func ParseDirective(context *Context, ruleType RuleType, directive *Directive) error {
+	currentContext := context.ActiveContext()
+	if currentContext != nil && !directive.HasSub() && !context.IsExplicit() {
+		fmt.Println("Processing directive", directive.Command, "argument", directive.Argument)
+		err := currentContext.EndContext()
+		if err != nil {
+			return err
+		}
+		currentContext = nil
+	}
+	// Create a new rule based on the directive and add it to the current container.
+	currentContext = context.StartOrActiveContext(NewContainerFactory(ruleType))
+	var err error
+	if directive.HasSub() {
+		subDirective := directive.Sub()
+		var rt RuleType
+		switch subDirective.BaseCmd {
+		case "package":
+			rt = RuleTypePackage
+		case "type":
+			rt = RuleTypeType
+		case "function", "func":
+			rt = RuleTypeFunc
+		case "variable", "var":
+			rt = RuleTypeVar
+		case "constant", "const":
+			rt = RuleTypeConst
+		default:
+			err = currentContext.Container().ParseDirective(subDirective)
+			if err != nil {
+				return err
+			}
+		}
+		if rt != RuleTypeUnknown {
+			err = ParseDirective(currentContext, rt, directive)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 // parseFile parses a Go source file and returns the built configuration.
 func (p *parser) parseFile(file *goast.File, fset *gotoken.FileSet) (*config.Config, error) {
 	iterator := NewDirectiveIterator(file, fset)
@@ -64,6 +108,7 @@ func (p *parser) parseFile(file *goast.File, fset *gotoken.FileSet) (*config.Con
 			if !currentContext.IsExplicit() {
 				return nil, NewParserErrorWithContext(directive, "'done' directive without a matching explicit 'context'")
 			}
+			fmt.Println("Done processing directive")
 			err = currentContext.EndContext()
 			if err != nil {
 				return nil, NewParserErrorWithContext(directive, "error ending context")
@@ -85,26 +130,7 @@ func (p *parser) parseFile(file *goast.File, fset *gotoken.FileSet) (*config.Con
 			}
 		}
 		if rt != RuleTypeUnknown {
-			if !directive.HasSub() && !currentContext.IsExplicit() {
-				if currentContext.Parent() != nil && currentContext.Container() != nil {
-					err = currentContext.EndContext()
-					if err != nil {
-						return nil, NewParserErrorWithContext(directive, "error ending context: %w", err)
-					}
-					currentContext = currentContext.Parent()
-				}
-			} else if !directive.HasSub() && currentContext.IsExplicit() {
-				if currentContext.Container() != nil {
-					return nil, NewParserErrorWithContext(directive,
-						"'done' is required before closing an explicit 'context' block")
-				}
-			}
-			if currentContext == nil {
-				currentContext = p.rootContext
-			}
-			// Create a new rule based on the directive and add it to the current container.
-			currentContext = currentContext.StartOrActiveContext(NewContainerFactory(rt))
-			err := currentContext.Container().ParseDirective(directive)
+			err := ParseDirective(currentContext, rt, directive)
 			if err != nil {
 				return nil, err
 			}

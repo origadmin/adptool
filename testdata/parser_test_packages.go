@@ -4,7 +4,7 @@ package testdata
 //go:adapter:package github.com/my/package/v1
 //go:adapter:package:alias mypkg
 //go:adapter:package:path ./vendor/my/package/v1
-//go:adapter:package:prop PackageVar1 packageValue1
+//go:adapter:package:property PackageVar1 packageValue1
 //go:adapter:package:type MyStructInPackage
 //go:adapter:package:type:struct wrap
 //go:adapter:package:type:method DoSomethingInPackage
