@@ -95,7 +95,6 @@ func ParseDirective(context *Context, ruleType RuleType, directive *Directive) e
 // parseFile parses a Go source file and returns the built configuration.
 func (p *parser) parseFile(file *goast.File, fset *gotoken.FileSet) (*config.Config, error) {
 	iterator := NewDirectiveIterator(file, fset)
-	var err error
 	for directive := range iterator {
 		slog.Info("Processing directive", "line", directive.Line, "command", directive.BaseCmd, "argument",
 			directive.Argument)
@@ -140,13 +139,12 @@ func (p *parser) parseFile(file *goast.File, fset *gotoken.FileSet) (*config.Con
 		}
 	}
 
-	// After processing all directives, ensure all contexts are properly ended.
-	slog.Info("Finalizing unclosed context at end of file", "container", p.rootContext.Container())
-	err = p.rootContext.EndContext()
-	if err != nil {
-		return nil, NewParserError("error finalizing context")
+	if p.rootContext.IsActive() {
+		err := p.rootContext.EndContext()
+		if err != nil {
+			return nil, NewParserError("error ending root context")
+		}
 	}
-	p.rootContext = p.rootContext.Parent()
 
 	// Finalize the root config. The parent for the root is nil.
 	if err := p.rootContext.Container().Finalize(nil); err != nil {

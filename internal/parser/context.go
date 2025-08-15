@@ -142,7 +142,6 @@ func (c *Context) EndContext() error {
 		if err := currentContainer.Finalize(parentContainer); err != nil {
 			return NewParserError("failed to finalize container: %w", err)
 		}
-		return nil
 	}
-	return NewParserError("no parent context found for EndContext call")
+	return nil
 }
