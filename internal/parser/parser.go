@@ -55,7 +55,7 @@ func ParseDirective(context *Context, ruleType RuleType, directive *Directive) e
 		currentContext = nil
 	}
 	// Create a new rule based on the directive and add it to the current container.
-	currentContext = context.StartOrActiveContext(NewContainerFactory(ruleType))
+	currentContext = context.StartOrActiveContext(ruleType)
 	var err error
 	if directive.HasSub() {
 		subDirective := directive.Sub()
