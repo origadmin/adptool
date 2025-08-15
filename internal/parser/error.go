@@ -13,6 +13,7 @@ import (
 type parserError struct {
 	msg        string // Human-readable error message
 	context    any    // Additional context for the error
+	cause      error  // Wrapped error
 	stackTrace []byte // Captured stack trace
 }
 
@@ -21,18 +22,28 @@ func (e *parserError) Error() string {
 	return e.msg
 }
 
+func (e *parserError) Unwrap() error {
+	return e.cause
+}
+
+func (e *parserError) Cause() error {
+	return e.cause
+}
+
 // String implements the fmt.Stringer interface, providing a detailed error message for debugging.
 func (e *parserError) String() string {
 	var buf bytes.Buffer
 	buf.WriteString(e.msg) // Print msg first
 
 	if e.context != nil {
-		buf.WriteString(" [context: ") // Separator and start of context block
+		buf.WriteString(" [Context: ") // Separator and start of context block
 		switch ctx := e.context.(type) {
 		case *Directive:
 			buf.WriteString(fmt.Sprintf("Directive (line %d, original_cmd: %s, current_level_cmd: %s, argument: %s)",
 				ctx.Line, ctx.Command, ctx.BaseCmd, ctx.Argument))
 		// Add other context types here if needed in the future
+		case error:
+			buf.WriteString(fmt.Sprintf("Error: %v", ctx))
 		default:
 			// Use %T to print the type of the context
 			buf.WriteString(fmt.Sprintf("Type %T (%v)", ctx, ctx)) // Explicitly print type and value
@@ -85,16 +96,42 @@ func NewParserError(format string, args ...any) error {
 		stackTrace: stackBuf[:n],
 	}
 }
-
-// NewParserErrorWithContext creates a new parser error instance with a formatted message
-// and an arbitrary context object. It captures the current stack trace.
-func NewParserErrorWithContext(context any, format string, args ...any) error {
+func NewParserErrorWithCause(cause error, format string, args ...any) error {
 	msg := fmt.Sprintf(format, args...)
 	stackBuf := make([]byte, 4096)
 	n := runtime.Stack(stackBuf, false) // Capture stack trace, exclude goroutine info
 	return &parserError{
 		msg:        msg,
+		context:    nil, // No context by default for general errors
+		cause:      cause,
+		stackTrace: stackBuf[:n],
+	}
+}
+
+func NewParserErrorWithCauseAndContext(cause error, context any, format string, args ...any) error {
+	baseError := fmt.Sprintf(format, args...)
+
+	stackBuf := make([]byte, 4096)
+	n := runtime.Stack(stackBuf, false) // Capture stack trace, exclude goroutine info
+	return &parserError{
+		msg:        baseError,
 		context:    context, // Set the provided context
+		cause:      cause,   // Set the wrapped error if provided
+		stackTrace: stackBuf[:n],
+	}
+}
+
+// NewParserErrorWithContext creates a new parser error instance with a formatted message
+// and an arbitrary context object. It captures the current stack trace.
+func NewParserErrorWithContext(context any, format string, args ...any) error {
+	baseError := fmt.Errorf(format, args...)
+
+	stackBuf := make([]byte, 4096)
+	n := runtime.Stack(stackBuf, false) // Capture stack trace, exclude goroutine info
+	return &parserError{
+		msg:        baseError.Error(),
+		context:    context,                  // Set the provided context
+		cause:      errors.Unwrap(baseError), // Set the wrapped error if provided
 		stackTrace: stackBuf[:n],
 	}
 }
