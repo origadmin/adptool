@@ -1,8 +1,6 @@
 package parser
 
 import (
-	"fmt"
-
 	"github.com/origadmin/adptool/internal/config"
 )
 

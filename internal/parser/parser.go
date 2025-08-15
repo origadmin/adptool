@@ -95,7 +95,8 @@ func (p *parser) parseFile(file *goast.File, fset *gotoken.FileSet) (*config.Con
 				}
 			} else if !directive.HasSub() && currentContext.IsExplicit() {
 				if currentContext.Container() != nil {
-					return nil, NewParserError("'done' is required before closing an explicit 'context' block", directive)
+					return nil, newDirectiveError(directive,
+						"'done' is required before closing an explicit 'context' block")
 				}
 			}
 			if currentContext == nil {
@@ -128,7 +129,7 @@ func (p *parser) parseFile(file *goast.File, fset *gotoken.FileSet) (*config.Con
 	// This check might be redundant now if the loop above guarantees we are at rootContext.
 	// However, it's a good final sanity check.
 	if p.rootContext.Parent() != nil {
-		return nil, NewParserError("unclosed 'context' block(s) detected at end of file (post-finalization check)", nil)
+		return nil, NewParserError("unclosed 'context' block(s) detected at end of file (post-finalization check)")
 	}
 
 	return p.rootConfig.Config, nil
