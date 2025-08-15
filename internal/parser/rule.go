@@ -50,7 +50,7 @@ func parseRuleSetDirective(rs *config.RuleSet, directive *Directive) error {
 	if directive.ShouldUnmarshal() { // Handle JSON block for defaults
 		err := json.Unmarshal([]byte(directive.Argument), rs)
 		if err != nil {
-			return fmt.Errorf("failed to unmarshal JSON for RuleSet: %w", newDirectiveError(directive, "failed to unmarshal JSON for RuleSet"))
+			return fmt.Errorf("failed to unmarshal JSON for RuleSet: %w", NewParserError("failed to unmarshal JSON for RuleSet"))
 		}
 		return nil
 	}
