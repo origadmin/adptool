@@ -57,16 +57,16 @@ func (p *parser) parseFile(file *goast.File, fset *gotoken.FileSet) (*config.Con
 		switch directive.BaseCmd {
 		case "context":
 			if currentContext.IsExplicit() && currentContext.Container() == nil {
-				return nil, newDirectiveError(directive, "consecutive 'context' directives without intervening rules are not allowed")
+				return nil, NewParserErrorWithContext(directive, "consecutive 'context' directives without intervening rules are not allowed")
 			}
 			currentContext.SetExplicit(true)
 		case "done":
 			if !currentContext.IsExplicit() {
-				return nil, newDirectiveError(directive, "'done' directive without a matching explicit 'context'")
+				return nil, NewParserErrorWithContext(directive, "'done' directive without a matching explicit 'context'")
 			}
 			err = currentContext.EndContext()
 			if err != nil {
-				return nil, NewParserError("error ending context")
+				return nil, NewParserErrorWithContext(directive, "error ending context")
 			}
 			currentContext = currentContext.Parent()
 		case "package":
@@ -89,13 +89,13 @@ func (p *parser) parseFile(file *goast.File, fset *gotoken.FileSet) (*config.Con
 				if currentContext.Container() != nil {
 					err = currentContext.EndContext()
 					if err != nil {
-						return nil, NewParserError("error ending context")
+						return nil, NewParserErrorWithContext(directive, "error ending context")
 					}
 					currentContext = currentContext.Parent()
 				}
 			} else if !directive.HasSub() && currentContext.IsExplicit() {
 				if currentContext.Container() != nil {
-					return nil, newDirectiveError(directive,
+					return nil, NewParserErrorWithContext(directive,
 						"'done' is required before closing an explicit 'context' block")
 				}
 			}
@@ -116,7 +116,7 @@ func (p *parser) parseFile(file *goast.File, fset *gotoken.FileSet) (*config.Con
 		slog.Info("Finalizing unclosed context at end of file", "container", currentContext.Container())
 		err = currentContext.EndContext()
 		if err != nil {
-			return nil, NewParserError("error finalizing context")
+				return nil, NewParserError("error finalizing context")
 		}
 		currentContext = currentContext.Parent()
 	}

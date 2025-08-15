@@ -17,7 +17,7 @@ func (r *TypeRule) ParseDirective(directive *Directive) error {
 	}
 	if !directive.HasSub() {
 		if directive.Argument == "" {
-			return fmt.Errorf("type directive requires an argument (name)")
+			return NewParserErrorWithContext(directive, "type directive requires an argument (name)")
 		}
 		r.TypeRule.Name = directive.Argument
 		return nil
@@ -65,7 +65,7 @@ func (r *TypeRule) AddVarRule(rule *VarRule) error {
 }
 
 func (r *TypeRule) AddConstRule(rule *ConstRule) error {
-	return fmt.Errorf("TypeRule cannot contain a ConstRule")
+	return NewParserErrorWithContext(r, "TypeRule cannot contain a ConstRule")
 }
 
 func (r *TypeRule) AddMethodRule(rule *MethodRule) error {
@@ -92,6 +92,6 @@ func (r *TypeRule) AddRule(rule any) error {
 	case *FieldRule:
 		return r.AddFieldRule(v)
 	default:
-		return fmt.Errorf("TypeRule cannot contain a rule of type %T", rule)
+		return NewParserErrorWithContext(rule, "TypeRule cannot contain a rule of type %T", rule)
 	}
 }

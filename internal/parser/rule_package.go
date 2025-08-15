@@ -48,7 +48,7 @@ func (p *PackageRule) ParseDirective(directive *Directive) error {
 	default:
 		// Handle other potential directives that might be part of RuleSet if embedded directly
 		// For now, return an error for unknown directives.
-		return fmt.Errorf("unrecognized directive '%s' for PackageRule", directive.Command)
+		return NewParserErrorWithContext(directive, "unrecognized directive '%s' for PackageRule", directive.Command)
 	}
 }
 
@@ -101,7 +101,7 @@ func (p *PackageRule) AddFieldRule(rule *FieldRule) error {
 
 func (p *PackageRule) Finalize(parent Container) error {
 	if parent == nil {
-		return fmt.Errorf("PackageRule cannot finalize without a parent container")
+		return NewParserErrorWithContext(p, "PackageRule cannot finalize without a parent container")
 	}
 	return parent.AddPackage(p)
 }

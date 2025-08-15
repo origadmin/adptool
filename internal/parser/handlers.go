@@ -2,7 +2,6 @@ package parser
 
 import (
 	"encoding/json"
-	"fmt"
 	"strings"
 
 	"github.com/origadmin/adptool/internal/config"
@@ -26,7 +25,7 @@ func handleDefaultDirective(defaults *config.Defaults, directive *Directive) err
 	switch directive.BaseCmd {
 	case "mode":
 		if !directive.HasSub() {
-			return newDirectiveError(directive, "mode directive cannot have sub-directives")
+			return NewParserErrorWithContext(directive, "mode directive cannot have sub-directives")
 		}
 		subCmd := directive.Sub()
 		switch subCmd.BaseCmd {
@@ -43,10 +42,10 @@ func handleDefaultDirective(defaults *config.Defaults, directive *Directive) err
 		case "ignores":
 			defaults.Mode.Ignores = subCmd.Argument
 		default:
-			return newDirectiveError(subCmd, "unrecognized directive '%s' for mode", subCmd.BaseCmd)
+			return NewParserErrorWithContext(subCmd, "unrecognized directive '%s' for mode", subCmd.BaseCmd)
 		}
 	default:
-		return newDirectiveError(directive, "unrecognized directive '%s' for Defaults", directive.BaseCmd)
+		return NewParserErrorWithContext(directive, "unrecognized directive '%s' for Defaults", directive.BaseCmd)
 	}
 	return nil
 }
@@ -58,11 +57,11 @@ func handleDefaultDirective(defaults *config.Defaults, directive *Directive) err
 
 func handlePropDirective(directive *Directive) ([]*config.PropsEntry, error) {
 	if directive.Argument == "" {
-		return nil, newDirectiveError(directive, "props directive requires an argument (key value)")
+		return nil, NewParserErrorWithContext(directive, "props directive requires an argument (key value)")
 	}
 	name, value, err := parseNameValue(directive.Argument)
 	if err != nil {
-		return nil, fmt.Errorf("invalid prop directive argument: %w", newDirectiveError(directive, "invalid prop directive argument"))
+		return nil, NewParserErrorWithContext(directive, "invalid prop directive argument: %w", err)
 	}
 	entry := &config.PropsEntry{Name: name, Value: value}
 	return []*config.PropsEntry{entry}, nil
@@ -74,13 +73,13 @@ func handlePropDirective(directive *Directive) ([]*config.PropsEntry, error) {
 //go:adapter:ignores:json ["pattern4", "pattern5"]
 func handleIgnoreDirective(directive *Directive) ([]string, error) {
 	if directive.Argument == "" {
-		return nil, newDirectiveError(directive, "ignores directive requires an argument (pattern)")
+		return nil, NewParserErrorWithContext(directive, "ignores directive requires an argument (pattern)")
 	}
 	if directive.IsJSON {
 		var ignores []string
 		err := json.Unmarshal([]byte(directive.Argument), &ignores)
 		if err != nil {
-			return nil, fmt.Errorf("failed to unmarshal JSON for ignores directive: %w", newDirectiveError(directive, "failed to unmarshal JSON for ignores directive"))
+			return nil, NewParserErrorWithContext(directive, "failed to unmarshal JSON for ignores directive: %w", err)
 		}
 		return ignores, nil
 	}

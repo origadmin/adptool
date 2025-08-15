@@ -48,7 +48,7 @@ func (m *MethodRule) AddFieldRule(rule *FieldRule) error {
 
 func (m *MethodRule) Finalize(parent Container) error {
 	if parent == nil {
-		return NewParserError("MethodRule cannot finalize without a parent container")
+		return NewParserErrorWithContext(m, "MethodRule cannot finalize without a parent container")
 	}
 	return parent.AddMethodRule(m)
 }

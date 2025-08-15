@@ -70,29 +70,19 @@ func (e *parserError) Is(target error) bool {
 	return false
 }
 
-// newDirectiveError is a helper to create a ParserError specifically for directive-related issues.
-// This function will replace the existing newDirectiveError in parser.go.
-func newDirectiveError(directive *Directive, format string, args ...any) error {
-	msg := fmt.Sprintf(format, args...)
-	stackBuf := make([]byte, 4096) // Capture stack here
-	n := runtime.Stack(stackBuf, false)
-	return &parserError{ // Directly create parserError
-		msg:        msg,
-		context:    directive, // Set context to directive
-		stackTrace: stackBuf[:n],
-	}
-}
+
 
 // NewParserError creates a new parser error instance with a formatted message.
 // It captures the current stack trace. This is for general parser errors
 // not directly tied to a specific directive.
 func NewParserError(format string, args ...any) error {
-	msg := fmt.Sprintf(format, args...)
+	baseError := fmt.Errorf(format, args...)
 	stackBuf := make([]byte, 4096)
 	n := runtime.Stack(stackBuf, false) // Capture stack trace, exclude goroutine info
 	return &parserError{
-		msg:        msg,
+		msg:        baseError.Error(),
 		context:    nil, // No context by default for general errors
+		cause:      errors.Unwrap(baseError),
 		stackTrace: stackBuf[:n],
 	}
 }

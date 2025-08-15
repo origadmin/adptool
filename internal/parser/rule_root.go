@@ -48,7 +48,7 @@ func (r *RootConfig) ParseDirective(directive *Directive) error {
 		}
 		ignores, err := handleIgnoreDirective(directive)
 		if err != nil {
-			return err
+			return NewParserErrorWithContext(directive, "failed to handle ignores directive: %w", err)
 		}
 		r.Config.Ignores = append(r.Config.Ignores, ignores...)
 		return nil
@@ -58,7 +58,7 @@ func (r *RootConfig) ParseDirective(directive *Directive) error {
 		}
 		props, err := handlePropDirective(directive)
 		if err != nil {
-			return err
+			return NewParserErrorWithContext(directive, "failed to handle property directive: %w", err)
 		}
 		r.Config.Props = append(r.Config.Props, props...)
 		return nil
@@ -66,10 +66,10 @@ func (r *RootConfig) ParseDirective(directive *Directive) error {
 	// are handled by the parser's main loop (parseFile) via StartContext,
 	// not by ParseDirective of the current container.
 	case "packages", "types", "functions", "variables", "constants":
-		return fmt.Errorf("directive '%s' starts a new scope and should not be parsed by RootConfig.ParseDirective",
+		return NewParserErrorWithContext(directive, "directive '%s' starts a new scope and should not be parsed by RootConfig.ParseDirective",
 			directive.BaseCmd)
 	default:
-		return fmt.Errorf("unrecognized directive '%s' for RootConfig", directive.BaseCmd)
+		return NewParserErrorWithContext(directive, "unrecognized directive '%s' for RootConfig", directive.BaseCmd)
 	}
 }
 
@@ -121,7 +121,7 @@ func (r *RootConfig) AddMethodRule(rule *MethodRule) error {
 }
 
 func (r *RootConfig) AddFieldRule(rule *FieldRule) error {
-	return errors.New("RootConfig cannot contain a FieldRule")
+	return NewParserErrorWithContext(r, "RootConfig cannot contain a FieldRule")
 }
 
 func (r *RootConfig) Finalize(parent Container) error {

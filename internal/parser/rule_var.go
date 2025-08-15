@@ -11,11 +11,11 @@ type VarRule struct {
 
 func (r *VarRule) ParseDirective(directive *Directive) error {
 	if directive.BaseCmd != "var" && directive.BaseCmd != "variable" {
-		return newDirectiveError(directive, "VarRule can only contain var directives")
+		return NewParserErrorWithContext(directive, "VarRule can only contain var directives")
 	}
 	if !directive.HasSub() {
 		if directive.Argument == "" {
-			return newDirectiveError(directive, "type directive requires an argument (name)")
+			return NewParserErrorWithContext(directive, "var directive requires an argument (name)")
 		}
 		r.VarRule.Name = directive.Argument
 		return nil
@@ -26,40 +26,40 @@ func (r *VarRule) ParseDirective(directive *Directive) error {
 }
 
 func (r *VarRule) AddPackage(pkg *PackageRule) error {
-	return NewParserError("VarRule cannot contain a PackageRule")
+	return NewParserErrorWithContext(r, "VarRule cannot contain a PackageRule")
 }
 
 func (r *VarRule) AddTypeRule(rule *TypeRule) error {
-	return NewParserError("VarRule cannot contain a TypeRule")
+	return NewParserErrorWithContext(r, "VarRule cannot contain a TypeRule")
 }
 
 func (r *VarRule) AddFuncRule(rule *FuncRule) error {
-	return NewParserError("VarRule cannot contain a FuncRule")
+	return NewParserErrorWithContext(r, "VarRule cannot contain a FuncRule")
 }
 
 func (r *VarRule) AddVarRule(rule *VarRule) error {
-	return NewParserError("VarRule cannot contain a VarRule")
+	return NewParserErrorWithContext(r, "VarRule cannot contain a VarRule")
 }
 
 func (r *VarRule) AddConstRule(rule *ConstRule) error {
-	return NewParserError("VarRule cannot contain a ConstRule")
+	return NewParserErrorWithContext(r, "VarRule cannot contain a ConstRule")
 }
 
 func (r *VarRule) AddMethodRule(rule *MethodRule) error {
-	return NewParserError("VarRule cannot contain a MethodRule")
+	return NewParserErrorWithContext(r, "VarRule cannot contain a MethodRule")
 }
 
 func (r *VarRule) AddFieldRule(rule *FieldRule) error {
-	return NewParserError("VarRule cannot contain a FieldRule")
+	return NewParserErrorWithContext(r, "VarRule cannot contain a FieldRule")
 }
 
 func (r *VarRule) Finalize(parent Container) error {
 	if parent == nil {
-		return NewParserError("VarRule cannot finalize without a parent container")
+		return NewParserErrorWithContext(r, "VarRule cannot finalize without a parent container")
 	}
 	return parent.AddVarRule(r)
 }
 
 func (r *VarRule) AddRule(rule any) error {
-	return NewParserError("VarRule cannot contain any child rules")
+	return NewParserErrorWithContext(r, "VarRule cannot contain any child rules")
 }
