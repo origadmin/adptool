@@ -86,10 +86,10 @@ func (p *parser) parseFile(file *goast.File, fset *gotoken.FileSet) (*config.Con
 		}
 		if rt != RuleTypeUnknown {
 			if !directive.HasSub() && !currentContext.IsExplicit() {
-				if currentContext.Container() != nil {
+				if currentContext.Parent() != nil && currentContext.Container() != nil {
 					err = currentContext.EndContext()
 					if err != nil {
-						return nil, NewParserErrorWithContext(directive, "error ending context")
+						return nil, NewParserErrorWithContext(directive, "error ending context: %w", err)
 					}
 					currentContext = currentContext.Parent()
 				}
@@ -116,7 +116,7 @@ func (p *parser) parseFile(file *goast.File, fset *gotoken.FileSet) (*config.Con
 		slog.Info("Finalizing unclosed context at end of file", "container", currentContext.Container())
 		err = currentContext.EndContext()
 		if err != nil {
-				return nil, NewParserError("error finalizing context")
+			return nil, NewParserError("error finalizing context")
 		}
 		currentContext = currentContext.Parent()
 	}

@@ -71,6 +71,7 @@ type Container interface {
 	// Finalize performs any post-processing or validation for this container
 	// after all its direct rules have been added.
 	Finalize(parent Container) error
+	Type() RuleType
 }
 
 // --- Invalid Rule ---
@@ -80,6 +81,10 @@ type Container interface {
 type InvalidRule struct{}
 
 var invalidRuleInstance = &InvalidRule{}
+
+func (i *InvalidRule) Type() RuleType {
+	return RuleTypeUnknown
+}
 
 // ParseDirective for an invalid rule always returns an error.
 func (i *InvalidRule) ParseDirective(directive *Directive) error {

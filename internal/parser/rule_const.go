@@ -9,6 +9,10 @@ type ConstRule struct {
 	*config.ConstRule
 }
 
+func (r *ConstRule) Type() RuleType {
+	return RuleTypeConst
+}
+
 func (r *ConstRule) AddPackage(pkg *PackageRule) error {
 	return NewParserErrorWithContext(r, "ConstRule cannot contain a PackageRule")
 }

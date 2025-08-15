@@ -9,6 +9,10 @@ type MethodRule struct {
 	*config.MemberRule
 }
 
+func (m *MethodRule) Type() RuleType {
+	return RuleTypeMethod
+}
+
 func (m *MethodRule) ParseDirective(directive *Directive) error {
 	// Delegate to the common RuleSet parser
 	return parseRuleSetDirective(&m.RuleSet, directive)
