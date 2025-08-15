@@ -1,7 +1,6 @@
 package parser
 
 import (
-	"fmt"
 	goast "go/ast"
 	gotoken "go/token"
 	"log/slog"
@@ -46,10 +45,10 @@ func ParseFileDirectives(file *goast.File, fset *gotoken.FileSet) (*config.Confi
 
 // parseFile parses a Go source file and returns the built configuration.
 func (p *parser) parseFile(file *goast.File, fset *gotoken.FileSet) (*config.Config, error) {
-	extractor := NewDirectiveIterator(file, fset)
+	iterator := NewDirectiveIterator(file, fset)
 	currentContext := p.rootContext
 	var err error
-	for directive := range extractor.Seq() {
+	for directive := range iterator {
 		slog.Info("Processing directive", "line", directive.Line, "command", directive.BaseCmd, "argument",
 			directive.Argument)
 
