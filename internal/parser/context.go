@@ -31,9 +31,10 @@ type Context struct {
 // It takes the data container (Container) for this scope and whether it was explicitly created.
 func NewContext(container Container, explicit bool) *Context {
 	return &Context{
-		explicit:  explicit,
-		container: container,
-		active:    true, // A new context is active by default.
+		explicit:     explicit,
+		container:    container,
+		active:       true, // A new context is active by default.
+		activeStacks: make([]*Context, 0),
 	}
 }
 
@@ -100,10 +101,11 @@ func (c *Context) ActiveContext() *Context {
 // its siblings, and returns it.
 func (c *Context) StartContext(container Container) *Context {
 	activeContext := &Context{
-		explicit:  false,
-		active:    true,
-		container: container,
-		parent:    c,
+		explicit:     false,
+		active:       true,
+		container:    container,
+		parent:       c,
+		activeStacks: make([]*Context, 0),
 	}
 
 	// Deactivate all other sibling contexts to ensure only the new one is active.
@@ -127,7 +129,7 @@ func (c *Context) StartContext(container Container) *Context {
 // This is used to exit a scope.
 // EndContext deactivates the current context, finalizes its container,
 // and returns its parent context. This is used to exit a scope.
-func (c *Context) EndContext() (*Context, error) {
+func (c *Context) EndContext() error {
 	c.active = false // Deactivate the current context
 
 	// Finalize the current container and pass its data to the parent
@@ -135,9 +137,9 @@ func (c *Context) EndContext() (*Context, error) {
 		currentContainer := c.Container()
 		parentContainer := c.parent.Container()
 		if err := currentContainer.Finalize(parentContainer); err != nil {
-			return nil, fmt.Errorf("failed to finalize container: %w", err)
+			return fmt.Errorf("failed to finalize container: %w", NewParserError("failed to finalize container"))
 		}
+		return nil
 	}
-
-	return c.parent, nil
+	return NewParserError("no parent context found for EndContext call")
 }

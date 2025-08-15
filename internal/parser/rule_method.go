@@ -16,40 +16,40 @@ func (m *MethodRule) ParseDirective(directive *Directive) error {
 }
 
 func (m *MethodRule) AddRule(rule any) error {
-	return fmt.Errorf("MethodRule cannot contain any child rules")
+	return NewParserError("MethodRule cannot contain any child rules")
 }
 
 func (m *MethodRule) AddPackage(pkg *PackageRule) error {
-	return fmt.Errorf("MethodRule cannot contain a PackageRule")
+	return NewParserError("MethodRule cannot contain a PackageRule")
 }
 
 func (m *MethodRule) AddTypeRule(rule *TypeRule) error {
-	return fmt.Errorf("MethodRule cannot contain a TypeRule")
+	return NewParserError("MethodRule cannot contain a TypeRule")
 }
 
 func (m *MethodRule) AddFuncRule(rule *FuncRule) error {
-	return fmt.Errorf("MethodRule cannot contain a FuncRule")
+	return NewParserError("MethodRule cannot contain a FuncRule")
 }
 
 func (m *MethodRule) AddVarRule(rule *VarRule) error {
-	return fmt.Errorf("MethodRule cannot contain a VarRule")
+	return NewParserError("MethodRule cannot contain a VarRule")
 }
 
 func (m *MethodRule) AddConstRule(rule *ConstRule) error {
-	return fmt.Errorf("MethodRule cannot contain a ConstRule")
+	return NewParserError("MethodRule cannot contain a ConstRule")
 }
 
 func (m *MethodRule) AddMethodRule(rule *MethodRule) error {
-	return fmt.Errorf("MethodRule cannot contain a MethodRule")
+	return NewParserError("MethodRule cannot contain a MethodRule")
 }
 
 func (m *MethodRule) AddFieldRule(rule *FieldRule) error {
-	return fmt.Errorf("MethodRule cannot contain a FieldRule")
+	return NewParserError("MethodRule cannot contain a FieldRule")
 }
 
 func (m *MethodRule) Finalize(parent Container) error {
 	if parent == nil {
-		return fmt.Errorf("MethodRule cannot finalize without a parent container")
+		return NewParserError("MethodRule cannot finalize without a parent container")
 	}
 	return parent.AddMethodRule(m)
 }

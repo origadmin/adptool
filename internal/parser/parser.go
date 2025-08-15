@@ -65,30 +65,20 @@ func (p *parser) parseFile(file *goast.File, fset *gotoken.FileSet) (*config.Con
 			if !currentContext.IsExplicit() {
 				return nil, newDirectiveError(directive, "'done' directive without a matching explicit 'context'")
 			}
-			currentContext, err = currentContext.EndContext()
+			err = currentContext.EndContext()
 			if err != nil {
-				return nil, fmt.Errorf("error ending context: %w", err)
+				return nil, NewParserError("error ending context")
 			}
+			currentContext = currentContext.Parent()
 		case "package":
-			//newContainer := NewContainer(RuleTypePackage)
-			//currentContext = currentContext.StartContext(newContainer)
 			rt = RuleTypePackage
 		case "type":
-			//newContainer := NewContainer(RuleTypeType)
-			//currentContext = currentContext.StartContext(newContainer)
 			rt = RuleTypeType
-			// Directives that create new containers (scopes)
 		case "function", "func":
-			//newContainer := NewContainer(RuleTypeFunc)
-			//currentContext = currentContext.StartContext(newContainer)
 			rt = RuleTypeFunc
 		case "variable", "var":
-			//newContainer := NewContainer(RuleTypeVar)
-			//currentContext = currentContext.StartContext(newContainer)
 			rt = RuleTypeVar
 		case "constant", "const":
-			//newContainer := NewContainer(RuleTypeConst)
-			//currentContext = currentContext.StartContext(newContainer)
 			rt = RuleTypeConst
 		default:
 			if err = currentContext.Container().ParseDirective(directive); err != nil {
@@ -96,9 +86,25 @@ func (p *parser) parseFile(file *goast.File, fset *gotoken.FileSet) (*config.Con
 			}
 		}
 		if rt != RuleTypeUnknown {
+			if !directive.HasSub() && !currentContext.IsExplicit() {
+				if currentContext.Container() != nil {
+					err = currentContext.EndContext()
+					if err != nil {
+						return nil, NewParserError("error ending context")
+					}
+					currentContext = currentContext.Parent()
+				}
+			} else if !directive.HasSub() && currentContext.IsExplicit() {
+				if currentContext.Container() != nil {
+					return nil, NewParserError("'done' is required before closing an explicit 'context' block", directive)
+				}
+			}
+			if currentContext == nil {
+				currentContext = p.rootContext
+			}
 			// Create a new rule based on the directive and add it to the current container.
-			context := currentContext.StartOrActiveContext(NewContainerFactory(rt))
-			err := context.Container().ParseDirective(directive)
+			currentContext = currentContext.StartOrActiveContext(NewContainerFactory(rt))
+			err := currentContext.Container().ParseDirective(directive)
 			if err != nil {
 				return nil, err
 			}
@@ -108,21 +114,22 @@ func (p *parser) parseFile(file *goast.File, fset *gotoken.FileSet) (*config.Con
 	// After processing all directives, ensure all contexts are properly ended.
 	for currentContext != p.rootContext {
 		slog.Info("Finalizing unclosed context at end of file", "container", currentContext.Container())
-		currentContext, err = currentContext.EndContext()
+		err = currentContext.EndContext()
 		if err != nil {
-			return nil, fmt.Errorf("error finalizing context: %w", err)
+			return nil, NewParserError("error finalizing context")
 		}
+		currentContext = currentContext.Parent()
 	}
 
 	// Finalize the root config. The parent for the root is nil.
 	if err := p.rootContext.Container().Finalize(nil); err != nil {
-		return nil, err
+		return nil, NewParserError("error finalizing root config")
 	}
 
 	// This check might be redundant now if the loop above guarantees we are at rootContext.
 	// However, it's a good final sanity check.
 	if p.rootContext.Parent() != nil {
-		return nil, fmt.Errorf("unclosed 'context' block(s) detected at end of file (post-finalization check)")
+		return nil, NewParserError("unclosed 'context' block(s) detected at end of file (post-finalization check)", nil)
 	}
 
 	return p.rootConfig.Config, nil

@@ -83,34 +83,34 @@ var invalidRuleInstance = &InvalidRule{}
 
 // ParseDirective for an invalid rule always returns an error.
 func (i *InvalidRule) ParseDirective(directive *Directive) error {
-	return fmt.Errorf("unrecognized directive command: %s", directive.Command)
+	return newDirectiveError(directive, "unrecognized directive command: %s", directive.Command)
 }
 func (i *InvalidRule) AddRule(rule any) error {
-	return fmt.Errorf("cannot add rule to an invalid container")
+	return NewParserError("cannot add rule to an invalid container")
 }
 func (i *InvalidRule) AddPackage(pkg *PackageRule) error {
-	return fmt.Errorf("cannot add rule to an invalid container")
+	return NewParserError("cannot add rule to an invalid container")
 }
 func (i *InvalidRule) AddTypeRule(rule *TypeRule) error {
-	return fmt.Errorf("cannot add rule to an invalid container")
+	return NewParserError("cannot add rule to an invalid container")
 }
 func (i *InvalidRule) AddFuncRule(rule *FuncRule) error {
-	return fmt.Errorf("cannot add rule to an invalid container")
+	return NewParserError("cannot add rule to an invalid container")
 }
 func (i *InvalidRule) AddVarRule(rule *VarRule) error {
-	return fmt.Errorf("cannot add rule to an invalid container")
+	return NewParserError("cannot add rule to an invalid container")
 }
 func (i *InvalidRule) AddConstRule(rule *ConstRule) error {
-	return fmt.Errorf("cannot add rule to an invalid container")
+	return NewParserError("cannot add rule to an invalid container")
 }
 func (i *InvalidRule) AddMethodRule(rule *MethodRule) error {
-	return fmt.Errorf("cannot add rule to an invalid container")
+	return NewParserError("cannot add rule to an invalid container")
 }
 func (i *InvalidRule) AddFieldRule(rule *FieldRule) error {
-	return fmt.Errorf("cannot add rule to an invalid container")
+	return NewParserError("cannot add rule to an invalid container")
 }
 
 // Finalize for an invalid rule is a no-op.
 func (i *InvalidRule) Finalize(parent Container) error {
-	return fmt.Errorf("cannot add rule to an invalid container")
+	return NewParserError("cannot add rule to an invalid container")
 }

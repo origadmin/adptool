@@ -43,10 +43,10 @@ func handleDefaultDirective(defaults *config.Defaults, directive *Directive) err
 		case "ignores":
 			defaults.Mode.Ignores = subCmd.Argument
 		default:
-			return fmt.Errorf("unrecognized directive '%s' for mode", subCmd.BaseCmd)
+			return newDirectiveError(subCmd, "unrecognized directive '%s' for mode", subCmd.BaseCmd)
 		}
 	default:
-		return fmt.Errorf("unrecognized directive '%s' for Defaults", directive.BaseCmd)
+		return newDirectiveError(directive, "unrecognized directive '%s' for Defaults", directive.BaseCmd)
 	}
 	return nil
 }
@@ -58,11 +58,11 @@ func handleDefaultDirective(defaults *config.Defaults, directive *Directive) err
 
 func handlePropDirective(directive *Directive) ([]*config.PropsEntry, error) {
 	if directive.Argument == "" {
-		return nil, fmt.Errorf("props directive requires an argument (key value)")
+		return nil, newDirectiveError(directive, "props directive requires an argument (key value)")
 	}
 	name, value, err := parseNameValue(directive.Argument)
 	if err != nil {
-		return nil, fmt.Errorf("invalid prop directive argument: %v", err)
+		return nil, fmt.Errorf("invalid prop directive argument: %w", newDirectiveError(directive, "invalid prop directive argument"))
 	}
 	entry := &config.PropsEntry{Name: name, Value: value}
 	return []*config.PropsEntry{entry}, nil
@@ -74,13 +74,13 @@ func handlePropDirective(directive *Directive) ([]*config.PropsEntry, error) {
 //go:adapter:ignores:json ["pattern4", "pattern5"]
 func handleIgnoreDirective(directive *Directive) ([]string, error) {
 	if directive.Argument == "" {
-		return nil, fmt.Errorf("ignores directive requires an argument (pattern)")
+		return nil, newDirectiveError(directive, "ignores directive requires an argument (pattern)")
 	}
 	if directive.IsJSON {
 		var ignores []string
 		err := json.Unmarshal([]byte(directive.Argument), &ignores)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to unmarshal JSON for ignores directive: %w", newDirectiveError(directive, "failed to unmarshal JSON for ignores directive"))
 		}
 		return ignores, nil
 	}

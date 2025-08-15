@@ -9,11 +9,6 @@ import (
 	"strings"
 )
 
-// newDirectiveError creates a formatted error with the directive's line number.
-func newDirectiveError(directive *Directive, format string, args ...interface{}) error {
-	return fmt.Errorf("command %s, line %d: %s", directive.Command, directive.Line, fmt.Sprintf(format, args...))
-}
-
 // parseNameValue parses an argument string into a name and value.
 // Expected format: "name value"
 func parseNameValue(argument string) (name, value string, err error) {
