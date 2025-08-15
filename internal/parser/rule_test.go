@@ -13,6 +13,11 @@ type MockContainer struct {
 	mock.Mock
 }
 
+func (m *MockContainer) Type() RuleType {
+	args := m.Called()
+	return args.Get(0).(RuleType)
+}
+
 func (m *MockContainer) ParseDirective(directive *Directive) error {
 	args := m.Called(directive)
 	return args.Error(0)

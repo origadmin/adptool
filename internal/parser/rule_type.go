@@ -17,7 +17,7 @@ func (r *TypeRule) Type() RuleType {
 
 func (r *TypeRule) ParseDirective(directive *Directive) error {
 	if directive.BaseCmd != "type" {
-		return fmt.Errorf("TypeRule can only contain type directives")
+		return NewParserErrorWithContext(directive, "type directive requires a base command")
 	}
 	if !directive.HasSub() {
 		if directive.Argument == "" {

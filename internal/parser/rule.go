@@ -2,7 +2,6 @@ package parser
 
 import (
 	"encoding/json"
-	
 	"strings"
 
 	"github.com/origadmin/adptool/internal/config"
@@ -10,6 +9,29 @@ import (
 
 // RuleType is an enum for different container rule types.
 type RuleType int
+
+func (t RuleType) String() string {
+	switch t {
+	case RuleTypeRoot:
+		return "root"
+	case RuleTypePackage:
+		return "package"
+	case RuleTypeType:
+		return "type"
+	case RuleTypeFunc:
+		return "func"
+	case RuleTypeVar:
+		return "var"
+	case RuleTypeConst:
+		return "const"
+	case RuleTypeMethod:
+		return "method"
+	case RuleTypeField:
+		return "field"
+	default:
+		return "unknown"
+	}
+}
 
 // Enum for RuleType
 const (
@@ -131,13 +153,13 @@ func parseRuleSetDirective(rs *config.RuleSet, directive *Directive) error {
 			return NewParserErrorWithContext(directive, "transform directive requires a sub-command")
 		}
 		sub := directive.Sub()
-			if sub.ShouldUnmarshal() {
-		err := json.Unmarshal([]byte(directive.Argument), rs.Transforms)
-		if err != nil {
-			return NewParserErrorWithContext(directive, "failed to unmarshal JSON for RuleSet.Transforms: %w", err)
+		if sub.ShouldUnmarshal() {
+			err := json.Unmarshal([]byte(directive.Argument), rs.Transforms)
+			if err != nil {
+				return NewParserErrorWithContext(directive, "failed to unmarshal JSON for RuleSet.Transforms: %w", err)
+			}
+			return nil
 		}
-		return nil
-	}
 		switch sub.BaseCmd {
 		case "before":
 			rs.Transforms.Before = sub.Argument

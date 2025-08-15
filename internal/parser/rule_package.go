@@ -18,41 +18,54 @@ func (p *PackageRule) Type() RuleType {
 }
 
 func (p *PackageRule) ParseDirective(directive *Directive) error {
-	switch directive.BaseCmd {
-	case "import":
+	if directive.BaseCmd != "package" {
+		return NewParserErrorWithContext(directive, "type directive requires a base command")
+	}
+	if !directive.HasSub() {
 		if directive.Argument == "" {
-			return fmt.Errorf("import directive requires an argument (path)")
+			return NewParserErrorWithContext(directive, "type directive requires an argument (name)")
 		}
-		p.Package.Import = directive.Argument
+		args := strings.SplitN(directive.Argument, " ", 2)
+		if len(args) == 1 {
+			p.Package.Import = args[0]
+		} else if len(args) > 1 {
+			p.Package.Import = args[0]
+			p.Package.Alias = args[1]
+		} else {
+		}
+
+		return nil
+	}
+	subDirective := directive.Sub()
+	switch subDirective.BaseCmd {
+	case "import":
+		if subDirective.Argument == "" {
+			return fmt.Errorf("import subDirective requires an argument (path)")
+		}
+		p.Package.Import = subDirective.Argument
 		return nil
 	case "path":
-		p.Package.Path = directive.Argument
+		p.Package.Path = subDirective.Argument
 		return nil
 	case "alias":
-		p.Package.Alias = directive.Argument
+		p.Package.Alias = subDirective.Argument
 		return nil
-	case "props":
-		if directive.Argument == "" {
-			return fmt.Errorf("props directive requires an argument (key=value)")
+	case "property":
+		if subDirective.Argument == "" {
+			return fmt.Errorf("props directive requires an argument (key value)")
 		}
-		parts := strings.SplitN(directive.Argument, "=", 2)
-		if len(parts) != 2 {
-			return fmt.Errorf("invalid props directive argument '%s', expected key=value", directive.Argument)
+		props, err := handlePropDirective(subDirective)
+		if err != nil {
+			return NewParserErrorWithContext(subDirective, "failed to handle property directive: %w", err)
 		}
-		p.Package.Props = append(p.Package.Props, &config.PropsEntry{
-			Name:  parts[0],
-			Value: parts[1],
-		})
+		p.Package.Props = append(p.Package.Props, props...)
 		return nil
-	// Directives that start new containers (types, funcs, vars, consts)
-	// are handled by the parser's main loop (parseFile) via StartContext,
-	// not by ParseDirective of the current container.
 	case "types", "functions", "variables", "constants":
 		return fmt.Errorf("directive '%s' starts a new scope and should not be parsed by PackageRule.ParseDirective", directive.Command)
 	default:
 		// Handle other potential directives that might be part of RuleSet if embedded directly
 		// For now, return an error for unknown directives.
-		return NewParserErrorWithContext(directive, "unrecognized directive '%s' for PackageRule", directive.Command)
+		return NewParserErrorWithContext(subDirective, "unrecognized directive '%s' for PackageRule", subDirective.Command)
 	}
 }
 

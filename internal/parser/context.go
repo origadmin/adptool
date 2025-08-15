@@ -74,10 +74,12 @@ func (c *Context) Parent() *Context {
 // If not, it creates a new one by calling the provided factory function.
 func (c *Context) StartOrActiveContext(factory ContainerFactory) *Context {
 	if active := c.ActiveContext(); active != nil {
+		fmt.Println("Using existing active context:", active.container.Type().String())
 		return active
 	}
 	// Execute the factory function only when a new container is needed.
 	container := factory()
+	fmt.Println("Starting new context:", container.Type().String())
 	return c.StartContext(container)
 }
 
@@ -88,13 +90,14 @@ func (c *Context) ActiveContext() *Context {
 	for i := len(c.activeStacks) - 1; i >= 0; i-- {
 		stack := c.activeStacks[i]
 		if stack.active {
-			if deepContext := stack.ActiveContext(); deepContext != nil {
-				return deepContext
-			}
+			//if deepContext := stack.ActiveContext(); deepContext != nil {
+			//	return deepContext
+			//}
 			return stack
 		}
 	}
 	return nil
+
 }
 
 // StartContext creates a new child context, makes it the sole active context among
@@ -131,7 +134,6 @@ func (c *Context) StartContext(container Container) *Context {
 // and returns its parent context. This is used to exit a scope.
 func (c *Context) EndContext() error {
 	c.active = false // Deactivate the current context
-	fmt.Println("Ending context:", c.container.Type())
 	// Finalize the current container and pass its data to the parent
 	if c.parent != nil { // Only finalize if there's a parent to pass data to
 		currentContainer := c.Container()
