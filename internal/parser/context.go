@@ -72,15 +72,16 @@ func (c *Context) Parent() *Context {
 // StartOrActiveContext gets an active child context or creates a new one.
 // It first checks if an active child context already exists and returns it.
 // If not, it creates a new one by calling the provided factory function.
-func (c *Context) StartOrActiveContext(factory ContainerFactory) *Context {
+func (c *Context) StartOrActiveContext(ruleType RuleType) *Context {
 	if active := c.ActiveContext(); active != nil {
 		fmt.Println("Using existing active context:", active.container.Type().String())
 		return active
 	}
-	// Execute the factory function only when a new container is needed.
-	container := factory()
-	fmt.Println("Starting new context:", container.Type().String())
-	return c.StartContext(container)
+	// Execute the factory function only when a new containerFactory is needed.
+	containerFactory := NewContainerFactory(ruleType)
+	context := containerFactory()
+	fmt.Println("Starting new context:", context.Type().String())
+	return c.StartContext(context)
 }
 
 // ActiveContext finds and returns the currently active child context from the activeStacks.
