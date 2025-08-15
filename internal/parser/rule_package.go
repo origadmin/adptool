@@ -13,6 +13,10 @@ type PackageRule struct {
 	*config.Package
 }
 
+func (p *PackageRule) Type() RuleType {
+	return RuleTypePackage
+}
+
 func (p *PackageRule) ParseDirective(directive *Directive) error {
 	switch directive.BaseCmd {
 	case "import":

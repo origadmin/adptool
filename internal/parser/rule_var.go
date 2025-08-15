@@ -9,6 +9,10 @@ type VarRule struct {
 	*config.VarRule
 }
 
+func (r *VarRule) Type() RuleType {
+	return RuleTypeVar
+}
+
 func (r *VarRule) ParseDirective(directive *Directive) error {
 	if directive.BaseCmd != "var" && directive.BaseCmd != "variable" {
 		return NewParserErrorWithContext(directive, "VarRule can only contain var directives")

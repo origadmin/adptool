@@ -131,13 +131,13 @@ func (c *Context) StartContext(container Container) *Context {
 // and returns its parent context. This is used to exit a scope.
 func (c *Context) EndContext() error {
 	c.active = false // Deactivate the current context
-
+	fmt.Println("Ending context:", c.container.Type())
 	// Finalize the current container and pass its data to the parent
 	if c.parent != nil { // Only finalize if there's a parent to pass data to
 		currentContainer := c.Container()
 		parentContainer := c.parent.Container()
 		if err := currentContainer.Finalize(parentContainer); err != nil {
-			return fmt.Errorf("failed to finalize container: %w", NewParserError("failed to finalize container"))
+			return NewParserError("failed to finalize container: %w", err)
 		}
 		return nil
 	}

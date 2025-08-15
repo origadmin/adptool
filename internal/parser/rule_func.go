@@ -9,6 +9,10 @@ type FuncRule struct {
 	*config.FuncRule
 }
 
+func (r *FuncRule) Type() RuleType {
+	return RuleTypeFunc
+}
+
 func (r *FuncRule) ParseDirective(directive *Directive) error {
 	if directive.BaseCmd != "func" {
 		return NewParserErrorWithContext(directive, "FuncRule can only contain func directives")

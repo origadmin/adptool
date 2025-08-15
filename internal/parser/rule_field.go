@@ -9,6 +9,10 @@ type FieldRule struct {
 	*config.MemberRule
 }
 
+func (f *FieldRule) Type() RuleType {
+	return RuleTypeField
+}
+
 func (f *FieldRule) ParseDirective(directive *Directive) error {
 	// Delegate to the common RuleSet parser
 	return parseRuleSetDirective(&f.RuleSet, directive)

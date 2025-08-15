@@ -13,6 +13,10 @@ type RootConfig struct {
 	*config.Config
 }
 
+func (r *RootConfig) Type() RuleType {
+	return RuleTypeRoot
+}
+
 func (r *RootConfig) ParseDirective(directive *Directive) error {
 	if r.Config.Defaults == nil {
 		r.Config.Defaults = config.NewDefaults()
