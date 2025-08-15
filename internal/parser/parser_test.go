@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"errors"
 	"path/filepath"
 	"runtime"
 	"testing"
@@ -166,7 +167,7 @@ func TestParseTypes(t *testing.T) {
 
 	cfg, err := ParseFileDirectives(file, fset)
 	if err != nil {
-		t.Fatalf("Failed to parse directives: %v", err)
+		t.Fatalf("Failed to parse directives: %v", parseErrorLog(err))
 	}
 
 	// This test now only checks for GLOBAL types. Types defined within a package
@@ -293,7 +294,7 @@ func TestParseFunctions(t *testing.T) {
 
 	cfg, err := ParseFileDirectives(file, fset)
 	if err != nil {
-		t.Fatalf("Failed to parse directives: %v", err)
+		t.Fatalf("Failed to parse directives: %v", parseErrorLog(err))
 	}
 
 	expectedFunctions := []*config.FuncRule{
@@ -379,4 +380,13 @@ func TestParseConstants(t *testing.T) {
 		assert.Equal(t, expected.Name, actual.Name, "Constant %d Name mismatch", i)
 		assert.Equal(t, len(expected.RuleSet.Ignores), len(actual.RuleSet.Ignores), "Constant %d RuleSet.Ignores count mismatch", i)
 	}
+}
+
+// parseErrorLog is a helper function to get a detailed error string for parser errors.
+func parseErrorLog(err error) string {
+	var pe *parserError
+	if errors.As(err, &pe) {
+		return pe.String() // Use the String() method for full details
+	}
+	return err.Error() // Fallback to standard Error() for other errors
 }
