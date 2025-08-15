@@ -139,10 +139,14 @@ func (p *parser) parseFile(file *goast.File, fset *gotoken.FileSet) (*config.Con
 		}
 	}
 
-	if p.rootContext.IsActive() {
-		err := p.rootContext.EndContext()
-		if err != nil {
-			return nil, NewParserError("error ending root context")
+	if p.rootContext.IsExplicit() {
+		return nil, NewParserError("unclosed 'context' block(s) detected at end of file")
+	} else {
+		if p.rootContext.IsActive() {
+			err := p.rootContext.EndContext()
+			if err != nil {
+				return nil, NewParserError("error ending root context")
+			}
 		}
 	}
 
