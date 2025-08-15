@@ -16,9 +16,6 @@ func (r *TypeRule) Type() RuleType {
 }
 
 func (r *TypeRule) ParseDirective(directive *Directive) error {
-	if directive.BaseCmd != "type" {
-		return NewParserErrorWithContext(directive, "type directive requires a base command")
-	}
 	if !directive.HasSub() {
 		if directive.Argument == "" {
 			return NewParserErrorWithContext(directive, "type directive requires an argument (name)")
@@ -27,7 +24,7 @@ func (r *TypeRule) ParseDirective(directive *Directive) error {
 		return nil
 	}
 	subDirective := directive.Sub()
-	switch subDirective.BaseCmd {
+	switch directive.BaseCmd {
 	case "struct":
 		r.TypeRule.Kind = "struct"
 		r.TypeRule.Pattern = directive.Argument
@@ -35,11 +32,11 @@ func (r *TypeRule) ParseDirective(directive *Directive) error {
 	case "rename":
 		r.TypeRule.Explicit = append(r.TypeRule.Explicit, &config.ExplicitRule{
 			From: r.TypeRule.Name,
-			To:   subDirective.Argument,
+			To:   directive.Argument,
 		})
 		return nil
 	case "disabled":
-		r.TypeRule.Disabled = subDirective.Argument == "true"
+		r.TypeRule.Disabled = directive.Argument == "true"
 		return nil
 	case "method":
 		// todo
