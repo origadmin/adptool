@@ -18,6 +18,8 @@ func (p *PackageRule) Type() RuleType {
 }
 
 func (p *PackageRule) ParseDirective(directive *Directive) error {
+	// DEBUG: Log the BaseCmd right before the check
+	// t.Logf("DEBUG: Inside PackageRule.ParseDirective, directive.BaseCmd: %s", directive.BaseCmd)
 	if directive.BaseCmd != "package" {
 		return NewParserErrorWithContext(directive, "PackageRule can only contain package directives")
 	}
@@ -40,6 +42,9 @@ func (p *PackageRule) ParseDirective(directive *Directive) error {
 	// Handle sub-directives, e.g., "go:adapter:package:alias mypkg"
 	subDirective := directive.Sub()
 	switch subDirective.BaseCmd {
+	case "import":
+		p.Package.Import = subDirective.Argument
+		return nil
 	case "alias":
 		p.Package.Alias = subDirective.Argument
 		return nil
