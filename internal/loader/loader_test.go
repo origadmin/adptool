@@ -116,7 +116,7 @@ packages:
 						Explicit: "merge",
 					},
 				},
-				Vars: []*config.PropsEntry{
+				Props: []*config.PropsEntry{
 					{Name: "GlobalVar1", Value: "globalValue1"},
 					{Name: "GlobalVar2", Value: "globalValue2"},
 				},
@@ -228,7 +228,7 @@ packages:
 			yamlContent: "",
 			expectedConfig: &config.Config{
 				Defaults:  nil,
-				Vars:      nil,
+				Props:     nil,
 				Types:     nil,
 				Functions: nil,
 				Variables: nil,

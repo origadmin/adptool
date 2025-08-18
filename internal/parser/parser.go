@@ -21,8 +21,8 @@ type parser struct {
 }
 
 // newParser creates a new parser instance.
-func newParser() *parser {
-	rootCfg := NewRootConfig()            // Use constructor
+func newParser(cfg *config.Config) *parser {
+	rootCfg := &RootConfig{Config: cfg}   // Use the provided config
 	rootCtx := NewContext(rootCfg, false) // Create the initial context for the root
 
 	return &parser{
@@ -32,16 +32,10 @@ func newParser() *parser {
 	}
 }
 
-func NewRootConfig() *RootConfig {
-	return &RootConfig{
-		Config: config.New(),
-	}
-}
-
 // ParseFileDirectives parses a Go source file and returns the built configuration.
 // This is the exported entry point.
-func ParseFileDirectives(file *goast.File, fset *gotoken.FileSet) (*config.Config, error) {
-	p := newParser() // Create a new parser instance
+func ParseFileDirectives(cfg *config.Config, file *goast.File, fset *gotoken.FileSet) (*config.Config, error) {
+	p := newParser(cfg) // Create a new parser instance
 	return p.parseFile(file, fset)
 }
 

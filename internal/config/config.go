@@ -1,5 +1,12 @@
 package config
 
+import (
+	"fmt"
+	"os"
+
+	"gopkg.in/yaml.v3"
+)
+
 // New creates a new, fully initialized Config object.
 func New() *Config {
 	return &Config{
@@ -11,6 +18,26 @@ func New() *Config {
 		Variables: make([]*VarRule, 0),
 		Constants: make([]*ConstRule, 0),
 	}
+}
+
+// LoadConfig loads the configuration from the specified file path.
+// It supports YAML and JSON formats.
+func LoadConfig(filePath string) (*Config, error) {
+	if filePath == "" {
+		return New(), nil // Return a new default config if no file is specified
+	}
+
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read config file %s: %w", filePath, err)
+	}
+
+	cfg := New() // Start with a default config
+	if err := yaml.Unmarshal(data, cfg); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal config file %s: %w", filePath, err)
+	}
+
+	return cfg, nil
 }
 
 // NewDefaults creates a new, fully initialized Defaults object.
@@ -49,11 +76,30 @@ type TypeRule struct {
 	RuleSet  `yaml:",inline" mapstructure:",squash" json:",inline" toml:",inline"`
 }
 
+func (t *TypeRule) GetName() string {
+	return t.Name
+}
+
+func (t *TypeRule) GetRuleSet() *RuleSet {
+	return &t.RuleSet
+}
+
+// TypeRuleSet defines a set of TypeRule.
+type TypeRuleSet []*TypeRule
+
 // FuncRule defines the set of rules for a single function.
 type FuncRule struct {
 	Name     string `yaml:"name" mapstructure:"name" json:"name" toml:"name"`
 	Disabled bool   `yaml:"disabled,omitempty" mapstructure:"disabled,omitempty" json:"disabled,omitempty" toml:"disabled,omitempty"`
 	RuleSet  `yaml:",inline" mapstructure:",squash" json:",inline" toml:",inline"`
+}
+
+func (f *FuncRule) GetName() string {
+	return f.Name
+}
+
+func (f *FuncRule) GetRuleSet() *RuleSet {
+	return &f.RuleSet
 }
 
 // VarRule defines the set of rules for a single variable.
@@ -63,11 +109,27 @@ type VarRule struct {
 	RuleSet  `yaml:",inline" mapstructure:",squash" json:",inline" toml:",inline"`
 }
 
+func (v *VarRule) GetName() string {
+	return v.Name
+}
+
+func (v *VarRule) GetRuleSet() *RuleSet {
+	return &v.RuleSet
+}
+
 // ConstRule defines the set of rules for a single constant.
 type ConstRule struct {
 	Name     string `yaml:"name" mapstructure:"name" json:"name" toml:"name"`
 	Disabled bool   `yaml:"disabled,omitempty" mapstructure:"disabled,omitempty" json:"disabled,omitempty" toml:"disabled,omitempty"`
 	RuleSet  `yaml:",inline" mapstructure:",squash" json:",inline" toml:",inline"`
+}
+
+func (c *ConstRule) GetName() string {
+	return c.Name
+}
+
+func (c *ConstRule) GetRuleSet() *RuleSet {
+	return &c.RuleSet
 }
 
 // MemberRule defines the set of rules for a type member (method or field).
@@ -85,6 +147,7 @@ type Transform struct {
 
 // RuleSet is the fundamental, reusable building block for defining transformation rules.
 type RuleSet struct {
+	//Disabled     bool            `yaml:"disabled,omitempty" mapstructure:"disabled,omitempty" json:"disabled,omitempty" toml:"disabled,omitempty"`
 	Strategy     []string        `yaml:"strategy,omitempty" mapstructure:"strategy,omitempty" json:"strategy,omitempty" toml:"strategy,omitempty"`
 	Prefix       string          `yaml:"prefix,omitempty" mapstructure:"prefix,omitempty" json:"prefix,omitempty" toml:"prefix,omitempty"`
 	PrefixMode   string          `yaml:"prefix_mode,omitempty" mapstructure:"prefix_mode,omitempty" json:"prefix_mode,omitempty" toml:"prefix_mode,omitempty"`
