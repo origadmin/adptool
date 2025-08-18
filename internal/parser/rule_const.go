@@ -29,6 +29,16 @@ func (r *ConstRule) ParseDirective(directive *Directive) error {
 		return nil
 	}
 
+	subDirective := directive.Sub()
+	switch subDirective.BaseCmd {
+	case "rename":
+		r.ConstRule.Explicit = append(r.ConstRule.Explicit, &config.ExplicitRule{
+			From: r.ConstRule.Name,
+			To:   subDirective.Argument,
+		})
+		return nil
+	}
+
 	// Delegate to the common RuleSet parser
 	return parseRuleSetDirective(&r.RuleSet, directive.Sub())
 }

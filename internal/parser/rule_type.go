@@ -42,6 +42,10 @@ func (r *TypeRule) ParseDirective(directive *Directive) error {
 	case "disabled":
 		r.TypeRule.Disabled = subDirective.Argument == "true"
 		return nil
+	case "method", "field":
+		// These are structural directives handled by the main parser's recursion.
+		// The TypeRule container should ignore them.
+		return nil
 	}
 	// Delegate to the common RuleSet parser
 	return parseRuleSetDirective(&r.RuleSet, subDirective)
