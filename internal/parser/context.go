@@ -3,6 +3,7 @@ package parser
 
 import (
 	"fmt"
+	"log/slog"
 )
 
 // Context represents a node in the parsing state hierarchy.
@@ -141,7 +142,19 @@ func (c *Context) EndContext() error {
 	// 3. Finalize the current container's data into its parent's container.
 	if c.parent != nil {
 		currentContainer := c.Container()
+		if currentContainer == nil {
+			// This should ideally not happen, but as a safeguard, we log and continue
+			// as there is no data to finalize anyway.
+			slog.Warn("ending a context with a nil container")
+			return nil
+		}
+
 		parentContainer := c.parent.Container()
+		if parentContainer == nil {
+			// This is a more critical error, as data would be lost.
+			return NewParserError("cannot finalize into a nil parent container")
+		}
+
 		if err := currentContainer.Finalize(parentContainer); err != nil {
 			return NewParserError("failed to finalize container: %w", err)
 		}
