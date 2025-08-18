@@ -58,10 +58,14 @@ func (p *PackageRule) ParseDirective(directive *Directive) error {
 		}
 		p.Package.Props = append(p.Package.Props, props...)
 		return nil
-	default:
+	case "type", "func", "function", "var", "variable", "const", "constant", "method", "field":
 		// This allows structural directives like 'type' or 'function' to be ignored here
 		// as they are handled by the main parser's recursion.
 		return nil
+	default:
+		// This allows structural directives like 'type' or 'function' to be ignored here
+		// as they are handled by the main parser's recursion.
+		return NewParserErrorWithContext(subDirective, "unrecognized sub-directive: %s", subDirective.BaseCmd)
 	}
 }
 
