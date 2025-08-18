@@ -14,6 +14,9 @@ func (f *FieldRule) Type() RuleType {
 }
 
 func (f *FieldRule) ParseDirective(directive *Directive) error {
+	if directive.BaseCmd != "field" {
+		return NewParserErrorWithContext(directive, "FieldRule can only contain field directives")
+	}
 	// Delegate to the common RuleSet parser
 	return parseRuleSetDirective(&f.RuleSet, directive)
 }
