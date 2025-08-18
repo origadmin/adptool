@@ -97,8 +97,8 @@ func (p *parser) parseFile(file *goast.File, fset *gotoken.FileSet) (*config.Con
 		var rt RuleType
 		switch directive.BaseCmd {
 		case "context":
-			if p.rootContext.IsExplicit() && p.rootContext.Container() == nil {
-				return nil, NewParserErrorWithContext(directive, "consecutive 'context' directives without intervening rules are not allowed")
+			if p.rootContext.IsExplicit() {
+				return nil, NewParserErrorWithContext(directive, "consecutive or nested 'context' directives are not allowed")
 			}
 			p.rootContext.SetExplicit(true)
 		case "done":
@@ -121,11 +121,26 @@ func (p *parser) parseFile(file *goast.File, fset *gotoken.FileSet) (*config.Con
 		case "constant", "const":
 			rt = RuleTypeConst
 		default:
+			// If it's not a recognized directive, it's a regular directive
+			// go:adapter:default:xxx
+			// go:adapter:ignore xxx
+			// go:adapter:ignores xxx
+			// go:adapter:property xxx
+			slog.Info("Processing regular directive", "line", directive.Line, "command", directive.BaseCmd, "argument",
+				directive.Argument)
 			if err = p.rootContext.Container().ParseDirective(directive); err != nil {
 				return nil, err
 			}
 		}
 		if rt != RuleTypeUnknown {
+			// If it's a recognized directive, it's a rule directive
+			// go:adapter:package xxx
+			// go:adapter:type xxx
+			// go:adapter:function xxx
+			// go:adapter:variable xxx
+			// go:adapter:constant xxx
+			slog.Info("Processing rule directive", "line", directive.Line, "command", directive.BaseCmd, "argument",
+				directive.Argument)
 			err := ParseDirective(p.rootContext, rt, directive)
 			if err != nil {
 				return nil, err
