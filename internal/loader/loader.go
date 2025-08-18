@@ -66,7 +66,7 @@ func LoadGoFileConfig(filePath string) (*config.Config, error) {
 	// Create a new config for this file's directives
 	cfg := config.New()
 	// parser.ParseFileDirectives will update this cfg object
-	_, err = parser.ParseFileDirectives(file, fset, cfg)
+	_, err = parser.ParseFileDirectives(cfg, file, fset)
 	if err != nil {
 		return nil, err
 	}

@@ -12,9 +12,9 @@ import (
 type CompiledConfig struct {
 	// Global rules (after variable substitution)
 	GlobalTypes     *config.TypeRuleSet
-	GlobalFunctions *config.RuleSet
-	GlobalVariables *config.RuleSet
-	GlobalConstants *config.RuleSet
+	GlobalFunctions *config.FuncRule
+	GlobalVariables *config.VarRule
+	GlobalConstants *config.ConstRule
 
 	// Package-specific overrides (after variable substitution, not merged with global)
 	Packages map[string]*CompiledPackage
@@ -33,9 +33,9 @@ type CompiledPackage struct {
 
 	// Package-specific rules (after variable substitution, not merged with global)
 	Types     *config.TypeRuleSet
-	Functions *config.RuleSet
-	Variables *config.RuleSet
-	Constants *config.RuleSet
+	Functions *config.FuncRule
+	Variables *config.VarRule
+	Constants *config.ConstRule
 
 	ResolvedVars map[string]string // Resolved for this package
 }
@@ -54,7 +54,7 @@ func Compile(cfg *config.Config) (*CompiledConfig, error) {
 		Suffix:   "append",
 		Explicit: "merge",
 		Regex:    "merge",
-		Ignore:   "merge",
+		Ignores:  "merge",
 	}
 	// Override with user-defined defaults
 	if cfg.Defaults != nil && cfg.Defaults.Mode != nil {
@@ -73,13 +73,14 @@ func Compile(cfg *config.Config) (*CompiledConfig, error) {
 		if cfg.Defaults.Mode.Regex != "" {
 			compiled.DefaultModes.Regex = cfg.Defaults.Mode.Regex
 		}
-		if cfg.Defaults.Mode.Ignore != "" {
-			compiled.DefaultModes.Ignore = cfg.Defaults.Mode.Ignore
+		if cfg.Defaults.Mode.Ignores != "" {
+			compiled.DefaultModes.Ignores = cfg.Defaults.Mode.Ignores
 		}
 	}
 
 	// 1. Resolve global variables
-	globalResolvedVars, err := resolveVars(cfg.Vars, nil, nil) // No parent vars, no stack
+	globalPropsMap := convertPropsToMap(cfg.Props)
+	globalResolvedVars, err := resolveVars(globalPropsMap, nil, nil) // No parent vars, no stack
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve global variables: %w", err)
 	}
@@ -90,15 +91,15 @@ func Compile(cfg *config.Config) (*CompiledConfig, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to compile global types rules: %w", err)
 	}
-	compiled.GlobalFunctions, err = compileRuleSet(cfg.Functions, globalResolvedVars)
+	compiled.GlobalFunctions, err = compileFuncRuleSet(cfg.Functions, globalResolvedVars)
 	if err != nil {
 		return nil, fmt.Errorf("failed to compile global functions rules: %w", err)
 	}
-	compiled.GlobalVariables, err = compileRuleSet(cfg.Variables, globalResolvedVars)
+	compiled.GlobalVariables, err = compileVarRuleSet(cfg.Variables, globalResolvedVars)
 	if err != nil {
 		return nil, fmt.Errorf("failed to compile global variables rules: %w", err)
 	}
-	compiled.GlobalConstants, err = compileRuleSet(cfg.Constants, globalResolvedVars)
+	compiled.GlobalConstants, err = compileConstRuleSet(cfg.Constants, globalResolvedVars)
 	if err != nil {
 		return nil, fmt.Errorf("failed to compile global constants rules: %w", err)
 	}
@@ -111,7 +112,8 @@ func Compile(cfg *config.Config) (*CompiledConfig, error) {
 		}
 
 		// Resolve package variables (inherits from global)
-		pkgResolvedVars, err := resolveVars(pkgCfg.Props, globalResolvedVars, nil)
+		pkgPropsMap := convertPropsToMap(pkgCfg.Props)
+		pkgResolvedVars, err := resolveVars(pkgPropsMap, globalResolvedVars, nil)
 		if err != nil {
 			return nil, fmt.Errorf("failed to resolve variables for package %s: %w", pkgCfg.Import, err)
 		}
@@ -122,15 +124,15 @@ func Compile(cfg *config.Config) (*CompiledConfig, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to compile types rules for package %s: %w", pkgCfg.Import, err)
 		}
-		pkgCompiled.Functions, err = compileRuleSet(pkgCfg.Functions, pkgResolvedVars)
+		pkgCompiled.Functions, err = compileFuncRuleSet(pkgCfg.Functions, pkgResolvedVars)
 		if err != nil {
 			return nil, fmt.Errorf("failed to compile functions rules for package %s: %w", pkgCfg.Import, err)
 		}
-		pkgCompiled.Variables, err = compileRuleSet(pkgCfg.Variables, pkgResolvedVars)
+		pkgCompiled.Variables, err = compileVarRuleSet(pkgCfg.Variables, pkgResolvedVars)
 		if err != nil {
 			return nil, fmt.Errorf("failed to compile variables rules for package %s: %w", pkgCfg.Import, err)
 		}
-		pkgCompiled.Constants, err = compileRuleSet(pkgCfg.Constants, pkgResolvedVars)
+		pkgCompiled.Constants, err = compileConstRuleSet(pkgCfg.Constants, pkgResolvedVars)
 		if err != nil {
 			return nil, fmt.Errorf("failed to compile constants rules for package %s: %w", pkgCfg.Import, err)
 		}
@@ -139,6 +141,15 @@ func Compile(cfg *config.Config) (*CompiledConfig, error) {
 	}
 
 	return compiled, nil
+}
+
+// convertPropsToMap converts a slice of PropsEntry to a map[string]string.
+func convertPropsToMap(props []*config.PropsEntry) map[string]string {
+	propMap := make(map[string]string)
+	for _, p := range props {
+		propMap[p.Name] = p.Value
+	}
+	return propMap
 }
 
 // resolveVars resolves compile-time variables recursively.
@@ -246,10 +257,10 @@ func compileRuleSet(rs *config.RuleSet, resolvedVars map[string]string) (*config
 	}
 
 	// Handle the new nested Transform struct
-	if rs.Transform != nil {
-		copiedRs.Transform = &config.Transform{
-			Before: rs.Transform.Before,
-			After:  rs.Transform.After,
+	if rs.Transforms != nil {
+		copiedRs.Transforms = &config.Transform{
+			Before: rs.Transforms.Before,
+			After:  rs.Transforms.After,
 		}
 	}
 
@@ -265,12 +276,12 @@ func compileRuleSet(rs *config.RuleSet, resolvedVars map[string]string) (*config
 	}
 
 	// Substitute variables in the new Transform struct
-	if copiedRs.Transform != nil {
-		copiedRs.Transform.Before, err = substituteString(copiedRs.Transform.Before, resolvedVars)
+	if copiedRs.Transforms != nil {
+		copiedRs.Transforms.Before, err = substituteString(copiedRs.Transforms.Before, resolvedVars)
 		if err != nil {
 			return nil, err
 		}
-		copiedRs.Transform.After, err = substituteString(copiedRs.Transform.After, resolvedVars)
+		copiedRs.Transforms.After, err = substituteString(copiedRs.Transforms.After, resolvedVars)
 		if err != nil {
 			return nil, err
 		}
@@ -301,32 +312,91 @@ func compileRuleSet(rs *config.RuleSet, resolvedVars map[string]string) (*config
 	return copiedRs, nil
 }
 
+func substituteString(suffix string, vars map[string]string) (string, error) {
+	if suffix == "" {
+		return "", nil
+	}
+
+	resolvedSuffix, err := parseAndSubstitute(suffix, vars, map[string]bool{})
+	if err != nil {
+		return "", err
+	}
+
+	return resolvedSuffix, nil
+}
+
 // compileTypeRuleSet performs variable substitution on a TypeRuleSet.
-func compileTypeRuleSet(trs *config.TypeRuleSet, resolvedVars map[string]string) (*config.TypeRuleSet, error) {
+func compileTypeRuleSet(trs []*config.TypeRule, resolvedVars map[string]string) (*config.TypeRuleSet, error) {
 	if trs == nil {
-		return config.NewTypeRuleSet(), nil // Return an initialized empty TypeRuleSet if nil
+		return &config.TypeRuleSet{}, nil
 	}
 
-	compiledTrs := config.NewTypeRuleSet()
+	var compiledTrs config.TypeRuleSet
 
-	// Compile the base RuleSet part
-	baseRuleSet, err := compileRuleSet(trs.RuleSet, resolvedVars)
-	if err != nil {
-		return nil, err
+	for _, tr := range trs {
+		compiledTr := &config.TypeRule{
+			Name:     tr.Name,
+			Disabled: tr.Disabled,
+			Kind:     tr.Kind,
+			Pattern:  tr.Pattern,
+		}
+
+		// Compile the base RuleSet part
+		baseRuleSet, err := compileRuleSet(&tr.RuleSet, resolvedVars)
+		if err != nil {
+			return nil, err
+		}
+		compiledTr.RuleSet = *baseRuleSet
+
+		// Compile nested methods rules
+		compiledMethods := []*config.MemberRule{}
+		for _, method := range tr.Methods {
+			compiledMethod := &config.MemberRule{
+				Name:     method.Name,
+				Disabled: method.Disabled,
+			}
+			methodRuleSet, err := compileRuleSet(&method.RuleSet, resolvedVars)
+			if err != nil {
+				return nil, err
+			}
+			compiledMethod.RuleSet = *methodRuleSet
+			compiledMethods = append(compiledMethods, compiledMethod)
+		}
+		compiledTr.Methods = compiledMethods
+
+		// Compile nested fields rules
+		compiledFields := []*config.MemberRule{}
+		for _, field := range tr.Fields {
+			compiledField := &config.MemberRule{
+				Name:     field.Name,
+				Disabled: field.Disabled,
+			}
+			fieldRuleSet, err := compileRuleSet(&field.RuleSet, resolvedVars)
+			if err != nil {
+				return nil, err
+			}
+			compiledField.RuleSet = *fieldRuleSet
+			compiledFields = append(compiledFields, compiledField)
+		}
+		compiledTr.Fields = compiledFields
+
+		compiledTrs = append(compiledTrs, compiledTr)
 	}
-	compiledTrs.RuleSet = baseRuleSet
 
-	// Compile nested methods rules
-	compiledTrs.Methods, err = compileRuleSet(trs.Methods, resolvedVars)
-	if err != nil {
-		return nil, err
-	}
+	return &compiledTrs, nil
+}
 
-	// Compile nested fields rules
-	compiledTrs.Fields, err = compileRuleSet(trs.Fields, resolvedVars)
-	if err != nil {
-		return nil, err
-	}
+func compileFuncRuleSet(frs []*config.FuncRule, vars map[string]string) (*config.FuncRule, error) {
+	// TODO: Implement this
+	panic("not implemented")
+}
 
-	return compiledTrs, nil
+func compileConstRuleSet(crs []*config.ConstRule, vars map[string]string) (*config.ConstRule, error) {
+	// TODO: Implement this
+	panic("not implemented")
+}
+
+func compileVarRuleSet(vrs []*config.VarRule, vars map[string]string) (*config.VarRule, error) {
+	// TODO: Implement this
+	panic("not implemented")
 }

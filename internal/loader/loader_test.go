@@ -128,7 +128,7 @@ packages:
 						Pattern:  "alias",
 						RuleSet: config.RuleSet{
 							Explicit: []*config.ExplicitRule{{From: "GlobalTypeOld", To: "GlobalTypeNew"}},
-							Ignore:   []string{"GlobalIgnoredType"},
+							Ignores:  []string{"GlobalIgnoredType"},
 						},
 						Methods: []*config.MemberRule{
 							{Name: "*", RuleSet: config.RuleSet{Prefix: "GlobalMethod"}},
@@ -194,7 +194,7 @@ packages:
 					{
 						Name:     "*",
 						Disabled: false,
-						RuleSet:  config.RuleSet{Ignore: []string{"GlobalIgnoredConst"}},
+						RuleSet:  config.RuleSet{Ignores: []string{"GlobalIgnoredConst"}},
 					},
 					{
 						Name:     "SpecificConst",
