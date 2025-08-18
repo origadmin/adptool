@@ -45,18 +45,17 @@ func ParseFileDirectives(file *goast.File, fset *gotoken.FileSet) (*config.Confi
 }
 
 func ParseDirective(context *Context, ruleType RuleType, directive *Directive) error {
-	currentContext := context.ActiveContext()
-	if currentContext != nil && !directive.HasSub() && !context.IsExplicit() {
-		fmt.Println("Processing directive", directive.Command, "argument", directive.Argument)
-		err := currentContext.EndContext()
-		if err != nil {
-			return err
-		}
-		currentContext = nil
+	// Check for an unclosed explicit context. This is a hard error.
+	if activeCtx := context.ActiveContext(); activeCtx != nil && activeCtx.IsExplicit() {
+		return NewParserErrorWithContext(directive, "cannot start a new rule context; an explicit context is currently active and must be closed with a 'done' directive first")
 	}
-	// Create a new rule based on the directive and add it to the current container.
-	currentContext = context.StartOrActiveContext(ruleType)
-	var err error
+
+	// Start a new context. This will now also end any previous implicit context.
+	currentContext, err := context.StartOrActiveContext(ruleType)
+	if err != nil {
+		return err
+	}
+
 	if directive.HasSub() {
 		subDirective := directive.Sub()
 		var rt RuleType
@@ -71,11 +70,6 @@ func ParseDirective(context *Context, ruleType RuleType, directive *Directive) e
 			rt = RuleTypeVar
 		case "constant", "const":
 			rt = RuleTypeConst
-		default:
-			//err = currentContext.Container().ParseDirective(directive)
-			//if err != nil {
-			//	return err
-			//}
 		}
 		if rt != RuleTypeUnknown {
 			err = ParseDirective(currentContext, rt, subDirective)

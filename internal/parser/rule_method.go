@@ -14,6 +14,9 @@ func (m *MethodRule) Type() RuleType {
 }
 
 func (m *MethodRule) ParseDirective(directive *Directive) error {
+	if directive.BaseCmd != "method" {
+		return NewParserErrorWithContext(directive, "MethodRule can only contain method directives")
+	}
 	// Delegate to the common RuleSet parser
 	return parseRuleSetDirective(&m.RuleSet, directive)
 }
