@@ -19,48 +19,42 @@ func (p *PackageRule) Type() RuleType {
 
 func (p *PackageRule) ParseDirective(directive *Directive) error {
 	if directive.BaseCmd != "package" {
-		return NewParserErrorWithContext(directive, "type directive requires a base command")
+		return NewParserErrorWithContext(directive, "PackageRule can only contain package directives")
 	}
-	if directive.Argument == "" {
-		return fmt.Errorf("import subDirective requires an argument (path)")
-	}
-	if directive.HasSub() {
-		subDirective := directive.Sub()
-		switch subDirective.BaseCmd {
-		case "import":
-			p.Package.Import = subDirective.Argument
-			return nil
-		case "path":
-			p.Package.Path = subDirective.Argument
-			return nil
-		case "alias":
-			p.Package.Alias = subDirective.Argument
-			return nil
-		case "property":
-			props, err := handlePropDirective(subDirective)
-			if err != nil {
-				return NewParserErrorWithContext(subDirective, "failed to handle property directive: %w", err)
-			}
-			p.Package.Props = append(p.Package.Props, props...)
-			return nil
-		case "types", "functions", "variables", "constants":
-			return fmt.Errorf("directive '%s' starts a new scope and should not be parsed by PackageRule.ParseDirective", directive.Command)
-		default:
-			// Handle other potential directives that might be part of RuleSet if embedded directly
-			// For now, return an error for unknown directives.
-			return NewParserErrorWithContext(subDirective, "unrecognized directive '%s' for PackageRule", subDirective.Command)
-		}
-	} else {
-		args := strings.SplitN(directive.Argument, " ", 2)
-		if len(args) == 1 {
-			p.Package.Import = args[0]
-		} else if len(args) > 1 {
-			p.Package.Import = args[0]
-			p.Package.Alias = args[1]
-		} else {
-		}
 
+	// Handles: //go:adapter:package <import_path> [alias]
+	if !directive.HasSub() {
+		if directive.Argument == "" {
+			return NewParserErrorWithContext(directive, "package directive requires an argument (import path)")
+		}
+		args := strings.SplitN(directive.Argument, " ", 2)
+		if len(args) >= 1 {
+			p.Package.Import = args[0]
+		}
+		if len(args) >= 2 {
+			p.Package.Alias = args[1]
+		}
 		return nil
+	}
+
+	// Handle sub-directives, e.g., "go:adapter:package:alias mypkg"
+	subDirective := directive.Sub()
+	switch subDirective.BaseCmd {
+	case "alias":
+		p.Package.Alias = subDirective.Argument
+		return nil
+	case "path":
+		p.Package.Path = subDirective.Argument
+		return nil
+	case "property":
+		props, err := handlePropDirective(subDirective)
+		if err != nil {
+			return NewParserErrorWithContext(subDirective, "failed to handle property directive: %w", err)
+		}
+		p.Package.Props = append(p.Package.Props, props...)
+		return nil
+	default:
+		return NewParserErrorWithContext(subDirective, "unrecognized directive '%s' for PackageRule", subDirective.Command)
 	}
 }
 

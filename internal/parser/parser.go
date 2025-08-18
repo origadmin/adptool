@@ -47,15 +47,12 @@ func ParseDirective(parentCtx *Context, ruleType RuleType, directive *Directive)
 	var currentCtx *Context
 	var err error
 
-	// The rule: reuse a parentCtx only if the directive has sub-commands and there's a matching active parentCtx.
-	// Otherwise, always create a new one.
+	// Stage 1: Establish the context for the base command.
 	if directive.HasSub() {
 		activeChild := parentCtx.ActiveContext()
 		if activeChild != nil && activeChild.Container().Type() == ruleType {
-			// Reuse the active parentCtx as the parent for the sub-directive.
 			currentCtx = activeChild
 		} else {
-			// If there's no matching active parentCtx, create one.
 			containerFactory := NewContainerFactory(ruleType)
 			container := containerFactory()
 			currentCtx, err = parentCtx.StartContext(container)
@@ -64,7 +61,6 @@ func ParseDirective(parentCtx *Context, ruleType RuleType, directive *Directive)
 			}
 		}
 	} else {
-		// No sub-commands, so it's a new sibling directive. Always create a new parentCtx.
 		containerFactory := NewContainerFactory(ruleType)
 		container := containerFactory()
 		currentCtx, err = parentCtx.StartContext(container)
@@ -73,7 +69,14 @@ func ParseDirective(parentCtx *Context, ruleType RuleType, directive *Directive)
 		}
 	}
 
-	// Now that we have the correct parentCtx, process the directive or its sub-directive.
+	// Stage 2: Let the container parse the directive.
+	// The container is responsible for parsing its own arguments and any non-structural sub-directives.
+	// It should ignore structural sub-directives, which will be handled by the parser's recursion below.
+	if err = currentCtx.Container().ParseDirective(directive); err != nil {
+		return err
+	}
+
+	// Stage 3: If the sub-directive is structural, the parser handles the recursion.
 	if directive.HasSub() {
 		subDirective := directive.Sub()
 		var rt RuleType
@@ -88,26 +91,14 @@ func ParseDirective(parentCtx *Context, ruleType RuleType, directive *Directive)
 			rt = RuleTypeVar
 		case "constant", "const":
 			rt = RuleTypeConst
-		default:
-			// If it's not a recognized directive, it's a regular directive
 		}
+
 		if rt != RuleTypeUnknown {
-			// The recursive call uses the parentCtx we just found/created as the parent.
+			// It's a structural sub-directive, so the parser recurses.
 			err = ParseDirective(currentCtx, rt, subDirective)
 			if err != nil {
 				return err
 			}
-		} else {
-			slog.Info("Processing regular directive", "line", subDirective.Line, "command", subDirective.Command, "argument",
-				subDirective.Argument)
-			err = currentCtx.Container().ParseDirective(subDirective)
-		}
-	} else {
-		// This is the base case for a leaf directive (e.g., "package", "type").
-		// The parentCtx was already created above. Now, process the directive's arguments.
-		err = currentCtx.Container().ParseDirective(directive)
-		if err != nil {
-			return err
 		}
 	}
 

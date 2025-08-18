@@ -26,20 +26,21 @@ func (r *TypeRule) ParseDirective(directive *Directive) error {
 		r.TypeRule.Name = directive.Argument
 		return nil
 	}
+
 	subDirective := directive.Sub()
-	switch directive.BaseCmd {
+	switch subDirective.BaseCmd {
 	case "struct":
 		r.TypeRule.Kind = "struct"
-		r.TypeRule.Pattern = directive.Argument
+		r.TypeRule.Pattern = subDirective.Argument
 		return nil
 	case "rename":
 		r.TypeRule.Explicit = append(r.TypeRule.Explicit, &config.ExplicitRule{
 			From: r.TypeRule.Name,
-			To:   directive.Argument,
+			To:   subDirective.Argument,
 		})
 		return nil
 	case "disabled":
-		r.TypeRule.Disabled = directive.Argument == "true"
+		r.TypeRule.Disabled = subDirective.Argument == "true"
 		return nil
 	case "method":
 		// todo
