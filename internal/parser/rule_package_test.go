@@ -204,7 +204,7 @@ func TestPackageRule_ParseDirective(t *testing.T) {
 		{
 			name: "single props directive",
 			directives: []string{
-				"//go:adapter:package:props key1=value1",
+				"//go:adapter:package:property key1 value1",
 			},
 			expectedPackage: &config.Package{
 				Props: []*config.PropsEntry{{Name: "key1", Value: "value1"}},
@@ -214,8 +214,8 @@ func TestPackageRule_ParseDirective(t *testing.T) {
 		{
 			name: "accumulate multiple props directives",
 			directives: []string{
-				"//go:adapter:package:props key1=value1",
-				"//go:adapter:package:props key2=value2",
+				"//go:adapter:package:property key1 value1",
+				"//go:adapter:package:property key2 value2",
 			},
 			expectedPackage: &config.Package{
 				Props: []*config.PropsEntry{
@@ -228,7 +228,7 @@ func TestPackageRule_ParseDirective(t *testing.T) {
 		{
 			name: "invalid props directive",
 			directives: []string{
-				"//go:adapter:package:props invalid_format",
+				"//go:adapter:package:property invalid_format",
 			},
 			expectedPackage: nil, // Expect partial or nil due to error
 			expectError:     true,
@@ -329,15 +329,7 @@ func TestPackageRule_ParseDirective(t *testing.T) {
 			for i, dirString := range tt.directives {
 				dir := decodeTestDirective(dirString) // Assuming decodeTestDirective is available
 				var err error
-				if tt.name == "directive with wrong base command should return error" {
-					err = pkgRule.ParseDirective(&dir)
-				} else if !dir.HasSub() {
-					// This handles //go:adapter:package <import_path> [alias]
-					err = pkgRule.ParseDirective(&dir)
-				} else {
-					// This handles sub-directives like :alias, :path, :props
-					err = pkgRule.ParseDirective(dir.Sub())
-				}
+				err = pkgRule.ParseDirective(&dir)
 
 				if err != nil {
 					actualErr = err

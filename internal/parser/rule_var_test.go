@@ -103,16 +103,16 @@ func TestVarRule_Finalize(t *testing.T) {
 // TestVarRule_ParseDirective tests the ParseDirective method of VarRule.
 func TestVarRule_ParseDirective(t *testing.T) {
 	tests := []struct {
-		name          string
-		directives    []string // Sequence of directive strings to parse
+		name            string
+		directives      []string        // Sequence of directive strings to parse
 		expectedRuleSet *config.RuleSet // The expected final state of VarRule.RuleSet
-		expectError   bool
-		errorContains string
+		expectError     bool
+		errorContains   string
 	}{
 		{
 			name: "single strategy directive",
 			directives: []string{
-				"//go:adapter:strategy my-strategy",
+				"//go:adapter:var:strategy my-strategy",
 			},
 			expectedRuleSet: &config.RuleSet{
 				Strategy: []string{"my-strategy"},
@@ -122,8 +122,8 @@ func TestVarRule_ParseDirective(t *testing.T) {
 		{
 			name: "accumulate multiple strategies",
 			directives: []string{
-				"//go:adapter:strategy s1",
-				"//go:adapter:strategy s2",
+				"//go:adapter:var:strategy s1",
+				"//go:adapter:var:strategy s2",
 			},
 			expectedRuleSet: &config.RuleSet{
 				Strategy: []string{"s1", "s2"},
@@ -133,7 +133,7 @@ func TestVarRule_ParseDirective(t *testing.T) {
 		{
 			name: "single prefix directive",
 			directives: []string{
-				"//go:adapter:prefix my-prefix",
+				"//go:adapter:var:prefix my-prefix",
 			},
 			expectedRuleSet: &config.RuleSet{
 				Prefix: "my-prefix",
@@ -143,8 +143,8 @@ func TestVarRule_ParseDirective(t *testing.T) {
 		{
 			name: "override prefix directive",
 			directives: []string{
-				"//go:adapter:prefix p1",
-				"//go:adapter:prefix p2",
+				"//go:adapter:var:prefix p1",
+				"//go:adapter:var:prefix p2",
 			},
 			expectedRuleSet: &config.RuleSet{
 				Prefix: "p2",
@@ -154,7 +154,7 @@ func TestVarRule_ParseDirective(t *testing.T) {
 		{
 			name: "single ignores directive",
 			directives: []string{
-				"//go:adapter:ignores *.log",
+				"//go:adapter:var:ignores *.log",
 			},
 			expectedRuleSet: &config.RuleSet{
 				Ignores: []string{"*.log"},
@@ -164,8 +164,8 @@ func TestVarRule_ParseDirective(t *testing.T) {
 		{
 			name: "accumulate multiple ignores",
 			directives: []string{
-				"//go:adapter:ignores *.log",
-				"//go:adapter:ignores temp/",
+				"//go:adapter:var:ignores *.log",
+				"//go:adapter:var:ignores temp/",
 			},
 			expectedRuleSet: &config.RuleSet{
 				Ignores: []string{"*.log", "temp/"},
@@ -175,24 +175,33 @@ func TestVarRule_ParseDirective(t *testing.T) {
 		{
 			name: "invalid directive",
 			directives: []string{
-				"//go:adapter:unknown-directive value",
+				"//go:adapter:var:unknown-directive value",
 			},
 			expectedRuleSet: nil, // RuleSet won't be modified or will be default
-			expectError: true,
-			errorContains: "unrecognized directive 'unknown-directive'",
+			expectError:     true,
+			errorContains:   "unrecognized directive 'unknown-directive'",
 		},
 		{
 			name: "error in sequence should stop processing",
 			directives: []string{
-				"//go:adapter:prefix valid-prefix",
-				"//go:adapter:strategy", // Invalid: strategy requires argument
-				"//go:adapter:suffix should-not-be-processed",
+				"//go:adapter:var:prefix valid-prefix",
+				"//go:adapter:var:strategy", // Invalid: strategy requires argument
+				"//go:adapter:var:suffix should-not-be-processed",
 			},
 			expectedRuleSet: &config.RuleSet{ // State before error
 				Prefix: "valid-prefix",
 			},
-			expectError: true,
+			expectError:   true,
 			errorContains: "strategy directive requires an argument",
+		},
+		{
+			name: "directive with wrong base command should return error",
+			directives: []string{
+				"//go:adapter:type:strategy some-strategy", // BaseCmd is "type", not "var"
+			},
+			expectedRuleSet: nil,
+			expectError:     true,
+			errorContains:   "VarRule can only contain var directives",
 		},
 	}
 
@@ -203,7 +212,21 @@ func TestVarRule_ParseDirective(t *testing.T) {
 
 			for i, dirString := range tt.directives {
 				dir := decodeTestDirective(dirString) // Assuming decodeTestDirective is available
-				err := varRule.ParseDirective(&dir)
+				var err error
+				if tt.name == "directive with wrong base command should return error" {
+					err = varRule.ParseDirective(&dir)
+				} else {
+					if dir.BaseCmd != "var" {
+						actualErr = fmt.Errorf("unexpected base command: %s", dir.BaseCmd)
+						t.Logf("Error encountered at directive %d (%s): %v", i, dirString, actualErr)
+						break // Stop processing directives on first error
+					}
+					if !dir.HasSub() {
+						continue
+					}
+					err = varRule.ParseDirective(&dir)
+				}
+
 				if err != nil {
 					actualErr = err
 					t.Logf("Error encountered at directive %d (%s): %v", i, dirString, err)
