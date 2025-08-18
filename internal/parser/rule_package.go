@@ -63,17 +63,13 @@ func (p *PackageRule) ParseDirective(directive *Directive) error {
 func (p *PackageRule) AddRule(rule any) error {
 	switch v := rule.(type) {
 	case *TypeRule:
-		p.Package.Types = append(p.Package.Types, v.TypeRule)
-		return nil
+		return p.AddTypeRule(v)
 	case *FuncRule:
-		p.Package.Functions = append(p.Package.Functions, v.FuncRule)
-		return nil
+		return p.AddFuncRule(v)
 	case *VarRule:
-		p.Package.Variables = append(p.Package.Variables, v.VarRule)
-		return nil
+		return p.AddVarRule(v)
 	case *ConstRule:
-		p.Package.Constants = append(p.Package.Constants, v.ConstRule)
-		return nil
+		return p.AddConstRule(v)
 	default:
 		return fmt.Errorf("PackageRule cannot contain a rule of type %T", rule)
 	}
@@ -84,19 +80,23 @@ func (p *PackageRule) AddPackage(pkg *PackageRule) error {
 }
 
 func (p *PackageRule) AddTypeRule(rule *TypeRule) error {
-	return p.AddRule(rule)
+	p.Package.Types = append(p.Package.Types, rule.TypeRule)
+	return nil
 }
 
 func (p *PackageRule) AddFuncRule(rule *FuncRule) error {
-	return p.AddRule(rule)
+	p.Package.Functions = append(p.Package.Functions, rule.FuncRule)
+	return nil
 }
 
 func (p *PackageRule) AddVarRule(rule *VarRule) error {
-	return p.AddRule(rule)
+	p.Package.Variables = append(p.Package.Variables, rule.VarRule)
+	return nil
 }
 
 func (p *PackageRule) AddConstRule(rule *ConstRule) error {
-	return p.AddRule(rule)
+	p.Package.Constants = append(p.Package.Constants, rule.ConstRule)
+	return nil
 }
 
 func (p *PackageRule) AddMethodRule(rule *MethodRule) error {

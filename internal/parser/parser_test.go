@@ -171,6 +171,7 @@ func TestParseTypes(t *testing.T) {
 	}
 
 	// According to the new rule, all standalone `type` directives are global.
+	// This test now expects ALL types from parser_test_types.go to be global.
 	expectedGlobalTypes := []*config.TypeRule{
 		{
 			Name:    "*",
@@ -216,13 +217,23 @@ func TestParseTypes(t *testing.T) {
 				},
 			},
 		},
-		// These types are defined standalone and will be parsed as global.
+		// Types from package-scoped sections, now global
 		{
 			Name: "ctx3.ContextType",
 			Kind: "type",
 			Methods: []*config.MemberRule{
 				{
 					Name: "DoSomethingCtx",
+				},
+			},
+		},
+		{
+			Name:    "nested4.NestedType",
+			Kind:    "struct",
+			Pattern: "copy",
+			Fields: []*config.MemberRule{
+				{
+					Name: "NestedField",
 				},
 			},
 		},
@@ -247,21 +258,8 @@ func TestParseTypes(t *testing.T) {
 		assert.Equal(t, expected.Name, cfg.Types[i].Name, "Global type %d Name mismatch", i)
 	}
 
-	// Only types explicitly defined with 'package:type' syntax should be in packages.
-	expectedPackageTypes := map[string][]*config.TypeRule{
-		"github.com/nested/pkg/v4": {
-			{
-				Name:    "nested4.NestedType",
-				Kind:    "struct",
-				Pattern: "copy",
-				Fields: []*config.MemberRule{
-					{
-						Name: "NestedField",
-					},
-				},
-			},
-		},
-	}
+	// No types should be in packages according to the current parser logic.
+	expectedPackageTypes := make(map[string][]*config.TypeRule)
 
 	actualPackageTypes := make(map[string][]*config.TypeRule)
 	for _, pkg := range cfg.Packages {
