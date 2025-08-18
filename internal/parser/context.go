@@ -78,6 +78,9 @@ func (c *Context) StartOrActiveContext(ruleType RuleType) (*Context, error) {
 	// Execute the factory function only when a new containerFactory is needed.
 	containerFactory := NewContainerFactory(ruleType)
 	container := containerFactory()
+	if container.Type() == RuleTypeUnknown {
+		return nil, NewParserError("unknown rule type: %s", ruleType.String())
+	}
 	return c.StartContext(container)
 }
 
