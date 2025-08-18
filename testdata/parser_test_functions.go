@@ -1,7 +1,8 @@
 package testdata
 
-// --- Other Top-level Directives ---
-
-// Test 8: Top-level directives for non-struct types
-//go:adapter:func ext1.MyExternalFunction
-//go:adapter:func:rename MyNewFunction
+// Test global function directives
+//go:adapter:function MyGlobalFunc
+//go:adapter:function:disabled true
+//go:adapter:function:rename NewRenamedFunc
+//go:adapter:function:regex ^old(.*)$=new$1
+//go:adapter:function:strategy replace
