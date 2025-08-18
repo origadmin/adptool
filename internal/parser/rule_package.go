@@ -21,13 +21,13 @@ func (p *PackageRule) ParseDirective(directive *Directive) error {
 	if directive.BaseCmd != "package" {
 		return NewParserErrorWithContext(directive, "type directive requires a base command")
 	}
+	if directive.Argument == "" {
+		return fmt.Errorf("import subDirective requires an argument (path)")
+	}
 	if directive.HasSub() {
 		subDirective := directive.Sub()
 		switch subDirective.BaseCmd {
 		case "import":
-			if subDirective.Argument == "" {
-				return fmt.Errorf("import subDirective requires an argument (path)")
-			}
 			p.Package.Import = subDirective.Argument
 			return nil
 		case "path":
@@ -37,9 +37,6 @@ func (p *PackageRule) ParseDirective(directive *Directive) error {
 			p.Package.Alias = subDirective.Argument
 			return nil
 		case "property":
-			if subDirective.Argument == "" {
-				return fmt.Errorf("props directive requires an argument (key value)")
-			}
 			props, err := handlePropDirective(subDirective)
 			if err != nil {
 				return NewParserErrorWithContext(subDirective, "failed to handle property directive: %w", err)
@@ -54,9 +51,6 @@ func (p *PackageRule) ParseDirective(directive *Directive) error {
 			return NewParserErrorWithContext(subDirective, "unrecognized directive '%s' for PackageRule", subDirective.Command)
 		}
 	} else {
-		if directive.Argument == "" {
-			return NewParserErrorWithContext(directive, "type directive requires an argument (name)")
-		}
 		args := strings.SplitN(directive.Argument, " ", 2)
 		if len(args) == 1 {
 			p.Package.Import = args[0]
