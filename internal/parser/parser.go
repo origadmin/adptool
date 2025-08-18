@@ -1,7 +1,6 @@
 package parser
 
 import (
-	"fmt"
 	goast "go/ast"
 	gotoken "go/token"
 	"log/slog"
@@ -45,17 +44,36 @@ func ParseFileDirectives(file *goast.File, fset *gotoken.FileSet) (*config.Confi
 }
 
 func ParseDirective(context *Context, ruleType RuleType, directive *Directive) error {
-	// Check for an unclosed explicit context. This is a hard error.
-	if activeCtx := context.ActiveContext(); activeCtx != nil && activeCtx.IsExplicit() {
-		return NewParserErrorWithContext(directive, "cannot start a new rule context; an explicit context is currently active and must be closed with a 'done' directive first")
+	var currentContext *Context
+	var err error
+
+	// The rule: reuse a context only if the directive has sub-commands and there's a matching active context.
+	// Otherwise, always create a new one.
+	if directive.HasSub() {
+		activeChild := context.ActiveContext()
+		if activeChild != nil && activeChild.Container().Type() == ruleType {
+			// Reuse the active context as the parent for the sub-directive.
+			currentContext = activeChild
+		} else {
+			// If there's no matching active context, create one.
+			containerFactory := NewContainerFactory(ruleType)
+			container := containerFactory()
+			currentContext, err = context.StartContext(container)
+			if err != nil {
+				return err
+			}
+		}
+	} else {
+		// No sub-commands, so it's a new sibling directive. Always create a new context.
+		containerFactory := NewContainerFactory(ruleType)
+		container := containerFactory()
+		currentContext, err = context.StartContext(container)
+		if err != nil {
+			return err
+		}
 	}
 
-	// Start a new context. This will now also end any previous implicit context.
-	currentContext, err := context.StartOrActiveContext(ruleType)
-	if err != nil {
-		return err
-	}
-
+	// Now that we have the correct context, process the directive or its sub-directive.
 	if directive.HasSub() {
 		subDirective := directive.Sub()
 		var rt RuleType
@@ -72,17 +90,21 @@ func ParseDirective(context *Context, ruleType RuleType, directive *Directive) e
 			rt = RuleTypeConst
 		}
 		if rt != RuleTypeUnknown {
+			// The recursive call uses the context we just found/created as the parent.
 			err = ParseDirective(currentContext, rt, subDirective)
 			if err != nil {
 				return err
 			}
 		}
 	} else {
+		// This is the base case for a leaf directive (e.g., "package", "type").
+		// The context was already created above. Now, process the directive's arguments.
 		err = currentContext.Container().ParseDirective(directive)
 		if err != nil {
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -90,26 +112,16 @@ func ParseDirective(context *Context, ruleType RuleType, directive *Directive) e
 func (p *parser) parseFile(file *goast.File, fset *gotoken.FileSet) (*config.Config, error) {
 	iterator := NewDirectiveIterator(file, fset)
 	for directive := range iterator {
-		slog.Info("Processing directive", "line", directive.Line, "command", directive.BaseCmd, "argument",
+		slog.Info("Processing directive", "line", directive.Line, "command", directive.Command, "argument",
 			directive.Argument)
 
 		var err error
 		var rt RuleType
 		switch directive.BaseCmd {
 		case "context":
-			if p.rootContext.IsExplicit() {
-				return nil, NewParserErrorWithContext(directive, "consecutive or nested 'context' directives are not allowed")
-			}
-			p.rootContext.SetExplicit(true)
+			// Explicit context handling is temporarily disabled. Do nothing.
 		case "done":
-			if !p.rootContext.IsExplicit() {
-				return nil, NewParserErrorWithContext(directive, "'done' directive without a matching explicit 'context'")
-			}
-			fmt.Println("Done processing directive")
-			err = p.rootContext.EndContext()
-			if err != nil {
-				return nil, NewParserErrorWithContext(directive, "error ending context")
-			}
+			// Explicit context handling is temporarily disabled. Do nothing.
 		case "package":
 			rt = RuleTypePackage
 		case "type":
@@ -139,7 +151,7 @@ func (p *parser) parseFile(file *goast.File, fset *gotoken.FileSet) (*config.Con
 			// go:adapter:function xxx
 			// go:adapter:variable xxx
 			// go:adapter:constant xxx
-			slog.Info("Processing rule directive", "line", directive.Line, "command", directive.BaseCmd, "argument",
+			slog.Info("Processing rule directive", "line", directive.Line, "command", directive.Command, "argument",
 				directive.Argument)
 			err := ParseDirective(p.rootContext, rt, directive)
 			if err != nil {
@@ -148,14 +160,10 @@ func (p *parser) parseFile(file *goast.File, fset *gotoken.FileSet) (*config.Con
 		}
 	}
 
-	if p.rootContext.IsExplicit() {
-		return nil, NewParserError("unclosed 'context' block(s) detected at end of file")
-	} else {
-		if p.rootContext.IsActive() {
-			err := p.rootContext.EndContext()
-			if err != nil {
-				return nil, NewParserError("error ending root context")
-			}
+	if p.rootContext.IsActive() {
+		err := p.rootContext.EndContext()
+		if err != nil {
+			return nil, NewParserError("error ending root context")
 		}
 	}
 
