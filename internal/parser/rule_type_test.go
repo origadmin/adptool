@@ -64,7 +64,7 @@ func TestTypeRule_AddSupportedRules(t *testing.T) {
 	t.Run("Add single MethodRule", func(t *testing.T) {
 		typeRule := &TypeRule{TypeRule: &config.TypeRule{Name: "MyType"}}
 		methodRule := &MethodRule{MemberRule: &config.MemberRule{Name: "MyMethod"}}
-		
+
 		err := typeRule.AddMethodRule(methodRule)
 		assert.NoError(t, err)
 		assert.Len(t, typeRule.TypeRule.Methods, 1)
@@ -74,7 +74,7 @@ func TestTypeRule_AddSupportedRules(t *testing.T) {
 	t.Run("Add single FieldRule", func(t *testing.T) {
 		typeRule := &TypeRule{TypeRule: &config.TypeRule{Name: "MyType"}}
 		fieldRule := &FieldRule{MemberRule: &config.MemberRule{Name: "MyField"}}
-		
+
 		err := typeRule.AddFieldRule(fieldRule)
 		assert.NoError(t, err)
 		assert.Len(t, typeRule.TypeRule.Fields, 1)
@@ -138,16 +138,16 @@ func TestTypeRule_Finalize(t *testing.T) {
 // TestTypeRule_ParseDirective tests the ParseDirective method of TypeRule.
 func TestTypeRule_ParseDirective(t *testing.T) {
 	tests := []struct {
-		name          string
-		directives    []string // Sequence of directive strings to parse
+		name            string
+		directives      []string        // Sequence of directive strings to parse
 		expectedRuleSet *config.RuleSet // The expected final state of TypeRule.RuleSet
-		expectError   bool
-		errorContains string
+		expectError     bool
+		errorContains   string
 	}{
 		{
 			name: "single strategy directive",
 			directives: []string{
-				"//go:adapter:strategy my-strategy",
+				"//go:adapter:type:strategy my-strategy",
 			},
 			expectedRuleSet: &config.RuleSet{
 				Strategy: []string{"my-strategy"},
@@ -157,8 +157,8 @@ func TestTypeRule_ParseDirective(t *testing.T) {
 		{
 			name: "accumulate multiple strategies",
 			directives: []string{
-				"//go:adapter:strategy s1",
-				"//go:adapter:strategy s2",
+				"//go:adapter:type:strategy s1",
+				"//go:adapter:type:strategy s2",
 			},
 			expectedRuleSet: &config.RuleSet{
 				Strategy: []string{"s1", "s2"},
@@ -168,7 +168,7 @@ func TestTypeRule_ParseDirective(t *testing.T) {
 		{
 			name: "single prefix directive",
 			directives: []string{
-				"//go:adapter:prefix my-prefix",
+				"//go:adapter:type:prefix my-prefix",
 			},
 			expectedRuleSet: &config.RuleSet{
 				Prefix: "my-prefix",
@@ -178,8 +178,8 @@ func TestTypeRule_ParseDirective(t *testing.T) {
 		{
 			name: "override prefix directive",
 			directives: []string{
-				"//go:adapter:prefix p1",
-				"//go:adapter:prefix p2",
+				"//go:adapter:type:prefix p1",
+				"//go:adapter:type:prefix p2",
 			},
 			expectedRuleSet: &config.RuleSet{
 				Prefix: "p2",
@@ -189,7 +189,7 @@ func TestTypeRule_ParseDirective(t *testing.T) {
 		{
 			name: "single ignores directive",
 			directives: []string{
-				"//go:adapter:ignores *.log",
+				"//go:adapter:type:ignores *.log",
 			},
 			expectedRuleSet: &config.RuleSet{
 				Ignores: []string{"*.log"},
@@ -199,8 +199,8 @@ func TestTypeRule_ParseDirective(t *testing.T) {
 		{
 			name: "accumulate multiple ignores",
 			directives: []string{
-				"//go:adapter:ignores *.log",
-				"//go:adapter:ignores temp/",
+				"//go:adapter:type:ignores *.log",
+				"//go:adapter:type:ignores temp/",
 			},
 			expectedRuleSet: &config.RuleSet{
 				Ignores: []string{"*.log", "temp/"},
@@ -210,23 +210,23 @@ func TestTypeRule_ParseDirective(t *testing.T) {
 		{
 			name: "invalid directive",
 			directives: []string{
-				"//go:adapter:unknown-directive value",
+				"//go:adapter:type:unknown-directive value",
 			},
 			expectedRuleSet: nil, // RuleSet won't be modified or will be default
-			expectError: true,
-			errorContains: "unrecognized directive 'unknown-directive'",
+			expectError:     true,
+			errorContains:   "unrecognized directive 'unknown-directive'",
 		},
 		{
 			name: "error in sequence should stop processing",
 			directives: []string{
-				"//go:adapter:prefix valid-prefix",
-				"//go:adapter:strategy", // Invalid: strategy requires argument
-				"//go:adapter:suffix should-not-be-processed",
+				"//go:adapter:type:prefix valid-prefix",
+				"//go:adapter:type:strategy", // Invalid: strategy requires argument
+				"//go:adapter:type:suffix should-not-be-processed",
 			},
 			expectedRuleSet: &config.RuleSet{ // State before error
 				Prefix: "valid-prefix",
 			},
-			expectError: true,
+			expectError:   true,
 			errorContains: "strategy directive requires an argument",
 		},
 	}
@@ -241,7 +241,7 @@ func TestTypeRule_ParseDirective(t *testing.T) {
 				err := typeRule.ParseDirective(&dir)
 				if err != nil {
 					actualErr = err
-					t.Logf("Error encountered at directive %d (%s): %v", i, dirString, err)
+					t.Logf("Error encountered at directive %d (%s): %v", i, dirString, parseErrorLog(err))
 					break // Stop processing directives on first error
 				}
 			}

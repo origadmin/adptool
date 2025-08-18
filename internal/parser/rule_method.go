@@ -17,8 +17,27 @@ func (m *MethodRule) ParseDirective(directive *Directive) error {
 	if directive.BaseCmd != "method" {
 		return NewParserErrorWithContext(directive, "MethodRule can only contain method directives")
 	}
-	// Delegate to the common RuleSet parser
-	return parseRuleSetDirective(&m.RuleSet, directive)
+
+	if !directive.HasSub() {
+		if directive.Argument == "" {
+			return NewParserErrorWithContext(directive, "method directive requires an argument (name)")
+		}
+		m.MemberRule.Name = directive.Argument
+		return nil
+	}
+
+	subDirective := directive.Sub()
+	switch subDirective.BaseCmd {
+	case "rename":
+		m.MemberRule.Explicit = append(m.MemberRule.Explicit, &config.ExplicitRule{
+			From: m.MemberRule.Name,
+			To:   subDirective.Argument,
+		})
+		return nil
+	}
+
+	// Delegate to the common RuleSet parser for generic rules
+	return parseRuleSetDirective(&m.RuleSet, subDirective)
 }
 
 func (m *MethodRule) AddRule(rule any) error {

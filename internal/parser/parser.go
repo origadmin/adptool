@@ -91,6 +91,16 @@ func ParseDirective(parentCtx *Context, ruleType RuleType, directive *Directive)
 			rt = RuleTypeVar
 		case "constant", "const":
 			rt = RuleTypeConst
+		case "method":
+			if currentCtx.Container().Type() != RuleTypeType {
+				return NewParserErrorWithContext(subDirective, "method directive can only be used within a type scope")
+			}
+			rt = RuleTypeMethod
+		case "field":
+			if currentCtx.Container().Type() != RuleTypeType {
+				return NewParserErrorWithContext(subDirective, "field directive can only be used within a type scope")
+			}
+			rt = RuleTypeField
 		}
 
 		if rt != RuleTypeUnknown {

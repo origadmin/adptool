@@ -42,12 +42,6 @@ func (r *TypeRule) ParseDirective(directive *Directive) error {
 	case "disabled":
 		r.TypeRule.Disabled = subDirective.Argument == "true"
 		return nil
-	case "method":
-		// todo
-		return nil
-	case "field":
-		//todo
-		return nil
 	}
 	// Delegate to the common RuleSet parser
 	return parseRuleSetDirective(&r.RuleSet, subDirective)
