@@ -14,7 +14,7 @@ func (r *FuncRule) Type() RuleType {
 }
 
 func (r *FuncRule) ParseDirective(directive *Directive) error {
-	if directive.BaseCmd != "func" {
+	if directive.BaseCmd != "func" && directive.BaseCmd != "function" {
 		return NewParserErrorWithContext(directive, "FuncRule can only contain func directives")
 	}
 	if !directive.HasSub() {
