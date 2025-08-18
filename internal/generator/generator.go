@@ -6,23 +6,30 @@ import (
 	"go/token"
 	"os"
 	"regexp"
-	"strings"
 
 	"github.com/origadmin/adptool/internal/config"
+	adptoolparser "github.com/origadmin/adptool/internal/parser"
 )
-
-const directivePrefix = "//go:adapter:"
 
 // Generate is the main function for the code generation process.
 func Generate(cfg *config.Config, filePaths []string, outputPath string) error {
-	// 1. Parse directives from all input files.
-	directives, err := parseDirectives(filePaths)
-	if err != nil {
-		return fmt.Errorf("failed to parse directives: %w", err)
+	fset := token.NewFileSet()
+
+	for _, path := range filePaths {
+		node, err := parser.ParseFile(fset, path, nil, parser.ParseComments)
+		if err != nil {
+			return fmt.Errorf("failed to parse file %s: %w", path, err)
+		}
+
+		// The parser will update the cfg object based on directives
+		_, err = adptoolparser.ParseFileDirectives(cfg, node, fset)
+		if err != nil {
+			return fmt.Errorf("failed to parse directives in file %s: %w", path, err)
+		}
 	}
 
-	// 2. Build the AdapterSpec from directives and config.
-	spec, err := buildAdapterSpec(cfg, directives)
+	// 2. Build the AdapterSpec from the updated config.
+	spec, err := buildAdapterSpec(cfg)
 	if err != nil {
 		return fmt.Errorf("failed to build adapter spec: %w", err)
 	}
@@ -35,132 +42,74 @@ func Generate(cfg *config.Config, filePaths []string, outputPath string) error {
 	return os.WriteFile(outputPath, generatedCode, 0644)
 }
 
-// parseDirectives scans files and extracts all //go:adapter comments.
-func parseDirectives(filePaths []string) ([]Directive, error) {
-	var directives []Directive
-	fset := token.NewFileSet()
-
-	for _, path := range filePaths {
-		// The parser needs to include comments.
-		node, err := parser.ParseFile(fset, path, nil, parser.ParseComments)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse file %s: %w", path, err)
-		}
-
-		for _, commentGroup := range node.Comments {
-			for _, comment := range commentGroup.List {
-				if strings.HasPrefix(comment.Text, directivePrefix) {
-					line := fset.Position(comment.Pos()).Line
-					d, err := parseDirective(comment.Text, line)
-					if err != nil {
-						return nil, fmt.Errorf("error in file %s at line %d: %w", path, line, err)
-					}
-					directives = append(directives, d)
-				}
-			}
-		}
-	}
-
-	return directives, nil
-}
-
-// parseDirective parses a single directive line.
-func parseDirective(line string, lineNumber int) (Directive, error) {
-	text := strings.TrimSpace(strings.TrimPrefix(line, directivePrefix))
-	parts := strings.SplitN(text, " ", 2)
-	if len(parts) == 0 || parts[0] == "" {
-		return Directive{}, fmt.Errorf("malformed directive: empty")
-	}
-
-	d := Directive{
-		Type: parts[0],
-		Line: lineNumber,
-	}
-
-	if len(parts) > 1 {
-		d.Value = strings.TrimSpace(parts[1])
-	}
-
-	// Basic validation
-	switch d.Type {
-	case "package", "type", "func", "method", "ignore":
-		if d.Value == "" {
-			return Directive{}, fmt.Errorf("directive '%s' requires a value", d.Type)
-		}
-	default:
-		return Directive{}, fmt.Errorf("unknown directive type: '%s'", d.Type)
-	}
-
-	return d, nil
-}
-
 // buildAdapterSpec constructs the final specification for the template.
-func buildAdapterSpec(cfg *config.Config, directives []Directive) (*AdapterSpec, error) {
+func buildAdapterSpec(cfg *config.Config) (*AdapterSpec, error) {
 	spec := &AdapterSpec{
 		PackageName: "adapters", // Default, can be overridden
 		Imports:     make(map[string]string),
 	}
 
-	var currentPkg *config.PackageConfig
-	var itemsToProcess []AdaptedItem
-	ignored := make(map[string]bool)
+	// Process global rules
+	processRules(cfg.Types, "type", spec)
+	processRules(cfg.Functions, "func", spec)
+	processRules(cfg.Variables, "var", spec)
+	processRules(cfg.Constants, "const", spec)
 
-	for _, d := range directives {
-		switch d.Type {
-		case "package":
-			found := false
-			for i := range cfg.Packages {
-				if cfg.Packages[i].Import == d.Value {
-					currentPkg = &cfg.Packages[i]
-					spec.Imports[currentPkg.Import] = currentPkg.Alias
-					// Reset ignored map for the new package context
-					ignored = make(map[string]bool)
-					for _, name := range currentPkg.Ignore {
-						ignored[name] = true
-					}
-					found = true
-					break
-				}
-			}
-			if !found {
-				return nil, fmt.Errorf("package '%s' from directive on line %d not found in adptool.yaml configuration", d.Value, d.Line)
-			}
-
-		case "type", "func", "method":
-			if currentPkg == nil {
-				return nil, fmt.Errorf("directive '%s: %s' on line %d must be preceded by a //go:adapter:package directive", d.Type, d.Value, d.Line)
-			}
-			item := AdaptedItem{
-				OriginalName: d.Value,
-				ItemType:     d.Type,
-				Rules:        currentPkg.RenameRules, // Use the rules from the current package context
-			}
-			itemsToProcess = append(itemsToProcess, item)
-
-		case "ignore":
-			ignored[d.Value] = true
+	// Process package-specific rules
+	for _, pkg := range cfg.Packages {
+		if pkg.Import != "" {
+			spec.Imports[pkg.Import] = pkg.Alias
 		}
-	}
-
-	// Apply renaming rules and filtering
-	for _, item := range itemsToProcess {
-		if ignored[item.OriginalName] {
-			continue // Skip ignored items
-		}
-
-		finalName, err := applyRules(item.OriginalName, item.Rules)
-		if err != nil {
-			return nil, fmt.Errorf("error applying rules to '%s': %w", item.OriginalName, err)
-		}
-		item.TargetName = finalName
-		spec.AdaptedItems = append(spec.AdaptedItems, item)
+		processRules(pkg.Types, "type", spec)
+		processRules(pkg.Functions, "func", spec)
+		processRules(pkg.Variables, "var", spec)
+		processRules(pkg.Constants, "const", spec)
 	}
 
 	return spec, nil
 }
 
+// Helper function to process different rule types
+func processRules[T interface {
+	GetName() string
+	GetRuleSet() *config.RuleSet
+}](rules []T, itemType string, spec *AdapterSpec) {
+	for _, rule := range rules {
+		if rule.GetRuleSet().Disabled {
+			continue
+		}
+		adaptedItem := AdaptedItem{
+			OriginalName: rule.GetName(),
+			ItemType:     itemType,
+			Rules:        convertRuleSetToRenameRules(rule.GetRuleSet()),
+		}
+		spec.AdaptedItems = append(spec.AdaptedItems, adaptedItem)
+	}
+}
+
+// convertRuleSetToRenameRules converts a config.RuleSet to a slice of RenameRule.
+func convertRuleSetToRenameRules(rs *config.RuleSet) []RenameRule {
+	var renameRules []RenameRule
+
+	if rs.Prefix != "" {
+		renameRules = append(renameRules, RenameRule{Type: "prefix", Value: rs.Prefix})
+	}
+	if rs.Suffix != "" {
+		renameRules = append(renameRules, RenameRule{Type: "suffix", Value: rs.Suffix})
+	}
+	for _, explicit := range rs.Explicit {
+		renameRules = append(renameRules, RenameRule{Type: "explicit", From: explicit.From, To: explicit.To})
+	}
+	for _, regex := range rs.Regex {
+		renameRules = append(renameRules, RenameRule{Type: "regex", Pattern: regex.Pattern, Replace: regex.Replace})
+	}
+	// Add other rule types as needed
+
+	return renameRules
+}
+
 // applyRules applies a set of rename rules to a given name and returns the result.
-func applyRules(name string, rules []config.RenameRule) (string, error) {
+func applyRules(name string, rules []RenameRule) (string, error) {
 	currentName := name
 	for _, rule := range rules {
 		switch rule.Type {
