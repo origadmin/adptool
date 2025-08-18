@@ -208,15 +208,6 @@ func TestParseTypes(t *testing.T) {
 			Kind:    "struct",
 			Pattern: "define",
 		},
-		{
-			Name: "github.com/another/pkg/v2.AnotherExternalType",
-			Kind: "type",
-			Methods: []*config.MemberRule{
-				{
-					Name: "DoAnother",
-				},
-			},
-		},
 		// Types from package-scoped sections, now global
 		{
 			Name: "ctx3.ContextType",
@@ -243,6 +234,15 @@ func TestParseTypes(t *testing.T) {
 			Methods: []*config.MemberRule{
 				{
 					Name: "DoSomethingAfterNested",
+				},
+			},
+		},
+		{
+			Name: "github.com/another/pkg/v2.AnotherExternalType",
+			Kind: "type",
+			Methods: []*config.MemberRule{
+				{
+					Name: "DoAnother",
 				},
 			},
 		},
