@@ -30,27 +30,27 @@ package testdata
 //go:adapter:package github.com/context/pkg/v3 ctx3
 //go:adapter:done
 
-// This type is defined within the context
+// Test 7: This type is defined within the context
 //go:adapter:type ctx3.ContextType
 // It should inherit the global 'wrap' pattern
 //go:adapter:type:method DoSomethingCtx
 
-// Nested context
+// Test 8: Nested context
 //go:adapter:context
 //go:adapter:package github.com/nested/pkg/v4 nested4
 //go:adapter:done
 
-// This type is in the nested context
+// Test 9: This type is in the nested context
 //go:adapter:context
 //go:adapter:type nested4.NestedType
 //go:adapter:type:struct copy // Override pattern inside nested context
 //go:adapter:type:field NestedField
 //go:adapter:done // End nested context
 
-// Back in ctx3 context. Test that the pattern reverts.
+// Test 10: Back in ctx3 context. Test that the pattern reverts.
 //go:adapter:type ctx3.AfterNestedType
 //go:adapter:type:method DoSomethingAfterNested
 
-// Test 7: A directive with a full import path, should also use global 'wrap' pattern
+// Test 11:: A directive with a full import path, should also use global 'wrap' pattern
 //go:adapter:type github.com/another/pkg/v2.AnotherExternalType
 //go:adapter:type:method DoAnother
