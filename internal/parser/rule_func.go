@@ -25,8 +25,18 @@ func (r *FuncRule) ParseDirective(directive *Directive) error {
 		return nil
 	}
 
-	// Delegate to the common RuleSet parser
-	return parseRuleSetDirective(&r.RuleSet, directive.Sub())
+	subDirective := directive.Sub()
+	switch subDirective.BaseCmd {
+	case "rename":
+		r.FuncRule.Explicit = append(r.FuncRule.Explicit, &config.ExplicitRule{
+			From: r.FuncRule.Name,
+			To:   subDirective.Argument,
+		})
+		return nil
+	}
+
+	// Delegate to the common RuleSet parser for generic rules
+	return parseRuleSetDirective(&r.RuleSet, subDirective)
 }
 
 func (r *FuncRule) AddPackage(pkg *PackageRule) error {
