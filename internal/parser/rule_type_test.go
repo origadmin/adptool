@@ -229,11 +229,28 @@ func TestTypeRule_ParseDirective(t *testing.T) {
 			expectError:   true,
 			errorContains: "strategy directive requires an argument",
 		},
+		{
+			name: "structural method directive should be ignored",
+			directives: []string{
+				"//go:adapter:type:method MyMethod",
+			},
+			expectedRuleSet: nil, // No change to RuleSet expected
+			expectError:     false,
+		},
+		{
+			name: "structural field directive should be ignored",
+			directives: []string{
+				"//go:adapter:type:field MyField",
+			},
+			expectedRuleSet: nil, // No change to RuleSet expected
+			expectError:     false,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			typeRule := &TypeRule{TypeRule: &config.TypeRule{}} // Fresh rule for each test
+			initialRuleSet := typeRule.RuleSet // Capture initial state
 			var actualErr error
 
 			for i, dirString := range tt.directives {
@@ -251,15 +268,20 @@ func TestTypeRule_ParseDirective(t *testing.T) {
 				assert.Contains(t, actualErr.Error(), tt.errorContains)
 			} else {
 				assert.NoError(t, actualErr)
-				assert.NotNil(t, typeRule.RuleSet)
-				assert.Equal(t, tt.expectedRuleSet.Strategy, typeRule.RuleSet.Strategy)
-				assert.Equal(t, tt.expectedRuleSet.Prefix, typeRule.RuleSet.Prefix)
-				assert.Equal(t, tt.expectedRuleSet.Suffix, typeRule.RuleSet.Suffix)
-				assert.Equal(t, tt.expectedRuleSet.Explicit, typeRule.RuleSet.Explicit)
-				assert.Equal(t, tt.expectedRuleSet.Regex, typeRule.RuleSet.Regex)
-				assert.Equal(t, tt.expectedRuleSet.Ignores, typeRule.RuleSet.Ignores)
-				assert.Equal(t, tt.expectedRuleSet.Transforms, typeRule.RuleSet.Transforms)
-				// Add assertions for other RuleSet fields as needed
+				if tt.expectedRuleSet == nil {
+					// If no change expected, RuleSet should remain as it was initially (nil)
+					assert.Equal(t, initialRuleSet, typeRule.RuleSet)
+				} else {
+					// If change expected, assert against the expected RuleSet
+					assert.NotNil(t, typeRule.RuleSet)
+					assert.Equal(t, tt.expectedRuleSet.Strategy, typeRule.RuleSet.Strategy)
+					assert.Equal(t, tt.expectedRuleSet.Prefix, typeRule.RuleSet.Prefix)
+					assert.Equal(t, tt.expectedRuleSet.Suffix, typeRule.RuleSet.Suffix)
+					assert.Equal(t, tt.expectedRuleSet.Explicit, typeRule.RuleSet.Explicit)
+					assert.Equal(t, tt.expectedRuleSet.Regex, typeRule.RuleSet.Regex)
+					assert.Equal(t, tt.expectedRuleSet.Ignores, typeRule.RuleSet.Ignores)
+					assert.Equal(t, tt.expectedRuleSet.Transforms, typeRule.RuleSet.Transforms)
+				}
 			}
 		})
 	}

@@ -235,15 +235,6 @@ func TestPackageRule_ParseDirective(t *testing.T) {
 			errorContains:   "invalid props directive argument",
 		},
 		{
-			name: "scope-starting directive should error",
-			directives: []string{
-				"//go:adapter:package:types",
-			},
-			expectedPackage: nil, // Expect partial or nil due to error
-			expectError:     true,
-			errorContains:   "directive 'package:types' starts a new scope and should not be parsed by PackageRule.ParseDirective",
-		},
-		{
 			name: "unrecognized directive should error",
 			directives: []string{
 				"//go:adapter:package:unknown-command value",
@@ -265,24 +256,89 @@ func TestPackageRule_ParseDirective(t *testing.T) {
 			expectError:   true,
 			errorContains: "invalid props directive argument",
 		},
+		{
+			name: "directive with wrong base command should return error",
+			directives: []string{
+				"//go:adapter:type:strategy some-strategy", // BaseCmd is "type", not "package"
+			},
+			expectedPackage: nil,
+			expectError:     true,
+			errorContains:   "PackageRule can only contain package directives",
+		},
+		{
+			name: "structural type directive should be ignored",
+			directives: []string{
+				"//go:adapter:package:type MyType",
+			},
+			expectedPackage: nil, // No change to Package expected
+			expectError:     false,
+		},
+		{
+			name: "structural func directive should be ignored",
+			directives: []string{
+				"//go:adapter:package:func MyFunc",
+			},
+			expectedPackage: nil, // No change to Package expected
+			expectError:     false,
+		},
+		{
+			name: "structural var directive should be ignored",
+			directives: []string{
+				"//go:adapter:package:var MyVar",
+			},
+			expectedPackage: nil, // No change to Package expected
+			expectError:     false,
+		},
+		{
+			name: "structural const directive should be ignored",
+			directives: []string{
+				"//go:adapter:package:const MyConst",
+			},
+			expectedPackage: nil, // No change to Package expected
+			expectError:     false,
+		},
+		{
+			name: "package directive with import path only",
+			directives: []string{
+				"//go:adapter:package github.com/my/new/package",
+			},
+			expectedPackage: &config.Package{
+				Import: "github.com/my/new/package",
+			},
+			expectError: false,
+		},
+		{
+			name: "package directive with import path and alias",
+			directives: []string{
+				"//go:adapter:package github.com/my/aliased/package myalias",
+			},
+			expectedPackage: &config.Package{
+				Import: "github.com/my/aliased/package",
+				Alias:  "myalias",
+			},
+			expectError: false,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			pkgRule := &PackageRule{Package: &config.Package{}} // Fresh rule for each test
+			initialPackage := pkgRule.Package                   // Capture initial state
 			var actualErr error
 
 			for i, dirString := range tt.directives {
 				dir := decodeTestDirective(dirString) // Assuming decodeTestDirective is available
-				if dir.BaseCmd != "package" {
-					actualErr = fmt.Errorf("unexpected base command: %s", dir.BaseCmd)
-					t.Logf("Error encountered at directive %d (%s): %v", i, dirString, actualErr)
-					break // Stop processing directives on first error
+				var err error
+				if tt.name == "directive with wrong base command should return error" {
+					err = pkgRule.ParseDirective(&dir)
+				} else if !dir.HasSub() {
+					// This handles //go:adapter:package <import_path> [alias]
+					err = pkgRule.ParseDirective(&dir)
+				} else {
+					// This handles sub-directives like :alias, :path, :props
+					err = pkgRule.ParseDirective(dir.Sub())
 				}
-				if !dir.HasSub() {
-					continue
-				}
-				err := pkgRule.ParseDirective(dir.Sub())
+
 				if err != nil {
 					actualErr = err
 					t.Logf("Error encountered at directive %d (%s): %v", i, dirString, err)
@@ -295,13 +351,16 @@ func TestPackageRule_ParseDirective(t *testing.T) {
 				assert.Contains(t, actualErr.Error(), tt.errorContains)
 			} else {
 				assert.NoError(t, actualErr)
-				assert.NotNil(t, pkgRule.Package)
-				assert.Equal(t, tt.expectedPackage.Import, pkgRule.Package.Import)
-				assert.Equal(t, tt.expectedPackage.Path, pkgRule.Package.Path)
-				assert.Equal(t, tt.expectedPackage.Alias, pkgRule.Package.Alias)
-				assert.ElementsMatch(t, tt.expectedPackage.Props, pkgRule.Package.Props)
-				// Note: PackageRule.ParseDirective does not handle Types, Functions, Variables, Constants directly.
-				// Those are handled by AddRule methods and the main parser loop.
+				if tt.expectedPackage == nil {
+					// If no change expected, Package should remain as it was initially
+					assert.Equal(t, initialPackage, pkgRule.Package)
+				} else {
+					assert.NotNil(t, pkgRule.Package)
+					assert.Equal(t, tt.expectedPackage.Import, pkgRule.Package.Import)
+					assert.Equal(t, tt.expectedPackage.Path, pkgRule.Package.Path)
+					assert.Equal(t, tt.expectedPackage.Alias, pkgRule.Package.Alias)
+					assert.ElementsMatch(t, tt.expectedPackage.Props, pkgRule.Package.Props)
+				}
 			}
 		})
 	}
