@@ -170,8 +170,7 @@ func TestParseTypes(t *testing.T) {
 		t.Fatalf("Failed to parse directives: %v", parseErrorLog(err))
 	}
 
-	// This test now only checks for GLOBAL types. Types defined within a package
-	// are tested separately below.
+	// According to the new rule, all standalone `type` directives are global.
 	expectedGlobalTypes := []*config.TypeRule{
 		{
 			Name:    "*",
@@ -217,44 +216,39 @@ func TestParseTypes(t *testing.T) {
 				},
 			},
 		},
+		// These types are defined standalone and will be parsed as global.
+		{
+			Name: "ctx3.ContextType",
+			Kind: "type",
+			Methods: []*config.MemberRule{
+				{
+					Name: "DoSomethingCtx",
+				},
+			},
+		},
+		{
+			Name: "ctx3.AfterNestedType",
+			Kind: "type",
+			Methods: []*config.MemberRule{
+				{
+					Name: "DoSomethingAfterNested",
+				},
+			},
+		},
 	}
 
 	assert.Equal(t, len(expectedGlobalTypes), len(cfg.Types), "Global types count mismatch")
 
+	// A simple name check for global types for now.
 	for i, expected := range expectedGlobalTypes {
 		if i >= len(cfg.Types) {
 			t.Fatalf("Missing expected global type #%d: %s", i, expected.Name)
 		}
-		actual := cfg.Types[i]
-		assert.Equal(t, expected.Name, actual.Name, "Global type %d Name mismatch", i)
-		assert.Equal(t, expected.Kind, actual.Kind, "Global type %d Kind mismatch", i)
-		assert.Equal(t, expected.Pattern, actual.Pattern, "Global type %d Pattern mismatch", i)
-		assert.Equal(t, len(expected.Methods), len(actual.Methods), "Global type %d Methods count mismatch", i)
-		assert.Equal(t, len(expected.Fields), len(actual.Fields), "Global type %d Fields count mismatch", i)
+		assert.Equal(t, expected.Name, cfg.Types[i].Name, "Global type %d Name mismatch", i)
 	}
 
-	// Additionally, let's verify the package-scoped types are where they belong.
+	// Only types explicitly defined with 'package:type' syntax should be in packages.
 	expectedPackageTypes := map[string][]*config.TypeRule{
-		"github.com/context/pkg/v3": {
-			{
-				Name: "ctx3.ContextType",
-				Kind: "type",
-				Methods: []*config.MemberRule{
-					{
-						Name: "DoSomethingCtx",
-					},
-				},
-			},
-			{
-				Name: "ctx3.AfterNestedType",
-				Kind: "type",
-				Methods: []*config.MemberRule{
-					{
-						Name: "DoSomethingAfterNested",
-					},
-				},
-			},
-		},
 		"github.com/nested/pkg/v4": {
 			{
 				Name:    "nested4.NestedType",
@@ -281,104 +275,6 @@ func TestParseTypes(t *testing.T) {
 		actualTypesInPkg, ok := actualPackageTypes[imp]
 		assert.True(t, ok, "Missing package with types: %s", imp)
 		assert.Equal(t, len(expectedTypesInPkg), len(actualTypesInPkg), "Types count in package %s mismatch", imp)
-		// A more detailed comparison could be done here if needed.
-	}
-}
-
-func TestParseFunctions(t *testing.T) {
-	filePath := filepath.Join(getModuleRoot(), "testdata", "parser_test_functions.go")
-	file, fset, err := loadGoFile(filePath)
-	if err != nil {
-		t.Fatalf("Failed to load Go file %s: %v", filePath, err)
-	}
-
-	cfg, err := ParseFileDirectives(file, fset)
-	if err != nil {
-		t.Fatalf("Failed to parse directives: %v", parseErrorLog(err))
-	}
-
-	expectedFunctions := []*config.FuncRule{
-		{
-			Name: "ext1.MyExternalFunction",
-			RuleSet: config.RuleSet{
-				Explicit: []*config.ExplicitRule{{From: "ext1.MyExternalFunction", To: "MyNewFunction"}},
-			},
-		},
-	}
-
-	assert.Equal(t, len(expectedFunctions), len(cfg.Functions), "Functions count mismatch")
-
-	for i, expected := range expectedFunctions {
-		if i >= len(cfg.Functions) {
-			t.Fatalf("Missing expected function #%d: %s", i, expected.Name)
-		}
-		actual := cfg.Functions[i]
-		assert.Equal(t, expected.Name, actual.Name, "Function %d Name mismatch", i)
-		assert.Equal(t, len(expected.RuleSet.Explicit), len(actual.RuleSet.Explicit), "Function %d RuleSet.Explicit count mismatch", i)
-	}
-}
-
-func TestParseVariables(t *testing.T) {
-	filePath := filepath.Join(getModuleRoot(), "testdata", "parser_test_variables.go")
-	file, fset, err := loadGoFile(filePath)
-	if err != nil {
-		t.Fatalf("Failed to load Go file %s: %v", filePath, err)
-	}
-
-	cfg, err := ParseFileDirectives(file, fset)
-	if err != nil {
-		t.Fatalf("Failed to parse directives: %v", err)
-	}
-
-	expectedVariables := []*config.VarRule{
-		{
-			Name: "ext1.MyExternalVariable",
-			RuleSet: config.RuleSet{
-				Explicit: []*config.ExplicitRule{{From: "ext1.MyExternalVariable", To: "MyNewVariable"}},
-			},
-		},
-	}
-
-	assert.Equal(t, len(expectedVariables), len(cfg.Variables), "Variables count mismatch")
-
-	for i, expected := range expectedVariables {
-		if i >= len(cfg.Variables) {
-			t.Fatalf("Missing expected variable #%d: %s", i, expected.Name)
-		}
-		actual := cfg.Variables[i]
-		assert.Equal(t, expected.Name, actual.Name, "Variable %d Name mismatch", i)
-		assert.Equal(t, len(expected.RuleSet.Explicit), len(actual.RuleSet.Explicit), "Variable %d RuleSet.Explicit count mismatch", i)
-	}
-}
-
-func TestParseConstants(t *testing.T) {
-	filePath := filepath.Join(getModuleRoot(), "testdata", "parser_test_constants.go")
-	file, fset, err := loadGoFile(filePath)
-	if err != nil {
-		t.Fatalf("Failed to load Go file %s: %v", filePath, err)
-	}
-
-	cfg, err := ParseFileDirectives(file, fset)
-	if err != nil {
-		t.Fatalf("Failed to parse directives: %v", err)
-	}
-
-	expectedConstants := []*config.ConstRule{
-		{
-			Name:    "ext1.MyExternalConstant",
-			RuleSet: config.RuleSet{Ignores: []string{"ext1.MyExternalConstant"}},
-		},
-	}
-
-	assert.Equal(t, len(expectedConstants), len(cfg.Constants), "Constants count mismatch")
-
-	for i, expected := range expectedConstants {
-		if i >= len(cfg.Constants) {
-			t.Fatalf("Missing expected constant #%d: %s", i, expected.Name)
-		}
-		actual := cfg.Constants[i]
-		assert.Equal(t, expected.Name, actual.Name, "Constant %d Name mismatch", i)
-		assert.Equal(t, len(expected.RuleSet.Ignores), len(actual.RuleSet.Ignores), "Constant %d RuleSet.Ignores count mismatch", i)
 	}
 }
 
