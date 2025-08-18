@@ -17,8 +17,22 @@ func (f *FieldRule) ParseDirective(directive *Directive) error {
 	if directive.BaseCmd != "field" {
 		return NewParserErrorWithContext(directive, "FieldRule can only contain field directives")
 	}
-	// Delegate to the common RuleSet parser
-	return parseRuleSetDirective(&f.RuleSet, directive)
+
+	if !directive.HasSub() {
+		if directive.Argument == "" {
+			return NewParserErrorWithContext(directive, "field directive requires an argument (name)")
+		}
+		f.MemberRule.Name = directive.Argument
+		return nil
+	}
+
+	subDirective := directive.Sub()
+	switch subDirective.BaseCmd {
+	// Add field-specific cases here in the future (e.g., "type", "tag")
+	}
+
+	// Delegate to the common RuleSet parser for generic rules
+	return parseRuleSetDirective(&f.RuleSet, subDirective)
 }
 
 func (f *FieldRule) AddRule(rule any) error {
