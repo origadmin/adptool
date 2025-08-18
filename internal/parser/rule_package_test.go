@@ -232,7 +232,7 @@ func TestPackageRule_ParseDirective(t *testing.T) {
 			},
 			expectedPackage: nil, // Expect partial or nil due to error
 			expectError:     true,
-			errorContains:   "invalid props directive argument",
+			errorContains:   "failed to handle property directive: invalid prop directive argument: argument must be in 'name value' format",
 		},
 		{
 			name: "unrecognized directive should error",
@@ -241,7 +241,7 @@ func TestPackageRule_ParseDirective(t *testing.T) {
 			},
 			expectedPackage: nil, // Expect partial or nil due to error
 			expectError:     true,
-			errorContains:   "unrecognized directive 'package:unknown-command' for PackageRule",
+			errorContains:   "unrecognized sub-directive: unknown-command",
 		},
 		{
 			name: "error in sequence should stop processing",
@@ -254,7 +254,7 @@ func TestPackageRule_ParseDirective(t *testing.T) {
 				Import: "good/import",
 			},
 			expectError:   true,
-			errorContains: "invalid props directive argument",
+			errorContains: "unrecognized sub-directive: props",
 		},
 		{
 			name: "directive with wrong base command should return error",
