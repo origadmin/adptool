@@ -179,7 +179,7 @@ func TestConstRule_ParseDirective(t *testing.T) {
 			},
 			expectedRuleSet: nil, // RuleSet won't be modified or will be default
 			expectError:     true,
-			errorContains:   "unrecognized directive 'const:unknown-directive' for RuleSet",
+			errorContains:   "unrecognized directive 'unknown-directive' for RuleSet",
 		},
 		{
 			name: "error in sequence should stop processing",
@@ -194,24 +194,38 @@ func TestConstRule_ParseDirective(t *testing.T) {
 			expectError:   true,
 			errorContains: "strategy directive requires an argument",
 		},
+		{
+			name: "directive with wrong base command should return error",
+			directives: []string{
+				"//go:adapter:type:strategy some-strategy", // BaseCmd is "type", not "const"
+			},
+			expectedRuleSet: nil,
+			expectError:     true,
+			errorContains:   "ConstRule can only contain const directives",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			constRule := &ConstRule{ConstRule: &config.ConstRule{}} // Fresh rule for each test
+			initialRuleSet := constRule.RuleSet                     // Capture initial state
 			var actualErr error
 
 			for i, dirString := range tt.directives {
 				dir := decodeTestDirective(dirString) // Assuming decodeTestDirective is available
-				if dir.BaseCmd != "const" {
-					actualErr = fmt.Errorf("unexpected base command: %s", dir.BaseCmd)
-					t.Logf("Error encountered at directive %d (%s): %v", i, dirString, actualErr)
-					break // Stop processing directives on first error
+				var err error
+				if tt.name == "directive with wrong base command should return error" {
+					err = constRule.ParseDirective(&dir)
+				} else {
+					// Original logic for other test cases
+					if dir.BaseCmd != "const" {
+						actualErr = fmt.Errorf("unexpected base command: %s", dir.BaseCmd)
+						t.Logf("Error encountered at directive %d (%s): %v", i, dirString, actualErr)
+						break // Stop processing directives on first error
+					}
+					err = constRule.ParseDirective(&dir)
 				}
-				if !dir.HasSub() {
-					continue
-				}
-				err := constRule.ParseDirective(dir.Sub())
+
 				if err != nil {
 					actualErr = err
 					t.Logf("Error encountered at directive %d (%s): %v", i, dirString, err)
@@ -224,15 +238,18 @@ func TestConstRule_ParseDirective(t *testing.T) {
 				assert.Contains(t, actualErr.Error(), tt.errorContains)
 			} else {
 				assert.NoError(t, actualErr)
-				assert.NotNil(t, constRule.RuleSet)
-				assert.Equal(t, tt.expectedRuleSet.Strategy, constRule.RuleSet.Strategy)
-				assert.Equal(t, tt.expectedRuleSet.Prefix, constRule.RuleSet.Prefix)
-				assert.Equal(t, tt.expectedRuleSet.Suffix, constRule.RuleSet.Suffix)
-				assert.Equal(t, tt.expectedRuleSet.Explicit, constRule.RuleSet.Explicit)
-				assert.Equal(t, tt.expectedRuleSet.Regex, constRule.RuleSet.Regex)
-				assert.Equal(t, tt.expectedRuleSet.Ignores, constRule.RuleSet.Ignores)
-				assert.Equal(t, tt.expectedRuleSet.Transforms, constRule.RuleSet.Transforms)
-				// Add assertions for other RuleSet fields as needed
+				if tt.expectedRuleSet == nil {
+					assert.Equal(t, initialRuleSet, constRule.RuleSet)
+				} else {
+					assert.NotNil(t, constRule.RuleSet)
+					assert.Equal(t, tt.expectedRuleSet.Strategy, constRule.RuleSet.Strategy)
+					assert.Equal(t, tt.expectedRuleSet.Prefix, constRule.RuleSet.Prefix)
+					assert.Equal(t, tt.expectedRuleSet.Suffix, constRule.RuleSet.Suffix)
+					assert.Equal(t, tt.expectedRuleSet.Explicit, constRule.RuleSet.Explicit)
+					assert.Equal(t, tt.expectedRuleSet.Regex, constRule.RuleSet.Regex)
+					assert.Equal(t, tt.expectedRuleSet.Ignores, constRule.RuleSet.Ignores)
+					assert.Equal(t, tt.expectedRuleSet.Transforms, constRule.RuleSet.Transforms)
+				}
 			}
 		})
 	}

@@ -103,16 +103,16 @@ func TestMethodRule_Finalize(t *testing.T) {
 // TestMethodRule_ParseDirective tests the ParseDirective method of MethodRule.
 func TestMethodRule_ParseDirective(t *testing.T) {
 	tests := []struct {
-		name          string
-		directives    []string // Sequence of directive strings to parse
+		name            string
+		directives      []string        // Sequence of directive strings to parse
 		expectedRuleSet *config.RuleSet // The expected final state of MethodRule.RuleSet
-		expectError   bool
-		errorContains string
+		expectError     bool
+		errorContains   string
 	}{
 		{
 			name: "single strategy directive",
 			directives: []string{
-				"//go:adapter:strategy my-strategy",
+				"//go:adapter:method:strategy my-strategy",
 			},
 			expectedRuleSet: &config.RuleSet{
 				Strategy: []string{"my-strategy"},
@@ -122,8 +122,8 @@ func TestMethodRule_ParseDirective(t *testing.T) {
 		{
 			name: "accumulate multiple strategies",
 			directives: []string{
-				"//go:adapter:strategy s1",
-				"//go:adapter:strategy s2",
+				"//go:adapter:method:strategy s1",
+				"//go:adapter:method:strategy s2",
 			},
 			expectedRuleSet: &config.RuleSet{
 				Strategy: []string{"s1", "s2"},
@@ -133,7 +133,7 @@ func TestMethodRule_ParseDirective(t *testing.T) {
 		{
 			name: "single prefix directive",
 			directives: []string{
-				"//go:adapter:prefix my-prefix",
+				"//go:adapter:method:prefix my-prefix",
 			},
 			expectedRuleSet: &config.RuleSet{
 				Prefix: "my-prefix",
@@ -143,8 +143,8 @@ func TestMethodRule_ParseDirective(t *testing.T) {
 		{
 			name: "override prefix directive",
 			directives: []string{
-				"//go:adapter:prefix p1",
-				"//go:adapter:prefix p2",
+				"//go:adapter:method:prefix p1",
+				"//go:adapter:method:prefix p2",
 			},
 			expectedRuleSet: &config.RuleSet{
 				Prefix: "p2",
@@ -154,7 +154,7 @@ func TestMethodRule_ParseDirective(t *testing.T) {
 		{
 			name: "single ignores directive",
 			directives: []string{
-				"//go:adapter:ignores *.log",
+				"//go:adapter:method:ignores *.log",
 			},
 			expectedRuleSet: &config.RuleSet{
 				Ignores: []string{"*.log"},
@@ -164,8 +164,8 @@ func TestMethodRule_ParseDirective(t *testing.T) {
 		{
 			name: "accumulate multiple ignores",
 			directives: []string{
-				"//go:adapter:ignores *.log",
-				"//go:adapter:ignores temp/",
+				"//go:adapter:method:ignores *.log",
+				"//go:adapter:method:ignores temp/",
 			},
 			expectedRuleSet: &config.RuleSet{
 				Ignores: []string{"*.log", "temp/"},
@@ -175,35 +175,59 @@ func TestMethodRule_ParseDirective(t *testing.T) {
 		{
 			name: "invalid directive",
 			directives: []string{
-				"//go:adapter:unknown-directive value",
+				"//go:adapter:method:unknown-directive value",
 			},
 			expectedRuleSet: nil, // RuleSet won't be modified or will be default
-			expectError: true,
-			errorContains: "unrecognized directive 'unknown-directive'",
+			expectError:     true,
+			errorContains:   "unrecognized directive 'unknown-directive'",
 		},
 		{
 			name: "error in sequence should stop processing",
 			directives: []string{
-				"//go:adapter:prefix valid-prefix",
-				"//go:adapter:strategy", // Invalid: strategy requires argument
-				"//go:adapter:suffix should-not-be-processed",
+				"//go:adapter:method:prefix valid-prefix",
+				"//go:adapter:method:strategy", // Invalid: strategy requires argument
+				"//go:adapter:method:suffix should-not-be-processed",
 			},
 			expectedRuleSet: &config.RuleSet{ // State before error
 				Prefix: "valid-prefix",
 			},
-			expectError: true,
+			expectError:   true,
 			errorContains: "strategy directive requires an argument",
+		},
+		{
+			name: "directive with wrong base command should return error",
+			directives: []string{
+				"//go:adapter:type:strategy some-strategy", // BaseCmd is "type", not "method"
+			},
+			expectedRuleSet: nil,
+			expectError:     true,
+			errorContains:   "MethodRule can only contain method directives",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			methodRule := &MethodRule{MemberRule: &config.MemberRule{}} // Fresh rule for each test
+			initialRuleSet := methodRule.RuleSet                        // Capture initial state
 			var actualErr error
 
 			for i, dirString := range tt.directives {
 				dir := decodeTestDirective(dirString) // Assuming decodeTestDirective is available
-				err := methodRule.ParseDirective(&dir)
+				var err error
+				if tt.name == "directive with wrong base command should return error" {
+					err = methodRule.ParseDirective(&dir)
+				} else {
+					if dir.BaseCmd != "method" {
+						actualErr = fmt.Errorf("unexpected base command: %s", dir.BaseCmd)
+						t.Logf("Error encountered at directive %d (%s): %v", i, dirString, actualErr)
+						break // Stop processing directives on first error
+					}
+					if !dir.HasSub() {
+						continue
+					}
+					err = methodRule.ParseDirective(&dir)
+				}
+
 				if err != nil {
 					actualErr = err
 					t.Logf("Error encountered at directive %d (%s): %v", i, dirString, err)
@@ -216,15 +240,18 @@ func TestMethodRule_ParseDirective(t *testing.T) {
 				assert.Contains(t, actualErr.Error(), tt.errorContains)
 			} else {
 				assert.NoError(t, actualErr)
-				assert.NotNil(t, methodRule.RuleSet)
-				assert.Equal(t, tt.expectedRuleSet.Strategy, methodRule.RuleSet.Strategy)
-				assert.Equal(t, tt.expectedRuleSet.Prefix, methodRule.RuleSet.Prefix)
-				assert.Equal(t, tt.expectedRuleSet.Suffix, methodRule.RuleSet.Suffix)
-				assert.Equal(t, tt.expectedRuleSet.Explicit, methodRule.RuleSet.Explicit)
-				assert.Equal(t, tt.expectedRuleSet.Regex, methodRule.RuleSet.Regex)
-				assert.Equal(t, tt.expectedRuleSet.Ignores, methodRule.RuleSet.Ignores)
-				assert.Equal(t, tt.expectedRuleSet.Transforms, methodRule.RuleSet.Transforms)
-				// Add assertions for other RuleSet fields as needed
+				if tt.expectedRuleSet == nil {
+					assert.Equal(t, initialRuleSet, methodRule.RuleSet)
+				} else {
+					assert.NotNil(t, methodRule.RuleSet)
+					assert.Equal(t, tt.expectedRuleSet.Strategy, methodRule.RuleSet.Strategy)
+					assert.Equal(t, tt.expectedRuleSet.Prefix, methodRule.RuleSet.Prefix)
+					assert.Equal(t, tt.expectedRuleSet.Suffix, methodRule.RuleSet.Suffix)
+					assert.Equal(t, tt.expectedRuleSet.Explicit, methodRule.RuleSet.Explicit)
+					assert.Equal(t, tt.expectedRuleSet.Regex, methodRule.RuleSet.Regex)
+					assert.Equal(t, tt.expectedRuleSet.Ignores, methodRule.RuleSet.Ignores)
+					assert.Equal(t, tt.expectedRuleSet.Transforms, methodRule.RuleSet.Transforms)
+				}
 			}
 		})
 	}

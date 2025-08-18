@@ -84,25 +84,25 @@ func TestRootConfigParseDirectiveDefaults(t *testing.T) {
 	}
 }
 
-func TestRootConfigParseDirectiveMultiScope(t *testing.T) {
+func TestRootConfigParseDirectiveDefaultAccumulation(t *testing.T) {
 	tests := []struct {
 		name             string
-		directiveString  []string
+		directiveStrings []string
 		expectedDefaults *config.Defaults
 		expectError      bool
 		errorContains    string
 	}{
 		{
-			name: "packages directive (should not be handled by ParseDirective)",
-			directiveString: []string{
+			name: "accumulate default mode directives",
+			directiveStrings: []string{
 				"//go:adapter:default:mode:strategy my-strategy",
 				"//go:adapter:default:mode:prefix my-prefix",
 				"//go:adapter:default:json {\"Mode\":{\"Strategy\":\"json-strategy\",\"Prefix\":\"json-prefix\"}}",
 			},
 			expectedDefaults: &config.Defaults{
 				Mode: &config.Mode{
-					Strategy: "my-strategy",
-					Prefix:   "my-prefix",
+					Strategy: "json-strategy", // JSON should override previous strategy
+					Prefix:   "json-prefix",   // JSON should override previous prefix
 				},
 			},
 			expectError:   false,
@@ -113,7 +113,7 @@ func TestRootConfigParseDirectiveMultiScope(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			rc := &RootConfig{Config: config.New()}
-			for _, directiveString := range tt.directiveString {
+			for _, directiveString := range tt.directiveStrings {
 				dir := decodeTestDirective(directiveString)
 				err := rc.ParseDirective(&dir)
 				if tt.expectError {
@@ -123,6 +123,9 @@ func TestRootConfigParseDirectiveMultiScope(t *testing.T) {
 					assert.NoError(t, err)
 					assert.NotNil(t, rc.Config)
 				}
+			}
+			if !tt.expectError {
+				assert.Equal(t, tt.expectedDefaults.Mode, rc.Config.Defaults.Mode)
 			}
 		})
 	}
@@ -243,6 +246,37 @@ func TestRootConfigParseDirectiveIgnores(t *testing.T) {
 				if assert.Len(t, rc.Config.Ignores, len(tt.expectedIgnores)) {
 					assert.Equal(t, tt.expectedIgnores[0], rc.Config.Ignores[0])
 				}
+			}
+		})
+	}
+}
+
+func TestRootConfigParseDirectiveUnrecognized(t *testing.T) {
+	tests := []struct {
+		name            string
+		directiveString string
+		expectError     bool
+		errorContains   string
+	}{
+		{
+			name:            "unrecognized directive",
+			directiveString: "//go:adapter:unknown-directive",
+			expectError:     true,
+			errorContains:   "unrecognized directive 'unknown-directive' for RootConfig",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rc := &RootConfig{Config: config.New()}
+			dir := decodeTestDirective(tt.directiveString)
+			err := rc.ParseDirective(&dir)
+
+			if tt.expectError {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errorContains)
+			} else {
+				assert.NoError(t, err)
 			}
 		})
 	}
