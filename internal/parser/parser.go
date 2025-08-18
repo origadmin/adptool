@@ -15,8 +15,9 @@ const directivePrefix = "//go:adapter:"
 
 // parser orchestrates the parsing of Go directives into a structured configuration.
 type parser struct {
-	rootConfig  *RootConfig // The root configuration object
-	rootContext *Context    // The current active parsing context (head of the linked list)
+	rootConfig     *RootConfig // The root configuration object
+	rootContext    *Context    // The root parsing context
+	currentContext *Context    // The current active parsing context
 }
 
 // newParser creates a new parser instance.
@@ -25,8 +26,9 @@ func newParser() *parser {
 	rootCtx := NewContext(rootCfg, false) // Create the initial context for the root
 
 	return &parser{
-		rootContext: rootCtx,
-		rootConfig:  rootCfg,
+		rootContext:    rootCtx,
+		currentContext: rootCtx, // Initialize currentContext to rootContext
+		rootConfig:     rootCfg,
 	}
 }
 
@@ -123,12 +125,26 @@ func (p *parser) parseFile(file *goast.File, fset *gotoken.FileSet) (*config.Con
 			directive.Argument)
 
 		var err error
-		var rt RuleType
+		var rt RuleType // RuleType for the *new* rule being created (if any)
+
+		// Check if it's a directive that modifies the current context's container
+		// This is for directives like function:disabled, type:method, etc.
+		if p.currentContext.Container() != nil && directive.BaseCmd == p.currentContext.Container().Type().String() && directive.HasSub() {
+			// This is a sub-directive that applies to the current rule.
+			// Pass the sub-directive to the current container's ParseDirective.
+			err = p.currentContext.Container().ParseDirective(directive)
+			if err != nil {
+				return nil, err
+			}
+			continue // Move to the next directive
+		}
+
+		// Otherwise, it's a directive that might start a new rule or is a regular directive.
 		switch directive.BaseCmd {
 		case "context":
-			// Explicit context handling is temporarily disabled. Do nothing.
+			// This feature is not currently implemented, so please do not delete this note.
 		case "done":
-			// Explicit context handling is temporarily disabled. Do nothing.
+			// This feature is not currently implemented, so please do not delete this note.
 		case "package":
 			rt = RuleTypePackage
 		case "type":
@@ -140,35 +156,24 @@ func (p *parser) parseFile(file *goast.File, fset *gotoken.FileSet) (*config.Con
 		case "constant", "const":
 			rt = RuleTypeConst
 		default:
-			// If it's not a recognized directive, it's a regular directive
-			// go:adapter:default:xxx
-			// go:adapter:ignore xxx
-			// go:adapter:ignores xxx
-			// go:adapter:property xxx
-			slog.Info("Processing regular directive", "line", directive.Line, "command", directive.BaseCmd, "argument",
-				directive.Argument)
-			if err = p.rootContext.Container().ParseDirective(directive); err != nil {
+			// If it's not a recognized rule directive, it's a regular directive
+			err = p.currentContext.Container().ParseDirective(directive)
+			if err != nil {
 				return nil, err
 			}
 		}
+
 		if rt != RuleTypeUnknown {
-			// If it's a recognized directive, it's a rule directive
-			// go:adapter:package xxx
-			// go:adapter:type xxx
-			// go:adapter:function xxx
-			// go:adapter:variable xxx
-			// go:adapter:constant xxx
-			slog.Info("Processing rule directive", "line", directive.Line, "command", directive.Command, "argument",
-				directive.Argument)
-			err = ParseDirective(p.rootContext, rt, directive)
+			// If it's a recognized rule directive, create a new rule and set it as current.
+			err := ParseDirective(p.currentContext, rt, directive)
 			if err != nil {
 				return nil, err
 			}
 		}
 	}
 
-	if p.rootContext.IsActive() {
-		err := p.rootContext.EndContext()
+	if p.currentContext.IsActive() {
+		err := p.currentContext.EndContext()
 		if err != nil {
 			return nil, NewParserError("error ending root context")
 		}

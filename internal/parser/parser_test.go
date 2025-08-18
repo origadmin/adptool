@@ -276,7 +276,40 @@ func TestParseTypes(t *testing.T) {
 	}
 }
 
-// parseErrorLog is a helper function to get a detailed error string for parser errors.
+func TestParseFunctions(t *testing.T) {
+	filePath := filepath.Join(getModuleRoot(), "testdata", "parser_test_functions.go")
+	file, fset, err := loadGoFile(filePath)
+	if err != nil {
+		t.Fatalf("Failed to load Go file %s: %v", filePath, err)
+	}
+
+	cfg, err := ParseFileDirectives(file, fset)
+	if err != nil {
+		t.Fatalf("Failed to parse directives: %v", parseErrorLog(err))
+	}
+
+	expectedFunctions := []*config.FuncRule{
+		{
+			Name:     "MyGlobalFunc",
+			Disabled: true,
+			RuleSet: config.RuleSet{
+				Explicit: []*config.ExplicitRule{{From: "MyGlobalFunc", To: "NewRenamedFunc"}},
+				Regex:    []*config.RegexRule{{Pattern: "^old(.*)$", Replace: "new$1"}},
+				Strategy: []string{"replace"},
+			},
+		},
+	}
+
+	assert.Equal(t, len(expectedFunctions), len(cfg.Functions), "Functions count mismatch")
+	for i, expected := range expectedFunctions {
+		assert.Equal(t, expected.Name, cfg.Functions[i].Name, "Function %d Name mismatch", i)
+		assert.Equal(t, expected.Disabled, cfg.Functions[i].Disabled, "Function %d Disabled mismatch", i)
+		assert.Equal(t, expected.RuleSet.Explicit, cfg.Functions[i].RuleSet.Explicit, "Function %d Explicit mismatch", i)
+		assert.Equal(t, expected.RuleSet.Regex, cfg.Functions[i].RuleSet.Regex, "Function %d Regex mismatch", i)
+		assert.Equal(t, expected.RuleSet.Strategy, cfg.Functions[i].RuleSet.Strategy, "Function %d Strategy mismatch", i)
+	}
+}
+
 func parseErrorLog(err error) string {
 	var pe *parserError
 	if errors.As(err, &pe) {
