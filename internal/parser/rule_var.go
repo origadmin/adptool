@@ -33,6 +33,9 @@ func (r *VarRule) ParseDirective(directive *Directive) error {
 			To:   subDirective.Argument,
 		})
 		return nil
+	case "disabled":
+		r.VarRule.Disabled = subDirective.Argument == "true"
+		return nil
 	}
 
 	// Delegate to the common RuleSet parser for generic rules

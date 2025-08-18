@@ -27,16 +27,19 @@ func (r *FuncRule) ParseDirective(directive *Directive) error {
 
 	subDirective := directive.Sub()
 	switch subDirective.BaseCmd {
+	case "disabled":
+		r.FuncRule.Disabled = subDirective.Argument == "true"
+		return nil
 	case "rename":
 		r.FuncRule.Explicit = append(r.FuncRule.Explicit, &config.ExplicitRule{
 			From: r.FuncRule.Name,
 			To:   subDirective.Argument,
 		})
 		return nil
+	default:
+		// Delegate to the common RuleSet parser for generic rules
+		return parseRuleSetDirective(&r.RuleSet, subDirective)
 	}
-
-	// Delegate to the common RuleSet parser for generic rules
-	return parseRuleSetDirective(&r.RuleSet, subDirective)
 }
 
 func (r *FuncRule) AddPackage(pkg *PackageRule) error {
