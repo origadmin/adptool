@@ -26,8 +26,8 @@ func TestRootConfigParseDirectiveDefaults(t *testing.T) {
 		},
 		{
 			name:            "Defaults with strategy (as sub-command)",
-			directiveString: "//go:adapter:default:mode:strategy my-strategy",
-			expectedMode:    &config.Mode{Strategy: "my-strategy"},
+			directiveString: "//go:adapter:default:mode:strategy replace",
+			expectedMode:    &config.Mode{Strategy: "replace"},
 			expectError:     false,
 		},
 		{
