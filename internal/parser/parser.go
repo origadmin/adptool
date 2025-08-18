@@ -43,37 +43,37 @@ func ParseFileDirectives(file *goast.File, fset *gotoken.FileSet) (*config.Confi
 	return p.parseFile(file, fset)
 }
 
-func ParseDirective(context *Context, ruleType RuleType, directive *Directive) error {
-	var currentContext *Context
+func ParseDirective(parentCtx *Context, ruleType RuleType, directive *Directive) error {
+	var currentCtx *Context
 	var err error
 
-	// The rule: reuse a context only if the directive has sub-commands and there's a matching active context.
+	// The rule: reuse a parentCtx only if the directive has sub-commands and there's a matching active parentCtx.
 	// Otherwise, always create a new one.
 	if directive.HasSub() {
-		activeChild := context.ActiveContext()
+		activeChild := parentCtx.ActiveContext()
 		if activeChild != nil && activeChild.Container().Type() == ruleType {
-			// Reuse the active context as the parent for the sub-directive.
-			currentContext = activeChild
+			// Reuse the active parentCtx as the parent for the sub-directive.
+			currentCtx = activeChild
 		} else {
-			// If there's no matching active context, create one.
+			// If there's no matching active parentCtx, create one.
 			containerFactory := NewContainerFactory(ruleType)
 			container := containerFactory()
-			currentContext, err = context.StartContext(container)
+			currentCtx, err = parentCtx.StartContext(container)
 			if err != nil {
 				return err
 			}
 		}
 	} else {
-		// No sub-commands, so it's a new sibling directive. Always create a new context.
+		// No sub-commands, so it's a new sibling directive. Always create a new parentCtx.
 		containerFactory := NewContainerFactory(ruleType)
 		container := containerFactory()
-		currentContext, err = context.StartContext(container)
+		currentCtx, err = parentCtx.StartContext(container)
 		if err != nil {
 			return err
 		}
 	}
 
-	// Now that we have the correct context, process the directive or its sub-directive.
+	// Now that we have the correct parentCtx, process the directive or its sub-directive.
 	if directive.HasSub() {
 		subDirective := directive.Sub()
 		var rt RuleType
@@ -88,18 +88,24 @@ func ParseDirective(context *Context, ruleType RuleType, directive *Directive) e
 			rt = RuleTypeVar
 		case "constant", "const":
 			rt = RuleTypeConst
+		default:
+			// If it's not a recognized directive, it's a regular directive
 		}
 		if rt != RuleTypeUnknown {
-			// The recursive call uses the context we just found/created as the parent.
-			err = ParseDirective(currentContext, rt, subDirective)
+			// The recursive call uses the parentCtx we just found/created as the parent.
+			err = ParseDirective(currentCtx, rt, subDirective)
 			if err != nil {
 				return err
 			}
+		} else {
+			slog.Info("Processing regular directive", "line", subDirective.Line, "command", subDirective.Command, "argument",
+				subDirective.Argument)
+			err = currentCtx.Container().ParseDirective(subDirective)
 		}
 	} else {
 		// This is the base case for a leaf directive (e.g., "package", "type").
-		// The context was already created above. Now, process the directive's arguments.
-		err = currentContext.Container().ParseDirective(directive)
+		// The parentCtx was already created above. Now, process the directive's arguments.
+		err = currentCtx.Container().ParseDirective(directive)
 		if err != nil {
 			return err
 		}
@@ -153,7 +159,7 @@ func (p *parser) parseFile(file *goast.File, fset *gotoken.FileSet) (*config.Con
 			// go:adapter:constant xxx
 			slog.Info("Processing rule directive", "line", directive.Line, "command", directive.Command, "argument",
 				directive.Argument)
-			err := ParseDirective(p.rootContext, rt, directive)
+			err = ParseDirective(p.rootContext, rt, directive)
 			if err != nil {
 				return nil, err
 			}

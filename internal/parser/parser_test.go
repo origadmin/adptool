@@ -117,7 +117,7 @@ func TestParsePackages(t *testing.T) {
 	}
 
 	assert.Equal(t, len(expectedPackages), len(cfg.Packages), "Packages count mismatch")
-
+	t.Logf("Show packages: %#v", cfg.Packages[0])
 	for i := range expectedPackages {
 		expected := expectedPackages[i]
 		actual := cfg.Packages[i]
