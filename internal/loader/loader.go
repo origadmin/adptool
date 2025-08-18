@@ -63,8 +63,14 @@ func LoadGoFileConfig(filePath string) (*config.Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	// parser.ParseFileDirectives returns a *config.Config object containing only directives from this file.
-	return parser.ParseFileDirectives(file, fset)
+	// Create a new config for this file's directives
+	cfg := config.New()
+	// parser.ParseFileDirectives will update this cfg object
+	_, err = parser.ParseFileDirectives(file, fset, cfg)
+	if err != nil {
+		return nil, err
+	}
+	return cfg, nil
 }
 
 // LoadGoFilesConfigs loads multiple Go source files, parses their directives, and returns a map
