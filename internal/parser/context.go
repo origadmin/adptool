@@ -72,7 +72,18 @@ func (c *Context) Parent() *Context {
 // StartOrActiveContext gets an active child context or creates a new one.
 // It first checks if an active child context already exists and returns it.
 // If not, it creates a new one by calling the provided factory function.
-
+func (c *Context) StartOrActiveContext(ruleType RuleType) (*Context, error) {
+	if active := c.ActiveContext(); active != nil {
+		return active, nil
+	}
+	// Execute the factory function only when a new containerFactory is needed.
+	containerFactory := NewContainerFactory(ruleType)
+	container := containerFactory()
+	if container.Type() == RuleTypeUnknown {
+		return nil, NewParserError("unknown rule type: %s", ruleType.String())
+	}
+	return c.StartContext(container)
+}
 
 // ActiveContext finds and returns the currently active child context from the activeContexts.
 // It returns nil if no child context is active.
