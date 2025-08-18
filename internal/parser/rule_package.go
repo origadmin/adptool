@@ -54,7 +54,9 @@ func (p *PackageRule) ParseDirective(directive *Directive) error {
 		p.Package.Props = append(p.Package.Props, props...)
 		return nil
 	default:
-		return NewParserErrorWithContext(subDirective, "unrecognized directive '%s' for PackageRule", subDirective.Command)
+		// This allows structural directives like 'type' or 'function' to be ignored here
+		// as they are handled by the main parser's recursion.
+		return nil
 	}
 }
 
