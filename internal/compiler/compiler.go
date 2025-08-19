@@ -4,10 +4,10 @@ import (
 	"fmt" // Re-added fmt import for error messages in applyRules
 	"go/ast"
 	"log"
+	"path"   // Added for path.Base
 	"regexp" // Re-added regexp import for applyRules
 
 	"github.com/origadmin/adptool/internal/config"
-	"github.com/origadmin/adptool/internal/interfaces"
 	rulesPkg "github.com/origadmin/adptool/internal/rules"
 )
 
@@ -49,13 +49,12 @@ func (r *realReplacer) Apply(node ast.Node) ast.Node {
 	return node
 }
 
-// Compile takes a configuration and returns a Replacer instance.
-func Compile(cfg *config.Config) interfaces.Replacer {
+// Compile takes a configuration and returns a compiled representation of it.
+func Compile(cfg *config.Config) (*config.CompiledConfig, error) {
 	log.Printf("Compile: Received config: %+v", cfg)
 
+	// --- Compile Renaming Rules ---
 	rules := make(compiledRules)
-
-	// Helper to process rules from config sections
 	processConfigRules := func(cfgRules interface {
 		IsDisabled() bool
 		GetName() string
@@ -68,11 +67,10 @@ func Compile(cfg *config.Config) interfaces.Replacer {
 		ruleSet := cfgRules.GetRuleSet()
 		log.Printf("Compile: Processing rule for %s, RuleSet: %+v", name, ruleSet)
 		if ruleSet != nil {
-			rules[name] = rulesPkg.ConvertRuleSetToRenameRules(ruleSet) // Use rulesPkg.ConvertRuleSetToRenameRules
+			rules[name] = rulesPkg.ConvertRuleSetToRenameRules(ruleSet)
 		}
 	}
 
-	// Process global rules
 	for _, t := range cfg.Types {
 		processConfigRules(t)
 	}
@@ -86,10 +84,7 @@ func Compile(cfg *config.Config) interfaces.Replacer {
 		processConfigRules(c)
 	}
 
-	// Process package-specific rules (simplified for now, assuming direct name mapping)
 	for _, pkg := range cfg.Packages {
-		// TODO: Implement more sophisticated package-specific rule handling if needed.
-		// This might involve mapping rules based on fully qualified names.
 		for _, t := range pkg.Types {
 			processConfigRules(t)
 		}
@@ -103,8 +98,35 @@ func Compile(cfg *config.Config) interfaces.Replacer {
 			processConfigRules(c)
 		}
 	}
+	replacer := &realReplacer{rules: rules}
 
-	return &realReplacer{rules: rules}
+	// --- Compile Package Information ---
+	var compiledPackages []*config.CompiledPackage
+	for _, pkg := range cfg.Packages {
+		finalAlias := pkg.Alias
+		if finalAlias == "" {
+			finalAlias = path.Base(pkg.Import)
+		}
+		compiledPackages = append(compiledPackages, &config.CompiledPackage{
+			ImportPath:  pkg.Import,
+			ImportAlias: finalAlias,
+		})
+	}
+
+	// --- Assemble Compiled Config ---
+	compiledCfg := &config.CompiledConfig{
+		PackageName: cfg.OutputPackageName,
+		Packages:    compiledPackages,
+		Replacer:    replacer,
+	}
+
+	// Use a default output package name if not provided
+	if compiledCfg.PackageName == "" {
+		compiledCfg.PackageName = "adapters"
+	}
+
+	log.Printf("Successfully compiled config: %+v", compiledCfg)
+	return compiledCfg, nil
 }
 
 // applyRules applies a set of rename rules to a given name and returns the result.
