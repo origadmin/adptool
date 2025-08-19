@@ -1,402 +1,135 @@
 package compiler
 
 import (
-	"fmt"
-	"strings"
+	"fmt" // Re-added fmt import for error messages in applyRules
+	"go/ast"
+	"log"
+	"regexp" // Re-added regexp import for applyRules
 
 	"github.com/origadmin/adptool/internal/config"
+	"github.com/origadmin/adptool/internal/interfaces"
+	rulesPkg "github.com/origadmin/adptool/internal/rules"
 )
 
-// CompiledConfig represents the fully resolved and flattened configuration after the compile stage.
-// It's optimized for quick lookup during the apply stage.
-type CompiledConfig struct {
-	// Global rules (after variable substitution)
-	GlobalTypes     *config.TypeRuleSet
-	GlobalFunctions *config.FuncRule
-	GlobalVariables *config.VarRule
-	GlobalConstants *config.ConstRule
+// compiledRules stores the transformation rules compiled from the config.
+// It maps original names to a slice of rulesPkg.RenameRule.
+type compiledRules map[string][]rulesPkg.RenameRule
 
-	// Package-specific overrides (after variable substitution, not merged with global)
-	Packages map[string]*CompiledPackage
-
-	// Global resolved variables
-	ResolvedVars map[string]string
-
-	// Default modes for rule merging
-	DefaultModes *config.Mode
+// realReplacer implements the interfaces.Replacer interface
+// and applies actual transformation rules based on the compiled configuration.
+type realReplacer struct {
+	rules compiledRules
 }
 
-// CompiledPackage holds compiled rules and resolved variables for a specific package.
-type CompiledPackage struct {
-	Import string
-	Alias  string
-
-	// Package-specific rules (after variable substitution, not merged with global)
-	Types     *config.TypeRuleSet
-	Functions *config.FuncRule
-	Variables *config.VarRule
-	Constants *config.ConstRule
-
-	ResolvedVars map[string]string // Resolved for this package
-}
-
-// Compile processes the raw Config and produces a CompiledConfig.
-// This stage resolves variables and merges hierarchical rules.
-func Compile(cfg *config.Config) (*CompiledConfig, error) {
-	compiled := &CompiledConfig{
-		Packages: make(map[string]*CompiledPackage),
-	}
-
-	// Set default modes from config, or use hardcoded defaults if not specified
-	compiled.DefaultModes = &config.Mode{
-		Strategy: "replace",
-		Prefix:   "append",
-		Suffix:   "append",
-		Explicit: "merge",
-		Regex:    "merge",
-		Ignores:  "merge",
-	}
-	// Override with user-defined defaults
-	if cfg.Defaults != nil && cfg.Defaults.Mode != nil {
-		if cfg.Defaults.Mode.Strategy != "" {
-			compiled.DefaultModes.Strategy = cfg.Defaults.Mode.Strategy
-		}
-		if cfg.Defaults.Mode.Prefix != "" {
-			compiled.DefaultModes.Prefix = cfg.Defaults.Mode.Prefix
-		}
-		if cfg.Defaults.Mode.Suffix != "" {
-			compiled.DefaultModes.Suffix = cfg.Defaults.Mode.Suffix
-		}
-		if cfg.Defaults.Mode.Explicit != "" {
-			compiled.DefaultModes.Explicit = cfg.Defaults.Mode.Explicit
-		}
-		if cfg.Defaults.Mode.Regex != "" {
-			compiled.DefaultModes.Regex = cfg.Defaults.Mode.Regex
-		}
-		if cfg.Defaults.Mode.Ignores != "" {
-			compiled.DefaultModes.Ignores = cfg.Defaults.Mode.Ignores
-		}
-	}
-
-	// 1. Resolve global variables
-	globalPropsMap := convertPropsToMap(cfg.Props)
-	globalResolvedVars, err := resolveVars(globalPropsMap, nil, nil) // No parent vars, no stack
-	if err != nil {
-		return nil, fmt.Errorf("failed to resolve global variables: %w", err)
-	}
-	compiled.ResolvedVars = globalResolvedVars
-
-	// 2. Compile global rules (only variable substitution, no merging here)
-	compiled.GlobalTypes, err = compileTypeRuleSet(cfg.Types, globalResolvedVars)
-	if err != nil {
-		return nil, fmt.Errorf("failed to compile global types rules: %w", err)
-	}
-	compiled.GlobalFunctions, err = compileFuncRuleSet(cfg.Functions, globalResolvedVars)
-	if err != nil {
-		return nil, fmt.Errorf("failed to compile global functions rules: %w", err)
-	}
-	compiled.GlobalVariables, err = compileVarRuleSet(cfg.Variables, globalResolvedVars)
-	if err != nil {
-		return nil, fmt.Errorf("failed to compile global variables rules: %w", err)
-	}
-	compiled.GlobalConstants, err = compileConstRuleSet(cfg.Constants, globalResolvedVars)
-	if err != nil {
-		return nil, fmt.Errorf("failed to compile global constants rules: %w", err)
-	}
-
-	// 3. Compile package-specific rules (only variable substitution, no merging with global here)
-	for _, pkgCfg := range cfg.Packages {
-		pkgCompiled := &CompiledPackage{
-			Import: pkgCfg.Import,
-			Alias:  pkgCfg.Alias,
-		}
-
-		// Resolve package variables (inherits from global)
-		pkgPropsMap := convertPropsToMap(pkgCfg.Props)
-		pkgResolvedVars, err := resolveVars(pkgPropsMap, globalResolvedVars, nil)
-		if err != nil {
-			return nil, fmt.Errorf("failed to resolve variables for package %s: %w", pkgCfg.Import, err)
-		}
-		pkgCompiled.ResolvedVars = pkgResolvedVars
-
-		// Compile package rules (only variable substitution)
-		pkgCompiled.Types, err = compileTypeRuleSet(pkgCfg.Types, pkgResolvedVars)
-		if err != nil {
-			return nil, fmt.Errorf("failed to compile types rules for package %s: %w", pkgCfg.Import, err)
-		}
-		pkgCompiled.Functions, err = compileFuncRuleSet(pkgCfg.Functions, pkgResolvedVars)
-		if err != nil {
-			return nil, fmt.Errorf("failed to compile functions rules for package %s: %w", pkgCfg.Import, err)
-		}
-		pkgCompiled.Variables, err = compileVarRuleSet(pkgCfg.Variables, pkgResolvedVars)
-		if err != nil {
-			return nil, fmt.Errorf("failed to compile variables rules for package %s: %w", pkgCfg.Import, err)
-		}
-		pkgCompiled.Constants, err = compileConstRuleSet(pkgCfg.Constants, pkgResolvedVars)
-		if err != nil {
-			return nil, fmt.Errorf("failed to compile constants rules for package %s: %w", pkgCfg.Import, err)
-		}
-
-		compiled.Packages[pkgCfg.Import] = pkgCompiled
-	}
-
-	return compiled, nil
-}
-
-// convertPropsToMap converts a slice of PropsEntry to a map[string]string.
-func convertPropsToMap(props []*config.PropsEntry) map[string]string {
-	propMap := make(map[string]string)
-	for _, p := range props {
-		propMap[p.Name] = p.Value
-	}
-	return propMap
-}
-
-// resolveVars resolves compile-time variables recursively.
-// It detects circular dependencies and handles variable substitution.
-func resolveVars(localVars map[string]string, parentResolvedVars map[string]string, resolutionStack map[string]bool) (map[string]string, error) {
-	if resolutionStack == nil {
-		resolutionStack = make(map[string]bool)
-	}
-
-	resolved := make(map[string]string)
-
-	// Copy parent resolved vars first
-	for k, v := range parentResolvedVars {
-		resolved[k] = v
-	}
-
-	for k, v := range localVars {
-		if resolutionStack[k] {
-			return nil, fmt.Errorf("circular dependency detected for variable: %s", k)
-		}
-		resolutionStack[k] = true
-
-		// Parse and substitute variables in the current value
-		parsedValue, err := parseAndSubstitute(v, resolved, resolutionStack) // Pass 'resolved' for already resolved vars in current scope
-		if err != nil {
-			return nil, fmt.Errorf("failed to resolve variable %s: %w", k, err)
-		}
-		resolved[k] = parsedValue
-
-		delete(resolutionStack, k)
-	}
-
-	return resolved, nil
-}
-
-// parseAndSubstitute parses a string for ${...} variables and substitutes them.
-// It recursively calls resolveVars for nested variables.
-func parseAndSubstitute(s string, resolvedVars map[string]string, resolutionStack map[string]bool) (string, error) {
-	var builder strings.Builder
-	start := 0
-
-	for {
-		idx := strings.Index(s[start:], "${")
-		if idx == -1 {
-			builder.WriteString(s[start:])
-			break
-		}
-
-		builder.WriteString(s[start : start+idx])
-		varStart := start + idx
-		varEnd := strings.Index(s[varStart:], "}")
-		if varEnd == -1 {
-			return "", fmt.Errorf("unclosed variable placeholder in: %s", s[varStart:])
-		}
-
-		varName := s[varStart+2 : varStart+varEnd]
-
-		if resolvedVal, ok := resolvedVars[varName]; ok {
-			builder.WriteString(resolvedVal)
+// Apply applies the transformation rules to the given AST node.
+func (r *realReplacer) Apply(node ast.Node) ast.Node {
+	switch n := node.(type) {
+	case *ast.Ident:
+		log.Printf("Apply: Processing identifier: %s", n.Name)
+		if rulesToApply, ok := r.rules[n.Name]; ok {
+			log.Printf("Apply: Found rules for %s: %+v", n.Name, rulesToApply)
+			// Apply rules to the identifier's name
+			newName, err := applyRules(n.Name, rulesToApply) // Use applyRules
+			if err != nil {
+				log.Printf("Error applying rules to identifier %s: %v", n.Name, err)
+				return node // Return original node on error
+			}
+			if newName != n.Name {
+				n.Name = newName // Modify the identifier's name
+				log.Printf("Transformed identifier %s to %s", node, newName)
+			}
 		} else {
-			return "", fmt.Errorf("undefined variable: %s", varName)
+			log.Printf("Apply: No rules found for identifier: %s", n.Name)
 		}
-
-		start = varStart + varEnd + 1
+	// TODO: Add more cases for other AST node types if needed (e.g., *ast.FuncDecl, *ast.TypeSpec)
+	// For now, we focus on ast.Ident as it's the most common target for renaming.
+	default:
+		// log.Printf("Real replacer applied to node: %T", node) // Too verbose
 	}
-
-	return builder.String(), nil
+	return node
 }
 
-// compileRuleSet performs variable substitution on a RuleSet.
-func compileRuleSet(rs *config.RuleSet, resolvedVars map[string]string) (*config.RuleSet, error) {
-	if rs == nil {
-		return &config.RuleSet{
-			Strategy: []string{},
-			Explicit: []*config.ExplicitRule{},
-			Regex:    []*config.RegexRule{},
-			Ignores:  []string{},
-		}, nil
-	}
+// Compile takes a configuration and returns a Replacer instance.
+func Compile(cfg *config.Config) interfaces.Replacer {
+	log.Printf("Compile: Received config: %+v", cfg)
 
-	// Create a copy to avoid modifying the original (if it's a parent RuleSet)
-	copiedRs := &config.RuleSet{
-		Strategy:     make([]string, len(rs.Strategy)),
-		Prefix:       rs.Prefix,
-		PrefixMode:   rs.PrefixMode,
-		Suffix:       rs.Suffix,
-		SuffixMode:   rs.SuffixMode,
-		Explicit:     make([]*config.ExplicitRule, len(rs.Explicit)),
-		ExplicitMode: rs.ExplicitMode,
-		Regex:        make([]*config.RegexRule, len(rs.Regex)),
-		RegexMode:    rs.RegexMode,
-		Ignores:      make([]string, len(rs.Ignores)),
-		IgnoresMode:  rs.IgnoresMode,
-	}
+	rules := make(compiledRules)
 
-	// Deep copy for slices and pointers
-	copy(copiedRs.Strategy, rs.Strategy)
-	copy(copiedRs.Ignores, rs.Ignores)
-
-	for i, r := range rs.Explicit {
-		copiedRs.Explicit[i] = &config.ExplicitRule{From: r.From, To: r.To}
-	}
-	for i, r := range rs.Regex {
-		copiedRs.Regex[i] = &config.RegexRule{Pattern: r.Pattern, Replace: r.Replace}
-	}
-
-	// Handle the new nested Transform struct
-	if rs.Transforms != nil {
-		copiedRs.Transforms = &config.Transform{
-			Before: rs.Transforms.Before,
-			After:  rs.Transforms.After,
+	// Helper to process rules from config sections
+	processConfigRules := func(cfgRules interface {
+		IsDisabled() bool
+		GetName() string
+		GetRuleSet() *config.RuleSet
+	}) {
+		if cfgRules.IsDisabled() {
+			return
+		}
+		name := cfgRules.GetName()
+		ruleSet := cfgRules.GetRuleSet()
+		log.Printf("Compile: Processing rule for %s, RuleSet: %+v", name, ruleSet)
+		if ruleSet != nil {
+			rules[name] = rulesPkg.ConvertRuleSetToRenameRules(ruleSet) // Use rulesPkg.ConvertRuleSetToRenameRules
 		}
 	}
 
-	// Substitute variables in string fields
-	var err error
-	copiedRs.Prefix, err = substituteString(copiedRs.Prefix, resolvedVars)
-	if err != nil {
-		return nil, err
+	// Process global rules
+	for _, t := range cfg.Types {
+		processConfigRules(t)
 	}
-	copiedRs.Suffix, err = substituteString(copiedRs.Suffix, resolvedVars)
-	if err != nil {
-		return nil, err
+	for _, f := range cfg.Functions {
+		processConfigRules(f)
 	}
-
-	// Substitute variables in the new Transform struct
-	if copiedRs.Transforms != nil {
-		copiedRs.Transforms.Before, err = substituteString(copiedRs.Transforms.Before, resolvedVars)
-		if err != nil {
-			return nil, err
-		}
-		copiedRs.Transforms.After, err = substituteString(copiedRs.Transforms.After, resolvedVars)
-		if err != nil {
-			return nil, err
-		}
+	for _, v := range cfg.Variables {
+		processConfigRules(v)
+	}
+	for _, c := range cfg.Constants {
+		processConfigRules(c)
 	}
 
-	// Substitute variables in ExplicitRule and RegexRule fields
-	for _, r := range copiedRs.Explicit {
-		r.From, err = substituteString(r.From, resolvedVars)
-		if err != nil {
-			return nil, err
+	// Process package-specific rules (simplified for now, assuming direct name mapping)
+	for _, pkg := range cfg.Packages {
+		// TODO: Implement more sophisticated package-specific rule handling if needed.
+		// This might involve mapping rules based on fully qualified names.
+		for _, t := range pkg.Types {
+			processConfigRules(t)
 		}
-		r.To, err = substituteString(r.To, resolvedVars)
-		if err != nil {
-			return nil, err
+		for _, f := range pkg.Functions {
+			processConfigRules(f)
 		}
-	}
-	for _, r := range copiedRs.Regex {
-		r.Pattern, err = substituteString(r.Pattern, resolvedVars)
-		if err != nil {
-			return nil, err
+		for _, v := range pkg.Variables {
+			processConfigRules(v)
 		}
-		r.Replace, err = substituteString(r.Replace, resolvedVars)
-		if err != nil {
-			return nil, err
+		for _, c := range pkg.Constants {
+			processConfigRules(c)
 		}
 	}
 
-	return copiedRs, nil
+	return &realReplacer{rules: rules}
 }
 
-func substituteString(suffix string, vars map[string]string) (string, error) {
-	if suffix == "" {
-		return "", nil
-	}
-
-	resolvedSuffix, err := parseAndSubstitute(suffix, vars, map[string]bool{})
-	if err != nil {
-		return "", err
-	}
-
-	return resolvedSuffix, nil
-}
-
-// compileTypeRuleSet performs variable substitution on a TypeRuleSet.
-func compileTypeRuleSet(trs []*config.TypeRule, resolvedVars map[string]string) (*config.TypeRuleSet, error) {
-	if trs == nil {
-		return &config.TypeRuleSet{}, nil
-	}
-
-	var compiledTrs config.TypeRuleSet
-
-	for _, tr := range trs {
-		compiledTr := &config.TypeRule{
-			Name:     tr.Name,
-			Disabled: tr.Disabled,
-			Kind:     tr.Kind,
-			Pattern:  tr.Pattern,
-		}
-
-		// Compile the base RuleSet part
-		baseRuleSet, err := compileRuleSet(&tr.RuleSet, resolvedVars)
-		if err != nil {
-			return nil, err
-		}
-		compiledTr.RuleSet = *baseRuleSet
-
-		// Compile nested methods rules
-		compiledMethods := []*config.MemberRule{}
-		for _, method := range tr.Methods {
-			compiledMethod := &config.MemberRule{
-				Name:     method.Name,
-				Disabled: method.Disabled,
+// applyRules applies a set of rename rules to a given name and returns the result.
+// This function is copied from internal/generator/generator.go for now.
+// Ideally, this logic would be in a shared utility package or the compiler would
+// directly implement the rule application without copying.
+func applyRules(name string, rules []rulesPkg.RenameRule) (string, error) {
+	currentName := name
+	for _, rule := range rules {
+		switch rule.Type {
+		case "explicit":
+			if name == rule.From {
+				return rule.To, nil // Explicit rule is final
 			}
-			methodRuleSet, err := compileRuleSet(&method.RuleSet, resolvedVars)
+		case "prefix":
+			currentName = rule.Value + currentName
+		case "suffix":
+			currentName = currentName + rule.Value
+		case "regex":
+			re, err := regexp.Compile(rule.Pattern)
 			if err != nil {
-				return nil, err
+				return "", fmt.Errorf("invalid regex pattern '%s': %w", rule.Pattern, err)
 			}
-			compiledMethod.RuleSet = *methodRuleSet
-			compiledMethods = append(compiledMethods, compiledMethod)
+			currentName = re.ReplaceAllString(currentName, rule.Replace)
 		}
-		compiledTr.Methods = compiledMethods
-
-		// Compile nested fields rules
-		compiledFields := []*config.MemberRule{}
-		for _, field := range tr.Fields {
-			compiledField := &config.MemberRule{
-				Name:     field.Name,
-				Disabled: field.Disabled,
-			}
-			fieldRuleSet, err := compileRuleSet(&field.RuleSet, resolvedVars)
-			if err != nil {
-				return nil, err
-			}
-			compiledField.RuleSet = *fieldRuleSet
-			compiledFields = append(compiledFields, compiledField)
-		}
-		compiledTr.Fields = compiledFields
-
-		compiledTrs = append(compiledTrs, compiledTr)
 	}
-
-	return &compiledTrs, nil
-}
-
-func compileFuncRuleSet(frs []*config.FuncRule, vars map[string]string) (*config.FuncRule, error) {
-	// TODO: Implement this
-	panic("not implemented")
-}
-
-func compileConstRuleSet(crs []*config.ConstRule, vars map[string]string) (*config.ConstRule, error) {
-	// TODO: Implement this
-	panic("not implemented")
-}
-
-func compileVarRuleSet(vrs []*config.VarRule, vars map[string]string) (*config.VarRule, error) {
-	// TODO: Implement this
-	panic("not implemented")
+	return currentName, nil
 }
