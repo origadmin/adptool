@@ -71,11 +71,12 @@ func buildAdapterSpec(cfg *config.Config) (*AdapterSpec, error) {
 
 // Helper function to process different rule types
 func processRules[T interface {
+	IsDisabled() bool
 	GetName() string
 	GetRuleSet() *config.RuleSet
 }](rules []T, itemType string, spec *AdapterSpec) {
 	for _, rule := range rules {
-		if rule.GetRuleSet().Disabled {
+		if rule.IsDisabled() {
 			continue
 		}
 		adaptedItem := AdaptedItem{

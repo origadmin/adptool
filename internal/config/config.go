@@ -84,6 +84,10 @@ func (t *TypeRule) GetRuleSet() *RuleSet {
 	return &t.RuleSet
 }
 
+func (t *TypeRule) IsDisabled() bool {
+	return t.Disabled
+}
+
 // TypeRuleSet defines a set of TypeRule.
 type TypeRuleSet []*TypeRule
 
@@ -102,6 +106,10 @@ func (f *FuncRule) GetRuleSet() *RuleSet {
 	return &f.RuleSet
 }
 
+func (f *FuncRule) IsDisabled() bool {
+	return f.Disabled
+}
+
 // VarRule defines the set of rules for a single variable.
 type VarRule struct {
 	Name     string `yaml:"name" mapstructure:"name" json:"name" toml:"name"`
@@ -117,6 +125,10 @@ func (v *VarRule) GetRuleSet() *RuleSet {
 	return &v.RuleSet
 }
 
+func (v *VarRule) IsDisabled() bool {
+	return v.Disabled
+}
+
 // ConstRule defines the set of rules for a single constant.
 type ConstRule struct {
 	Name     string `yaml:"name" mapstructure:"name" json:"name" toml:"name"`
@@ -130,6 +142,10 @@ func (c *ConstRule) GetName() string {
 
 func (c *ConstRule) GetRuleSet() *RuleSet {
 	return &c.RuleSet
+}
+
+func (c *ConstRule) IsDisabled() bool {
+	return c.Disabled
 }
 
 // MemberRule defines the set of rules for a type member (method or field).
@@ -203,11 +219,4 @@ type Mode struct {
 	Explicit string `yaml:"explicit,omitempty" mapstructure:"explicit,omitempty" json:"explicit,omitempty" toml:"explicit,omitempty"`
 	Regex    string `yaml:"regex,omitempty" mapstructure:"regex,omitempty" json:"regex,omitempty" toml:"regex,omitempty"`
 	Ignores  string `yaml:"ignores,omitempty" mapstructure:"ignores,omitempty" json:"ignores,omitempty" toml:"ignores,omitempty"`
-}
-
-// Merge combines two Config objects.
-func Merge(base *Config, overlay *Config) (*Config, error) {
-	// This is a placeholder for the actual merge logic.
-	// A real implementation would be much more sophisticated.
-	return base, nil
 }
