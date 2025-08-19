@@ -1,0 +1,258 @@
+package config
+
+import (
+	"fmt"
+	"path/filepath"
+	"strings"
+
+	"github.com/origadmin/adptool/internal/interfaces"
+	"github.com/origadmin/adptool/internal/replacer"
+)
+
+// CompileConfig compiles the configuration into a form that can be used for generation.
+func CompileConfig(cfg *Config) (*CompiledConfig, error) {
+	if cfg == nil {
+		return nil, fmt.Errorf("config cannot be nil")
+	}
+
+	// Create a new compiled config
+	compiled := &CompiledConfig{
+		PackageName: cfg.OutputPackageName,
+		Packages:    make([]*CompiledPackage, 0, len(cfg.Packages)),
+	}
+
+	// If no output package name is specified, use "adp" as default
+	if compiled.PackageName == "" {
+		compiled.PackageName = "adp"
+	}
+
+	// Process packages
+	for _, pkg := range cfg.Packages {
+		compiledPkg := &CompiledPackage{
+			ImportPath: pkg.Import,
+			ImportAlias: pkg.Alias,
+		}
+
+		// If no alias is specified, use the last part of the import path
+		if compiledPkg.ImportAlias == "" {
+			parts := strings.Split(pkg.Import, "/")
+			compiledPkg.ImportAlias = parts[len(parts)-1]
+		}
+
+		compiled.Packages = append(compiled.Packages, compiledPkg)
+	}
+
+	// Create replacer
+	r := replacer.New()
+
+	// Add global ignores
+	for _, ignore := range cfg.Ignores {
+		r.AddIgnore(ignore)
+	}
+
+	// Process types
+	for _, typeRule := range cfg.Types {
+		if typeRule.IsDisabled() {
+			continue
+		}
+		processRuleSet(r, typeRule.GetName(), typeRule.GetRuleSet(), cfg.Defaults)
+
+		// Process methods
+		for _, methodRule := range typeRule.Methods {
+			if methodRule.Disabled {
+				continue
+			}
+			fullName := fmt.Sprintf("%s.%s", typeRule.GetName(), methodRule.Name)
+			processRuleSet(r, fullName, &methodRule.RuleSet, cfg.Defaults)
+		}
+
+		// Process fields
+		for _, fieldRule := range typeRule.Fields {
+			if fieldRule.Disabled {
+				continue
+			}
+			fullName := fmt.Sprintf("%s.%s", typeRule.GetName(), fieldRule.Name)
+			processRuleSet(r, fullName, &fieldRule.RuleSet, cfg.Defaults)
+		}
+	}
+
+	// Process functions
+	for _, funcRule := range cfg.Functions {
+		if funcRule.IsDisabled() {
+			continue
+		}
+		processRuleSet(r, funcRule.GetName(), funcRule.GetRuleSet(), cfg.Defaults)
+	}
+
+	// Process variables
+	for _, varRule := range cfg.Variables {
+		if varRule.IsDisabled() {
+			continue
+		}
+		processRuleSet(r, varRule.GetName(), varRule.GetRuleSet(), cfg.Defaults)
+	}
+
+	// Process constants
+	for _, constRule := range cfg.Constants {
+		if constRule.IsDisabled() {
+			continue
+		}
+		processRuleSet(r, constRule.GetName(), constRule.GetRuleSet(), cfg.Defaults)
+	}
+
+	// Process package-specific rules
+	for _, pkg := range cfg.Packages {
+		// Process package types
+		for _, typeRule := range pkg.Types {
+			if typeRule.IsDisabled() {
+				continue
+			}
+			fullName := fmt.Sprintf("%s.%s", pkg.Alias, typeRule.GetName())
+			processRuleSet(r, fullName, typeRule.GetRuleSet(), cfg.Defaults)
+
+			// Process methods
+			for _, methodRule := range typeRule.Methods {
+				if methodRule.Disabled {
+					continue
+				}
+				methodFullName := fmt.Sprintf("%s.%s", fullName, methodRule.Name)
+				processRuleSet(r, methodFullName, &methodRule.RuleSet, cfg.Defaults)
+			}
+
+			// Process fields
+			for _, fieldRule := range typeRule.Fields {
+				if fieldRule.Disabled {
+					continue
+				}
+				fieldFullName := fmt.Sprintf("%s.%s", fullName, fieldRule.Name)
+				processRuleSet(r, fieldFullName, &fieldRule.RuleSet, cfg.Defaults)
+			}
+		}
+
+		// Process package functions
+		for _, funcRule := range pkg.Functions {
+			if funcRule.IsDisabled() {
+				continue
+			}
+			fullName := fmt.Sprintf("%s.%s", pkg.Alias, funcRule.GetName())
+			processRuleSet(r, fullName, funcRule.GetRuleSet(), cfg.Defaults)
+		}
+
+		// Process package variables
+		for _, varRule := range pkg.Variables {
+			if varRule.IsDisabled() {
+				continue
+			}
+			fullName := fmt.Sprintf("%s.%s", pkg.Alias, varRule.GetName())
+			processRuleSet(r, fullName, varRule.GetRuleSet(), cfg.Defaults)
+		}
+
+		// Process package constants
+		for _, constRule := range pkg.Constants {
+			if constRule.IsDisabled() {
+				continue
+			}
+			fullName := fmt.Sprintf("%s.%s", pkg.Alias, constRule.GetName())
+			processRuleSet(r, fullName, constRule.GetRuleSet(), cfg.Defaults)
+		}
+	}
+
+	compiled.Replacer = r
+	return compiled, nil
+}
+
+// processRuleSet applies the rules from a RuleSet to the replacer.
+func processRuleSet(r interfaces.Replacer, name string, rs *RuleSet, defaults *Defaults) {
+	if rs == nil {
+		return
+	}
+
+	// Apply prefix if specified
+	if rs.Prefix != "" {
+		mode := rs.PrefixMode
+		if mode == "" && defaults != nil && defaults.Mode != nil {
+			mode = defaults.Mode.Prefix
+		}
+		r.AddPrefix(name, rs.Prefix, mode)
+	}
+
+	// Apply suffix if specified
+	if rs.Suffix != "" {
+		mode := rs.SuffixMode
+		if mode == "" && defaults != nil && defaults.Mode != nil {
+			mode = defaults.Mode.Suffix
+		}
+		r.AddSuffix(name, rs.Suffix, mode)
+	}
+
+	// Apply explicit replacements
+	if len(rs.Explicit) > 0 {
+		mode := rs.ExplicitMode
+		if mode == "" && defaults != nil && defaults.Mode != nil {
+			mode = defaults.Mode.Explicit
+		}
+		for _, rule := range rs.Explicit {
+			r.AddExplicit(name, rule.From, rule.To, mode)
+		}
+	}
+
+	// Apply regex replacements
+	if len(rs.Regex) > 0 {
+		mode := rs.RegexMode
+		if mode == "" && defaults != nil && defaults.Mode != nil {
+			mode = defaults.Mode.Regex
+		}
+		for _, rule := range rs.Regex {
+			r.AddRegex(name, rule.Pattern, rule.Replace, mode)
+		}
+	}
+
+	// Apply ignores
+	if len(rs.Ignores) > 0 {
+		mode := rs.IgnoresMode
+		if mode == "" && defaults != nil && defaults.Mode != nil {
+			mode = defaults.Mode.Ignores
+		}
+		for _, ignore := range rs.Ignores {
+			r.AddIgnore(ignore)
+		}
+	}
+
+	// Apply transforms
+	if rs.Transforms != nil {
+		r.AddTransform(name, rs.Transforms.Before, rs.Transforms.After)
+	} else if rs.TransformBefore != "" || rs.TransformAfter != "" {
+		// Support deprecated transform fields
+		r.AddTransform(name, rs.TransformBefore, rs.TransformAfter)
+	}
+}
+
+// GetImportPath returns the import path for the given package.
+func (c *CompiledConfig) GetImportPath(alias string) (string, bool) {
+	for _, pkg := range c.Packages {
+		if pkg.ImportAlias == alias {
+			return pkg.ImportPath, true
+		}
+	}
+	return "", false
+}
+
+// GetImportAlias returns the alias for the given import path.
+func (c *CompiledConfig) GetImportAlias(importPath string) (string, bool) {
+	for _, pkg := range c.Packages {
+		if pkg.ImportPath == importPath {
+			return pkg.ImportAlias, true
+		}
+	}
+	return "", false
+}
+
+// GetPackageName returns the name of the package to be generated.
+func (c *CompiledConfig) GetPackageName() string {
+	return c.PackageName
+}
+
+// GetReplacer returns the replacer for the compiled config.
+func (c *CompiledConfig) GetReplacer() interfaces.Replacer {
+	return c.Replacer
+}

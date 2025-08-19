@@ -4,8 +4,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/origadmin/adptool/internal/interfaces"
 	"gopkg.in/yaml.v3"
+
+	"github.com/origadmin/adptool/internal/interfaces"
 )
 
 // New creates a new, fully initialized Config object.
@@ -65,6 +66,10 @@ type Config struct {
 type CompiledPackage struct {
 	ImportPath  string
 	ImportAlias string
+	Types       []*TypeRule  // Types defined in this package
+	Functions   []*FuncRule  // Functions defined in this package
+	Variables   []*VarRule   // Variables defined in this package
+	Constants   []*ConstRule // Constants defined in this package
 }
 
 // CompiledConfig holds all the compiled information needed for generation.
@@ -168,6 +173,18 @@ type MemberRule struct {
 	Name     string `yaml:"name" mapstructure:"name" json:"name" toml:"name"`
 	Disabled bool   `yaml:"disabled,omitempty" mapstructure:"disabled,omitempty" json:"disabled,omitempty" toml:"disabled,omitempty"`
 	RuleSet  `yaml:",inline" mapstructure:",squash" json:",inline" toml:",inline"`
+}
+
+func (m *MemberRule) GetName() string {
+	return m.Name
+}
+
+func (m *MemberRule) GetRuleSet() *RuleSet {
+	return &m.RuleSet
+}
+
+func (m *MemberRule) IsDisabled() bool {
+	return m.Disabled
 }
 
 // Transform defines the before and after template strings for renaming.
