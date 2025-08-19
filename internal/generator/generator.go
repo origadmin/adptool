@@ -29,12 +29,13 @@ func (v replacerVisitor) Visit(n ast.Node) ast.Visitor {
 
 // qualifyType recursively qualifies ast.Ident nodes within an ast.Expr
 // with the given package alias if they are not already qualified.
-func qualifyType(expr ast.Expr, pkgAlias string) ast.Expr {
+// definedTypes is a map of type names that are defined in the current package.
+func qualifyType(expr ast.Expr, pkgAlias string, definedTypes map[string]bool) ast.Expr {
 	switch t := expr.(type) {
 	case *ast.Ident:
-		// Only qualify if it's not already qualified (i.e., not a SelectorExpr)
-		// and it's an exported identifier.
-		if t.IsExported() {
+		// Only qualify if it's not already qualified (i.e., not a SelectorExpr),
+		// it's an exported identifier, and it's not defined in the current package.
+		if t.IsExported() && !definedTypes[t.Name] {
 			return &ast.SelectorExpr{
 				X:   ast.NewIdent(pkgAlias),
 				Sel: t,
@@ -42,27 +43,27 @@ func qualifyType(expr ast.Expr, pkgAlias string) ast.Expr {
 		}
 		return t
 	case *ast.StarExpr:
-		t.X = qualifyType(t.X, pkgAlias)
+		t.X = qualifyType(t.X, pkgAlias, definedTypes)
 		return t
 	case *ast.ArrayType:
-		t.Elt = qualifyType(t.Elt, pkgAlias)
+		t.Elt = qualifyType(t.Elt, pkgAlias, definedTypes)
 		return t
 	case *ast.MapType:
-		t.Key = qualifyType(t.Key, pkgAlias)
-		t.Value = qualifyType(t.Value, pkgAlias)
+		t.Key = qualifyType(t.Key, pkgAlias, definedTypes)
+		t.Value = qualifyType(t.Value, pkgAlias, definedTypes)
 		return t
 	case *ast.ChanType:
-		t.Value = qualifyType(t.Value, pkgAlias)
+		t.Value = qualifyType(t.Value, pkgAlias, definedTypes)
 		return t
 	case *ast.FuncType:
 		if t.Params != nil {
 			for _, field := range t.Params.List {
-				field.Type = qualifyType(field.Type, pkgAlias)
+				field.Type = qualifyType(field.Type, pkgAlias, definedTypes)
 			}
 		}
 		if t.Results != nil {
 			for _, field := range t.Results.List {
-				field.Type = qualifyType(field.Type, pkgAlias)
+				field.Type = qualifyType(field.Type, pkgAlias, definedTypes)
 			}
 		}
 		return t
@@ -71,7 +72,7 @@ func qualifyType(expr ast.Expr, pkgAlias string) ast.Expr {
 		if t.Methods != nil {
 			for _, field := range t.Methods.List {
 				if funcType, ok := field.Type.(*ast.FuncType); ok {
-					field.Type = qualifyType(funcType, pkgAlias)
+					field.Type = qualifyType(funcType, pkgAlias, definedTypes)
 				}
 			}
 		}
@@ -80,14 +81,20 @@ func qualifyType(expr ast.Expr, pkgAlias string) ast.Expr {
 		// Struct fields' types need to be qualified
 		if t.Fields != nil {
 			for _, field := range t.Fields.List {
-				field.Type = qualifyType(field.Type, pkgAlias)
+				field.Type = qualifyType(field.Type, pkgAlias, definedTypes)
 			}
 		}
 		return t
 	case *ast.SelectorExpr:
-		// If it's already a SelectorExpr, we don't need to qualify it further.
-		// However, its X (package part) might need qualification if it's a nested selector.
-		// For simplicity, we'll assume top-level qualification for now.
+		// If it's already a SelectorExpr, check if it's a reference to a type from the source package
+		// that we've defined locally
+		if ident, ok := t.X.(*ast.Ident); ok && ident.Name == pkgAlias {
+			typeName := t.Sel.Name
+			if definedTypes[typeName] {
+				// Replace with local alias
+				return ast.NewIdent(typeName)
+			}
+		}
 		return t
 	default:
 		return expr
@@ -122,6 +129,9 @@ func Generate(compiledCfg *config.CompiledConfig, outputFilePath string) error {
 		funcDecls  []ast.Decl
 	}
 	var allPackageDecls = make(map[string]*packageDecls)
+	
+	// Initialize definedTypes map to collect all defined types
+	definedTypes := make(map[string]bool)
 
 	// Process each source package and generate declarations
 	for _, pkg := range compiledCfg.Packages {
@@ -153,6 +163,32 @@ func Generate(compiledCfg *config.CompiledConfig, outputFilePath string) error {
 			}
 		}
 
+		// First pass: collect all type declarations
+		for _, file := range sourcePkg.Syntax {
+			for _, decl := range file.Decls {
+				if genDecl, ok := decl.(*ast.GenDecl); ok && genDecl.Tok == token.TYPE {
+					for _, spec := range genDecl.Specs {
+						if typeSpec, ok := spec.(*ast.TypeSpec); ok && typeSpec.Name.IsExported() {
+							if allPackageDecls[pkg.ImportAlias] == nil {
+								allPackageDecls[pkg.ImportAlias] = &packageDecls{}
+							}
+							allPackageDecls[pkg.ImportAlias].typeSpecs = append(allPackageDecls[pkg.ImportAlias].typeSpecs, &ast.TypeSpec{
+								Name: typeSpec.Name,
+								Type: &ast.SelectorExpr{
+									X:   ast.NewIdent(pkg.ImportAlias),
+									Sel: typeSpec.Name,
+								},
+								Assign: token.Pos(1), // Set non-zero position to make it an alias type (type A = B)
+							})
+							// Add to definedTypes map
+							definedTypes[typeSpec.Name.Name] = true
+						}
+					}
+				}
+			}
+		}
+
+		// Second pass: collect other declarations
 		for _, file := range sourcePkg.Syntax {
 			fileInfo := fset.File(file.Pos())
 			if fileInfo != nil {
@@ -189,7 +225,7 @@ func Generate(compiledCfg *config.CompiledConfig, outputFilePath string) error {
 						}
 						funcDecl := &ast.FuncDecl{
 							Name: d.Name,
-							Type: qualifyType(d.Type, pkg.ImportAlias).(*ast.FuncType), // Qualify the function type
+							Type: qualifyType(d.Type, pkg.ImportAlias, definedTypes).(*ast.FuncType), // Qualify the function type
 							Body: &ast.BlockStmt{List: results},
 						}
 						if allPackageDecls[pkg.ImportAlias] == nil {
@@ -198,21 +234,12 @@ func Generate(compiledCfg *config.CompiledConfig, outputFilePath string) error {
 						allPackageDecls[pkg.ImportAlias].funcDecls = append(allPackageDecls[pkg.ImportAlias].funcDecls, funcDecl)
 					}
 				case *ast.GenDecl:
+					if d.Tok == token.TYPE {
+						// Already processed in the first pass
+						continue
+					}
 					for _, spec := range d.Specs {
 						switch s := spec.(type) {
-						case *ast.TypeSpec:
-							if s.Name.IsExported() {
-								if allPackageDecls[pkg.ImportAlias] == nil {
-									allPackageDecls[pkg.ImportAlias] = &packageDecls{}
-								}
-								allPackageDecls[pkg.ImportAlias].typeSpecs = append(allPackageDecls[pkg.ImportAlias].typeSpecs, &ast.TypeSpec{
-									Name: s.Name,
-									Type: &ast.SelectorExpr{
-										X:   ast.NewIdent(pkg.ImportAlias),
-										Sel: s.Name,
-									},
-								})
-							}
 						case *ast.ValueSpec:
 							for _, name := range s.Names {
 								if name.IsExported() {
@@ -253,6 +280,14 @@ func Generate(compiledCfg *config.CompiledConfig, outputFilePath string) error {
 		orderedDecls = append(orderedDecls, &ast.GenDecl{Tok: token.IMPORT, Specs: finalImportSpecs})
 	}
 
+	// definedTypes has already been populated in the first pass
+
+	// Collect all declarations by type across all packages
+	var allConstSpecs []ast.Spec
+	var allVarSpecs []ast.Spec
+	var allTypeSpecs []ast.Spec
+	var allFuncDecls []ast.Decl
+
 	// Sort package aliases for consistent output
 	var sortedPackageAliases []string
 	for alias := range allPackageDecls {
@@ -262,25 +297,54 @@ func Generate(compiledCfg *config.CompiledConfig, outputFilePath string) error {
 
 	for _, alias := range sortedPackageAliases {
 		pkgDecls := allPackageDecls[alias]
-
-		// Add grouped value declarations (CONST)
-		if len(pkgDecls.constSpecs) > 0 {
-			orderedDecls = append(orderedDecls, &ast.GenDecl{Tok: token.CONST, Specs: pkgDecls.constSpecs})
+		
+		// Collect all declarations
+		allConstSpecs = append(allConstSpecs, pkgDecls.constSpecs...)
+		allVarSpecs = append(allVarSpecs, pkgDecls.varSpecs...)
+		allTypeSpecs = append(allTypeSpecs, pkgDecls.typeSpecs...)
+		
+		// Update function declarations to use local type references
+		for _, funcDecl := range pkgDecls.funcDecls {
+			if fd, ok := funcDecl.(*ast.FuncDecl); ok {
+				// Re-qualify the function type with defined types
+				fd.Type = qualifyType(fd.Type, alias, definedTypes).(*ast.FuncType)
+			}
+			allFuncDecls = append(allFuncDecls, funcDecl)
 		}
-
-		// Add grouped value declarations (VAR)
-		if len(pkgDecls.varSpecs) > 0 {
-			orderedDecls = append(orderedDecls, &ast.GenDecl{Tok: token.VAR, Specs: pkgDecls.varSpecs})
-		}
-
-		// Add grouped type declarations
-		if len(pkgDecls.typeSpecs) > 0 {
-			orderedDecls = append(orderedDecls, &ast.GenDecl{Tok: token.TYPE, Specs: pkgDecls.typeSpecs})
-		}
-
-		// Add function declarations
-		orderedDecls = append(orderedDecls, pkgDecls.funcDecls...)
 	}
+
+	// Add all const declarations in a single group with parentheses
+	if len(allConstSpecs) > 0 {
+		constDecl := &ast.GenDecl{
+			Tok:    token.CONST,
+			Lparen: token.Pos(1), // Set non-zero position to include parentheses
+			Specs:  allConstSpecs,
+		}
+		orderedDecls = append(orderedDecls, constDecl)
+	}
+
+	// Add all var declarations in a single group with parentheses
+	if len(allVarSpecs) > 0 {
+		varDecl := &ast.GenDecl{
+			Tok:    token.VAR,
+			Lparen: token.Pos(1), // Set non-zero position to include parentheses
+			Specs:  allVarSpecs,
+		}
+		orderedDecls = append(orderedDecls, varDecl)
+	}
+
+	// Add all type declarations in a single group with parentheses
+	if len(allTypeSpecs) > 0 {
+		typeDecl := &ast.GenDecl{
+			Tok:    token.TYPE,
+			Lparen: token.Pos(1), // Set non-zero position to include parentheses
+			Specs:  allTypeSpecs,
+		}
+		orderedDecls = append(orderedDecls, typeDecl)
+	}
+
+	// Add all function declarations
+	orderedDecls = append(orderedDecls, allFuncDecls...)
 
 	aliasFile.Decls = orderedDecls
 
