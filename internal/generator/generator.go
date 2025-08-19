@@ -50,18 +50,29 @@ func NewGenerator(compiledCfg *config.CompiledConfig, outputFilePath string) *Ge
 
 // Generate generates the output code.
 func (g *Generator) Generate() error {
-	outFile, err := os.Create(g.outputFilePath)
-	fmt.Printf("Attempting to create file: %s, Error: %v\n", g.outputFilePath, err)
-	if err != nil {
+	// Initialize generator state
+	g.initializeState()
+
+	// Process each source package
+	if err := g.processPackages(); err != nil {
 		return err
 	}
-	defer outFile.Close()
 
-	// Initialize maps
+	// Build the output file structure
+	g.buildOutputFile()
+
+	// Write the output file
+	return g.writeOutputFile()
+}
+
+// initializeState initializes the generator's state.
+func (g *Generator) initializeState() {
 	g.allPackageDecls = make(map[string]*packageDecls)
 	g.definedTypes = make(map[string]bool)
+}
 
-	// Process each source package and generate declarations
+// processPackages processes each source package and collects declarations.
+func (g *Generator) processPackages() error {
 	for _, pkg := range g.compiledCfg.Packages {
 		// Add the primary package being adapted to the import list
 		g.importSpecs[pkg.ImportPath] = &ast.ImportSpec{
@@ -69,175 +80,188 @@ func (g *Generator) Generate() error {
 			Name: ast.NewIdent(pkg.ImportAlias),
 		}
 
-		loadCfg := &packages.Config{
-			Mode: packages.LoadSyntax | packages.LoadTypes,
-		}
-		pkgs, err := packages.Load(loadCfg, pkg.ImportPath)
+		// Load the package
+		sourcePkg, err := g.loadPackage(pkg.ImportPath)
 		if err != nil {
 			return err
 		}
-		if len(pkgs) == 0 {
+		if sourcePkg == nil {
 			continue // Skip if package not found
 		}
-		sourcePkg := pkgs[0]
 
 		// Collect imports from the source package
-		for importPath := range sourcePkg.Imports {
-			if _, exists := g.importSpecs[importPath]; !exists {
-				g.importSpecs[importPath] = &ast.ImportSpec{
-					Path: &ast.BasicLit{Kind: token.STRING, Value: fmt.Sprintf("%q", importPath)},
-					Name: nil, // Default to no alias
-				}
+		g.collectImports(sourcePkg)
+
+		// Collect declarations from the source package
+		g.collectTypeDeclarations(sourcePkg, pkg.ImportAlias)
+		g.collectOtherDeclarations(sourcePkg, pkg.ImportAlias)
+	}
+	return nil
+}
+
+// loadPackage loads a package by its import path.
+func (g *Generator) loadPackage(importPath string) (*packages.Package, error) {
+	loadCfg := &packages.Config{
+		Mode: packages.LoadSyntax | packages.LoadTypes,
+	}
+	pkgs, err := packages.Load(loadCfg, importPath)
+	if err != nil {
+		return nil, err
+	}
+	if len(pkgs) == 0 {
+		return nil, nil // Package not found
+	}
+	return pkgs[0], nil
+}
+
+// collectImports collects imports from the source package.
+func (g *Generator) collectImports(sourcePkg *packages.Package) {
+	for importPath := range sourcePkg.Imports {
+		if _, exists := g.importSpecs[importPath]; !exists {
+			g.importSpecs[importPath] = &ast.ImportSpec{
+				Path: &ast.BasicLit{Kind: token.STRING, Value: fmt.Sprintf("%q", importPath)},
+				Name: nil, // Default to no alias
 			}
 		}
+	}
+}
 
-		// First pass: collect all type declarations
-		for _, file := range sourcePkg.Syntax {
-			for _, decl := range file.Decls {
-				if genDecl, ok := decl.(*ast.GenDecl); ok && genDecl.Tok == token.TYPE {
-					for _, spec := range genDecl.Specs {
-						if typeSpec, ok := spec.(*ast.TypeSpec); ok && typeSpec.Name.IsExported() {
-							if g.allPackageDecls[pkg.ImportAlias] == nil {
-								g.allPackageDecls[pkg.ImportAlias] = &packageDecls{}
-							}
-							g.allPackageDecls[pkg.ImportAlias].typeSpecs = append(g.allPackageDecls[pkg.ImportAlias].typeSpecs, &ast.TypeSpec{
-								Name: typeSpec.Name,
-								Type: &ast.SelectorExpr{
-									X:   ast.NewIdent(pkg.ImportAlias),
-									Sel: typeSpec.Name,
-								},
-								Assign: token.Pos(1), // Set non-zero position to make it an alias type (type A = B)
-							})
-							// Add to definedTypes map
-							g.definedTypes[typeSpec.Name.Name] = true
-						}
-					}
-				}
-			}
-		}
-
-		// Second pass: collect other declarations
-		for _, file := range sourcePkg.Syntax {
-			fileInfo := g.fset.File(file.Pos())
-			if fileInfo != nil {
-				// fmt.Printf("Processing file: %s", fileInfo.Name())
-			} else {
-				// fmt.Printf("Processing file: <unknown> (file.Pos() returned no file info)")
-			}
-			for _, decl := range file.Decls {
-				switch d := decl.(type) {
-				case *ast.FuncDecl:
-					// fmt.Printf("  Found FuncDecl: %s, Exported: %t, Recv: %v", d.Name.Name, d.Name.IsExported(), d.Recv)
-					if d.Recv == nil && d.Name.IsExported() {
-						// fmt.Printf("    Generating alias for function: %s", d.Name.Name)
-						var args []ast.Expr
-						if d.Type.Params != nil {
-							for _, param := range d.Type.Params.List {
-								for _, name := range param.Names {
-									args = append(args, name)
-								}
-							}
-						}
-						callExpr := &ast.CallExpr{
-							Fun: &ast.SelectorExpr{
-								X:   ast.NewIdent(pkg.ImportAlias),
-								Sel: d.Name,
-							},
-							Args: args,
-						}
-						var results []ast.Stmt
-						if d.Type.Results != nil && len(d.Type.Results.List) > 0 {
-							results = []ast.Stmt{&ast.ReturnStmt{Results: []ast.Expr{callExpr}}}
-						} else {
-							results = []ast.Stmt{&ast.ExprStmt{X: callExpr}}
-						}
-						funcDecl := &ast.FuncDecl{
-							Name: d.Name,
-							Type: qualifyType(d.Type, pkg.ImportAlias, g.definedTypes).(*ast.FuncType), // Qualify the function type
-							Body: &ast.BlockStmt{List: results},
-						}
-						if g.allPackageDecls[pkg.ImportAlias] == nil {
-							g.allPackageDecls[pkg.ImportAlias] = &packageDecls{}
-						}
-						g.allPackageDecls[pkg.ImportAlias].funcDecls = append(g.allPackageDecls[pkg.ImportAlias].funcDecls, funcDecl)
-					}
-				case *ast.GenDecl:
-					if d.Tok == token.TYPE {
-						// Already processed in the first pass
-						continue
-					}
-					for _, spec := range d.Specs {
-						switch s := spec.(type) {
-						case *ast.ValueSpec:
-							for _, name := range s.Names {
-								if name.IsExported() {
-									newSpec := &ast.ValueSpec{
-										Names: []*ast.Ident{name},
-										Values: []ast.Expr{
-											&ast.SelectorExpr{
-												X:   ast.NewIdent(pkg.ImportAlias),
-												Sel: name,
-											},
-										},
-									}
-									if g.allPackageDecls[pkg.ImportAlias] == nil {
-										g.allPackageDecls[pkg.ImportAlias] = &packageDecls{}
-									}
-									if d.Tok == token.VAR {
-										g.allPackageDecls[pkg.ImportAlias].varSpecs = append(g.allPackageDecls[pkg.ImportAlias].varSpecs, newSpec)
-									} else if d.Tok == token.CONST {
-										g.allPackageDecls[pkg.ImportAlias].constSpecs = append(g.allPackageDecls[pkg.ImportAlias].constSpecs, newSpec)
-									}
-								}
-							}
-						}
+// collectTypeDeclarations collects type declarations from the source package.
+func (g *Generator) collectTypeDeclarations(sourcePkg *packages.Package, importAlias string) {
+	for _, file := range sourcePkg.Syntax {
+		for _, decl := range file.Decls {
+			if genDecl, ok := decl.(*ast.GenDecl); ok && genDecl.Tok == token.TYPE {
+				for _, spec := range genDecl.Specs {
+					if typeSpec, ok := spec.(*ast.TypeSpec); ok && typeSpec.Name.IsExported() {
+						g.addTypeDeclaration(typeSpec, importAlias)
 					}
 				}
 			}
 		}
 	}
+}
 
+// addTypeDeclaration adds a type declaration to the generator's state.
+func (g *Generator) addTypeDeclaration(typeSpec *ast.TypeSpec, importAlias string) {
+	if g.allPackageDecls[importAlias] == nil {
+		g.allPackageDecls[importAlias] = &packageDecls{}
+	}
+	g.allPackageDecls[importAlias].typeSpecs = append(g.allPackageDecls[importAlias].typeSpecs, &ast.TypeSpec{
+		Name: typeSpec.Name,
+		Type: &ast.SelectorExpr{
+			X:   ast.NewIdent(importAlias),
+			Sel: typeSpec.Name,
+		},
+		Assign: token.Pos(1), // Set non-zero position to make it an alias type (type A = B)
+	})
+	// Add to definedTypes map
+	g.definedTypes[typeSpec.Name.Name] = true
+}
+
+// collectOtherDeclarations collects function, variable, and constant declarations from the source package.
+func (g *Generator) collectOtherDeclarations(sourcePkg *packages.Package, importAlias string) {
+	for _, file := range sourcePkg.Syntax {
+		for _, decl := range file.Decls {
+			switch d := decl.(type) {
+			case *ast.FuncDecl:
+				g.collectFunctionDeclaration(d, importAlias)
+			case *ast.GenDecl:
+				if d.Tok != token.TYPE { // Skip type declarations, already processed
+					g.collectValueDeclaration(d, importAlias)
+				}
+			}
+		}
+	}
+}
+
+// collectFunctionDeclaration collects a function declaration.
+func (g *Generator) collectFunctionDeclaration(funcDecl *ast.FuncDecl, importAlias string) {
+	// Only process exported functions without receivers (not methods)
+	if funcDecl.Recv == nil && funcDecl.Name.IsExported() {
+		// Create argument list for the function call
+		var args []ast.Expr
+		if funcDecl.Type.Params != nil {
+			for _, param := range funcDecl.Type.Params.List {
+				for _, name := range param.Names {
+					args = append(args, name)
+				}
+			}
+		}
+		
+		// Create function call expression
+		callExpr := &ast.CallExpr{
+			Fun: &ast.SelectorExpr{
+				X:   ast.NewIdent(importAlias),
+				Sel: funcDecl.Name,
+			},
+			Args: args,
+		}
+		
+		// Create function body with appropriate return statement
+		var results []ast.Stmt
+		if funcDecl.Type.Results != nil && len(funcDecl.Type.Results.List) > 0 {
+			results = []ast.Stmt{&ast.ReturnStmt{Results: []ast.Expr{callExpr}}}
+		} else {
+			results = []ast.Stmt{&ast.ExprStmt{X: callExpr}}
+		}
+		
+		// Create function declaration
+		newFuncDecl := &ast.FuncDecl{
+			Name: funcDecl.Name,
+			Type: qualifyType(funcDecl.Type, importAlias, g.definedTypes).(*ast.FuncType),
+			Body: &ast.BlockStmt{List: results},
+		}
+		
+		// Add to package declarations
+		if g.allPackageDecls[importAlias] == nil {
+			g.allPackageDecls[importAlias] = &packageDecls{}
+		}
+		g.allPackageDecls[importAlias].funcDecls = append(g.allPackageDecls[importAlias].funcDecls, newFuncDecl)
+	}
+}
+
+// collectValueDeclaration collects variable and constant declarations.
+func (g *Generator) collectValueDeclaration(genDecl *ast.GenDecl, importAlias string) {
+	for _, spec := range genDecl.Specs {
+		if valueSpec, ok := spec.(*ast.ValueSpec); ok {
+			for _, name := range valueSpec.Names {
+				if name.IsExported() {
+					// Create new value specification
+					newSpec := &ast.ValueSpec{
+						Names: []*ast.Ident{name},
+						Values: []ast.Expr{
+							&ast.SelectorExpr{
+								X:   ast.NewIdent(importAlias),
+								Sel: name,
+							},
+						},
+					}
+					
+					// Add to package declarations based on token type
+					if g.allPackageDecls[importAlias] == nil {
+						g.allPackageDecls[importAlias] = &packageDecls{}
+					}
+					
+					if genDecl.Tok == token.VAR {
+						g.allPackageDecls[importAlias].varSpecs = append(g.allPackageDecls[importAlias].varSpecs, newSpec)
+					} else if genDecl.Tok == token.CONST {
+						g.allPackageDecls[importAlias].constSpecs = append(g.allPackageDecls[importAlias].constSpecs, newSpec)
+					}
+				}
+			}
+		}
+	}
+}
+
+// buildOutputFile builds the output file structure.
+func (g *Generator) buildOutputFile() {
 	var orderedDecls []ast.Decl
 
 	// Add imports first
-	var finalImportSpecs []ast.Spec
-	for _, spec := range g.importSpecs {
-		finalImportSpecs = append(finalImportSpecs, spec)
-	}
-	if len(finalImportSpecs) > 0 {
-		orderedDecls = append(orderedDecls, &ast.GenDecl{Tok: token.IMPORT, Specs: finalImportSpecs})
-	}
+	orderedDecls = append(orderedDecls, g.buildImportDeclaration())
 
 	// Collect all declarations by type across all packages
-	var allConstSpecs []ast.Spec
-	var allVarSpecs []ast.Spec
-	var allTypeSpecs []ast.Spec
-	var allFuncDecls []ast.Decl
-
-	// Sort package aliases for consistent output
-	var sortedPackageAliases []string
-	for alias := range g.allPackageDecls {
-		sortedPackageAliases = append(sortedPackageAliases, alias)
-	}
-	sort.Strings(sortedPackageAliases)
-
-	for _, alias := range sortedPackageAliases {
-		pkgDecls := g.allPackageDecls[alias]
-
-		// Collect all declarations
-		allConstSpecs = append(allConstSpecs, pkgDecls.constSpecs...)
-		allVarSpecs = append(allVarSpecs, pkgDecls.varSpecs...)
-		allTypeSpecs = append(allTypeSpecs, pkgDecls.typeSpecs...)
-
-		// Update function declarations to use local type references
-		for _, funcDecl := range pkgDecls.funcDecls {
-			if fd, ok := funcDecl.(*ast.FuncDecl); ok {
-				// Re-qualify the function type with defined types
-				fd.Type = qualifyType(fd.Type, alias, g.definedTypes).(*ast.FuncType)
-			}
-			allFuncDecls = append(allFuncDecls, funcDecl)
-		}
-	}
+	allConstSpecs, allVarSpecs, allTypeSpecs, allFuncDecls := g.collectAllDeclarations()
 
 	// Add all const declarations in a single group with parentheses
 	if len(allConstSpecs) > 0 {
@@ -278,6 +302,60 @@ func (g *Generator) Generate() error {
 	for i, decl := range g.aliasFile.Decls {
 		g.aliasFile.Decls[i] = g.compiledCfg.Replacer.Apply(decl).(ast.Decl)
 	}
+}
+
+// buildImportDeclaration builds the import declaration.
+func (g *Generator) buildImportDeclaration() ast.Decl {
+	var finalImportSpecs []ast.Spec
+	for _, spec := range g.importSpecs {
+		finalImportSpecs = append(finalImportSpecs, spec)
+	}
+	return &ast.GenDecl{Tok: token.IMPORT, Specs: finalImportSpecs}
+}
+
+// collectAllDeclarations collects all declarations from all packages.
+func (g *Generator) collectAllDeclarations() ([]ast.Spec, []ast.Spec, []ast.Spec, []ast.Decl) {
+	var allConstSpecs []ast.Spec
+	var allVarSpecs []ast.Spec
+	var allTypeSpecs []ast.Spec
+	var allFuncDecls []ast.Decl
+
+	// Sort package aliases for consistent output
+	var sortedPackageAliases []string
+	for alias := range g.allPackageDecls {
+		sortedPackageAliases = append(sortedPackageAliases, alias)
+	}
+	sort.Strings(sortedPackageAliases)
+
+	for _, alias := range sortedPackageAliases {
+		pkgDecls := g.allPackageDecls[alias]
+
+		// Collect all declarations
+		allConstSpecs = append(allConstSpecs, pkgDecls.constSpecs...)
+		allVarSpecs = append(allVarSpecs, pkgDecls.varSpecs...)
+		allTypeSpecs = append(allTypeSpecs, pkgDecls.typeSpecs...)
+
+		// Update function declarations to use local type references
+		for _, funcDecl := range pkgDecls.funcDecls {
+			if fd, ok := funcDecl.(*ast.FuncDecl); ok {
+				// Re-qualify the function type with defined types
+				fd.Type = qualifyType(fd.Type, alias, g.definedTypes).(*ast.FuncType)
+			}
+			allFuncDecls = append(allFuncDecls, funcDecl)
+		}
+	}
+
+	return allConstSpecs, allVarSpecs, allTypeSpecs, allFuncDecls
+}
+
+// writeOutputFile writes the output file.
+func (g *Generator) writeOutputFile() error {
+	outFile, err := os.Create(g.outputFilePath)
+	fmt.Printf("Attempting to create file: %s, Error: %v\n", g.outputFilePath, err)
+	if err != nil {
+		return err
+	}
+	defer outFile.Close()
 
 	return printer.Fprint(outFile, g.fset, g.aliasFile)
 }
