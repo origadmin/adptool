@@ -23,15 +23,17 @@ func main() {
 	}
 
 	// Compile the configuration into a replacer
-	replacer := compiler.Compile(cfg) // Call the compiler
+	compiledCfg, err := compiler.Compile(cfg) // Call the compiler
+	if err != nil {
+		fmt.Printf("Error compiling config: %v\n", err)
+		os.Exit(1)
+	}
 
-	// Determine source package import path
-	sourcePackageImportPath := "github.com/origadmin/adptool/alias_source/sourcepkg"
-	aliasPackageName := "aliaspkg"
+	// Determine output file path
 	outputAliasFilePath := "tools/adptool/generated_alias/aliaspkg.go"
 
 	// Call the generator
-	if err := generator.Generate(replacer, sourcePackageImportPath, aliasPackageName, outputAliasFilePath); err != nil {
+	if err := generator.Generate(compiledCfg, outputAliasFilePath); err != nil {
 		fmt.Printf("Error generating alias package: %v\n", err)
 		os.Exit(1)
 	}
