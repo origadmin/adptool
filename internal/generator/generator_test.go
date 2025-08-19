@@ -31,6 +31,15 @@ func TestGenerate(t *testing.T) {
 			{
 				ImportPath:  "github.com/origadmin/adptool/testdata/sourcepkg",
 				ImportAlias: "source",
+				Constants: []*config.ConstRule{
+					{
+						Name:     "*",
+						Disabled: false,
+						RuleSet: config.RuleSet{
+							Prefix: "Const",
+						},
+					},
+				},
 			},
 			{
 				ImportPath:  "github.com/origadmin/adptool/testdata/sourcepkg2",
