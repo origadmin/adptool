@@ -6,6 +6,7 @@ import (
 	"go/printer"
 	"go/token"
 	"os"
+	"sort"
 
 	"golang.org/x/tools/go/packages"
 
@@ -113,8 +114,14 @@ func Generate(compiledCfg *config.CompiledConfig, outputFilePath string) error {
 
 	importSpecs := make(map[string]*ast.ImportSpec)
 
-	// Collect all body declarations
-	var bodyDecls []ast.Decl
+	// Separate declarations by type
+	type packageDecls struct {
+		typeSpecs  []ast.Spec
+		varSpecs   []ast.Spec
+		constSpecs []ast.Spec
+		funcDecls  []ast.Decl
+	}
+	var allPackageDecls = make(map[string]*packageDecls)
 
 	// Process each source package and generate declarations
 	for _, pkg := range compiledCfg.Packages {
@@ -149,16 +156,16 @@ func Generate(compiledCfg *config.CompiledConfig, outputFilePath string) error {
 		for _, file := range sourcePkg.Syntax {
 			fileInfo := fset.File(file.Pos())
 			if fileInfo != nil {
-				// fmt.Printf("Processing file: %s\\n", fileInfo.Name())
+				// fmt.Printf("Processing file: %s", fileInfo.Name())
 			} else {
-				// fmt.Printf("Processing file: <unknown> (file.Pos() returned no file info)\\n")
+				// fmt.Printf("Processing file: <unknown> (file.Pos() returned no file info)")
 			}
 			for _, decl := range file.Decls {
 				switch d := decl.(type) {
 				case *ast.FuncDecl:
-					// fmt.Printf("  Found FuncDecl: %s, Exported: %t, Recv: %v\\n", d.Name.Name, d.Name.IsExported(), d.Recv)
+					// fmt.Printf("  Found FuncDecl: %s, Exported: %t, Recv: %v", d.Name.Name, d.Name.IsExported(), d.Recv)
 					if d.Recv == nil && d.Name.IsExported() {
-						// fmt.Printf("    Generating alias for function: %s\\n", d.Name.Name)
+						// fmt.Printf("    Generating alias for function: %s", d.Name.Name)
 						var args []ast.Expr
 						if d.Type.Params != nil {
 							for _, param := range d.Type.Params.List {
@@ -185,44 +192,47 @@ func Generate(compiledCfg *config.CompiledConfig, outputFilePath string) error {
 							Type: qualifyType(d.Type, pkg.ImportAlias).(*ast.FuncType), // Qualify the function type
 							Body: &ast.BlockStmt{List: results},
 						}
-						bodyDecls = append(bodyDecls, funcDecl)
+						if allPackageDecls[pkg.ImportAlias] == nil {
+							allPackageDecls[pkg.ImportAlias] = &packageDecls{}
+						}
+						allPackageDecls[pkg.ImportAlias].funcDecls = append(allPackageDecls[pkg.ImportAlias].funcDecls, funcDecl)
 					}
 				case *ast.GenDecl:
 					for _, spec := range d.Specs {
 						switch s := spec.(type) {
 						case *ast.TypeSpec:
 							if s.Name.IsExported() {
-								bodyDecls = append(bodyDecls, &ast.GenDecl{
-									Tok: token.TYPE,
-									Specs: []ast.Spec{
-										&ast.TypeSpec{
-											Name:   s.Name,
-											Assign: s.Pos(),
-											Type: &ast.SelectorExpr{
-												X:   ast.NewIdent(pkg.ImportAlias),
-												Sel: s.Name,
-											},
-										},
+								if allPackageDecls[pkg.ImportAlias] == nil {
+									allPackageDecls[pkg.ImportAlias] = &packageDecls{}
+								}
+								allPackageDecls[pkg.ImportAlias].typeSpecs = append(allPackageDecls[pkg.ImportAlias].typeSpecs, &ast.TypeSpec{
+									Name: s.Name,
+									Type: &ast.SelectorExpr{
+										X:   ast.NewIdent(pkg.ImportAlias),
+										Sel: s.Name,
 									},
 								})
 							}
 						case *ast.ValueSpec:
 							for _, name := range s.Names {
 								if name.IsExported() {
-									bodyDecls = append(bodyDecls, &ast.GenDecl{
-										Tok: d.Tok,
-										Specs: []ast.Spec{
-											&ast.ValueSpec{
-												Names: []*ast.Ident{name},
-												Values: []ast.Expr{
-													&ast.SelectorExpr{
-														X:   ast.NewIdent(pkg.ImportAlias),
-														Sel: name,
-												},
-												},
+									newSpec := &ast.ValueSpec{
+										Names: []*ast.Ident{name},
+										Values: []ast.Expr{
+											&ast.SelectorExpr{
+												X:   ast.NewIdent(pkg.ImportAlias),
+												Sel: name,
 											},
 										},
-									})
+									}
+									if allPackageDecls[pkg.ImportAlias] == nil {
+										allPackageDecls[pkg.ImportAlias] = &packageDecls{}
+									}
+									if d.Tok == token.VAR {
+										allPackageDecls[pkg.ImportAlias].varSpecs = append(allPackageDecls[pkg.ImportAlias].varSpecs, newSpec)
+									} else if d.Tok == token.CONST {
+										allPackageDecls[pkg.ImportAlias].constSpecs = append(allPackageDecls[pkg.ImportAlias].constSpecs, newSpec)
+									}
 								}
 							}
 						}
@@ -243,8 +253,34 @@ func Generate(compiledCfg *config.CompiledConfig, outputFilePath string) error {
 		orderedDecls = append(orderedDecls, &ast.GenDecl{Tok: token.IMPORT, Specs: finalImportSpecs})
 	}
 
-	// Add body declarations
-	orderedDecls = append(orderedDecls, bodyDecls...)
+	// Sort package aliases for consistent output
+	var sortedPackageAliases []string
+	for alias := range allPackageDecls {
+		sortedPackageAliases = append(sortedPackageAliases, alias)
+	}
+	sort.Strings(sortedPackageAliases)
+
+	for _, alias := range sortedPackageAliases {
+		pkgDecls := allPackageDecls[alias]
+
+		// Add grouped value declarations (CONST)
+		if len(pkgDecls.constSpecs) > 0 {
+			orderedDecls = append(orderedDecls, &ast.GenDecl{Tok: token.CONST, Specs: pkgDecls.constSpecs})
+		}
+
+		// Add grouped value declarations (VAR)
+		if len(pkgDecls.varSpecs) > 0 {
+			orderedDecls = append(orderedDecls, &ast.GenDecl{Tok: token.VAR, Specs: pkgDecls.varSpecs})
+		}
+
+		// Add grouped type declarations
+		if len(pkgDecls.typeSpecs) > 0 {
+			orderedDecls = append(orderedDecls, &ast.GenDecl{Tok: token.TYPE, Specs: pkgDecls.typeSpecs})
+		}
+
+		// Add function declarations
+		orderedDecls = append(orderedDecls, pkgDecls.funcDecls...)
+	}
 
 	aliasFile.Decls = orderedDecls
 
@@ -261,7 +297,7 @@ func Generate(compiledCfg *config.CompiledConfig, outputFilePath string) error {
 	// 		if d.Tok == token.IMPORT {
 	// 			for _, spec := range d.Specs {
 	// 				if s, ok := spec.(*ast.ImportSpec); ok {
-	// 					fmt.Printf("  Import: %s\n", s.Path.Value)
+	// 					fmt.Printf("  Import: %s", s.Path.Value)
 	// 				}
 	// 			}
 	// 		} else if len(d.Specs) > 0 {
@@ -269,18 +305,18 @@ func Generate(compiledCfg *config.CompiledConfig, outputFilePath string) error {
 	// 			for _, spec := range d.Specs {
 	// 				switch s := spec.(type) {
 	// 				case *ast.TypeSpec:
-	// 					fmt.Printf("  Type: %s\n", s.Name.Name)
+	// 					fmt.Printf("  Type: %s", s.Name.Name)
 	// 				case *ast.ValueSpec:
 	// 					for _, name := range s.Names {
-	// 						fmt.Printf("  Value: %s\n", name.Name)
+	// 						fmt.Printf("  Value: %s", name.Name)
 	// 					}
 	// 				}
 	// 			}
 	// 		}
 	// 	case *ast.FuncDecl:
-	// 		fmt.Printf("  Func: %s\n", d.Name.Name)
+	// 		fmt.Printf("  Func: %s", d.Name.Name)
 	// 	default:
-	// 		fmt.Printf("  Other Decl Type: %T\n", decl)
+	// 		fmt.Printf("  Other Decl Type: %T", decl)
 	// 	}
 	// }
 
