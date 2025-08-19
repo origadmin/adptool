@@ -11,132 +11,60 @@ import (
 	"golang.org/x/tools/go/packages"
 
 	"github.com/origadmin/adptool/internal/config"
-	"github.com/origadmin/adptool/internal/interfaces"
 )
 
-// replacerVisitor implements the ast.Visitor interface to apply replacements.
-type replacerVisitor struct {
-	replacer interfaces.Replacer
+// packageDecls struct (already exists, but will be part of Generator's context)
+type packageDecls struct {
+	typeSpecs  []ast.Spec
+	varSpecs   []ast.Spec
+	constSpecs []ast.Spec
+	funcDecls  []ast.Decl
 }
 
-// Visit implements the ast.Visitor interface.
-func (v replacerVisitor) Visit(n ast.Node) ast.Visitor {
-	if n != nil {
-		v.replacer.Apply(n)
-	}
-	return v // Continue traversal
+// Generator holds the state and configuration for code generation.
+type Generator struct {
+	compiledCfg     *config.CompiledConfig
+	outputFilePath  string
+	fset            *token.FileSet
+	aliasFile       *ast.File
+	importSpecs     map[string]*ast.ImportSpec
+	allPackageDecls map[string]*packageDecls
+	definedTypes    map[string]bool
 }
 
-// qualifyType recursively qualifies ast.Ident nodes within an ast.Expr
-// with the given package alias if they are not already qualified.
-// definedTypes is a map of type names that are defined in the current package.
-func qualifyType(expr ast.Expr, pkgAlias string, definedTypes map[string]bool) ast.Expr {
-	switch t := expr.(type) {
-	case *ast.Ident:
-		// Only qualify if it's not already qualified (i.e., not a SelectorExpr),
-		// it's an exported identifier, and it's not defined in the current package.
-		if t.IsExported() && !definedTypes[t.Name] {
-			return &ast.SelectorExpr{
-				X:   ast.NewIdent(pkgAlias),
-				Sel: t,
-			}
-		}
-		return t
-	case *ast.StarExpr:
-		t.X = qualifyType(t.X, pkgAlias, definedTypes)
-		return t
-	case *ast.ArrayType:
-		t.Elt = qualifyType(t.Elt, pkgAlias, definedTypes)
-		return t
-	case *ast.MapType:
-		t.Key = qualifyType(t.Key, pkgAlias, definedTypes)
-		t.Value = qualifyType(t.Value, pkgAlias, definedTypes)
-		return t
-	case *ast.ChanType:
-		t.Value = qualifyType(t.Value, pkgAlias, definedTypes)
-		return t
-	case *ast.FuncType:
-		if t.Params != nil {
-			for _, field := range t.Params.List {
-				field.Type = qualifyType(field.Type, pkgAlias, definedTypes)
-			}
-		}
-		if t.Results != nil {
-			for _, field := range t.Results.List {
-				field.Type = qualifyType(field.Type, pkgAlias, definedTypes)
-			}
-		}
-		return t
-	case *ast.InterfaceType:
-		// Interface methods' types need to be qualified
-		if t.Methods != nil {
-			for _, field := range t.Methods.List {
-				if funcType, ok := field.Type.(*ast.FuncType); ok {
-					field.Type = qualifyType(funcType, pkgAlias, definedTypes)
-				}
-			}
-		}
-		return t
-	case *ast.StructType:
-		// Struct fields' types need to be qualified
-		if t.Fields != nil {
-			for _, field := range t.Fields.List {
-				field.Type = qualifyType(field.Type, pkgAlias, definedTypes)
-			}
-		}
-		return t
-	case *ast.SelectorExpr:
-		// If it's already a SelectorExpr, check if it's a reference to a type from the source package
-		// that we've defined locally
-		if ident, ok := t.X.(*ast.Ident); ok && ident.Name == pkgAlias {
-			typeName := t.Sel.Name
-			if definedTypes[typeName] {
-				// Replace with local alias
-				return ast.NewIdent(typeName)
-			}
-		}
-		return t
-	default:
-		return expr
+// NewGenerator creates a new Generator instance.
+func NewGenerator(compiledCfg *config.CompiledConfig, outputFilePath string) *Generator {
+	return &Generator{
+		compiledCfg:    compiledCfg,
+		outputFilePath: outputFilePath,
+		fset:           token.NewFileSet(),
+		aliasFile: &ast.File{
+			Name:  ast.NewIdent(compiledCfg.PackageName),
+			Decls: []ast.Decl{},
+		},
+		importSpecs:     make(map[string]*ast.ImportSpec),
+		allPackageDecls: make(map[string]*packageDecls),
+		definedTypes:    make(map[string]bool),
 	}
 }
 
-// Generate creates an alias package based on the compiled configuration.
-func Generate(compiledCfg *config.CompiledConfig, outputFilePath string) error {
-	fset := token.NewFileSet()
-
-	aliasFile := &ast.File{
-		Name:  ast.NewIdent(compiledCfg.PackageName),
-		Decls: []ast.Decl{},
-	}
-
-	// Removed aliasFile.Doc assignment
-
-	outFile, err := os.Create(outputFilePath)
-	fmt.Printf("Attempting to create file: %s, Error: %v\n", outputFilePath, err)
+// Generate generates the output code.
+func (g *Generator) Generate() error {
+	outFile, err := os.Create(g.outputFilePath)
+	fmt.Printf("Attempting to create file: %s, Error: %v\n", g.outputFilePath, err)
 	if err != nil {
 		return err
 	}
 	defer outFile.Close()
 
-	importSpecs := make(map[string]*ast.ImportSpec)
-
-	// Separate declarations by type
-	type packageDecls struct {
-		typeSpecs  []ast.Spec
-		varSpecs   []ast.Spec
-		constSpecs []ast.Spec
-		funcDecls  []ast.Decl
-	}
-	var allPackageDecls = make(map[string]*packageDecls)
-	
-	// Initialize definedTypes map to collect all defined types
-	definedTypes := make(map[string]bool)
+	// Initialize maps
+	g.allPackageDecls = make(map[string]*packageDecls)
+	g.definedTypes = make(map[string]bool)
 
 	// Process each source package and generate declarations
-	for _, pkg := range compiledCfg.Packages {
+	for _, pkg := range g.compiledCfg.Packages {
 		// Add the primary package being adapted to the import list
-		importSpecs[pkg.ImportPath] = &ast.ImportSpec{
+		g.importSpecs[pkg.ImportPath] = &ast.ImportSpec{
 			Path: &ast.BasicLit{Kind: token.STRING, Value: fmt.Sprintf("%q", pkg.ImportPath)},
 			Name: ast.NewIdent(pkg.ImportAlias),
 		}
@@ -155,8 +83,8 @@ func Generate(compiledCfg *config.CompiledConfig, outputFilePath string) error {
 
 		// Collect imports from the source package
 		for importPath := range sourcePkg.Imports {
-			if _, exists := importSpecs[importPath]; !exists {
-				importSpecs[importPath] = &ast.ImportSpec{
+			if _, exists := g.importSpecs[importPath]; !exists {
+				g.importSpecs[importPath] = &ast.ImportSpec{
 					Path: &ast.BasicLit{Kind: token.STRING, Value: fmt.Sprintf("%q", importPath)},
 					Name: nil, // Default to no alias
 				}
@@ -169,10 +97,10 @@ func Generate(compiledCfg *config.CompiledConfig, outputFilePath string) error {
 				if genDecl, ok := decl.(*ast.GenDecl); ok && genDecl.Tok == token.TYPE {
 					for _, spec := range genDecl.Specs {
 						if typeSpec, ok := spec.(*ast.TypeSpec); ok && typeSpec.Name.IsExported() {
-							if allPackageDecls[pkg.ImportAlias] == nil {
-								allPackageDecls[pkg.ImportAlias] = &packageDecls{}
+							if g.allPackageDecls[pkg.ImportAlias] == nil {
+								g.allPackageDecls[pkg.ImportAlias] = &packageDecls{}
 							}
-							allPackageDecls[pkg.ImportAlias].typeSpecs = append(allPackageDecls[pkg.ImportAlias].typeSpecs, &ast.TypeSpec{
+							g.allPackageDecls[pkg.ImportAlias].typeSpecs = append(g.allPackageDecls[pkg.ImportAlias].typeSpecs, &ast.TypeSpec{
 								Name: typeSpec.Name,
 								Type: &ast.SelectorExpr{
 									X:   ast.NewIdent(pkg.ImportAlias),
@@ -181,7 +109,7 @@ func Generate(compiledCfg *config.CompiledConfig, outputFilePath string) error {
 								Assign: token.Pos(1), // Set non-zero position to make it an alias type (type A = B)
 							})
 							// Add to definedTypes map
-							definedTypes[typeSpec.Name.Name] = true
+							g.definedTypes[typeSpec.Name.Name] = true
 						}
 					}
 				}
@@ -190,7 +118,7 @@ func Generate(compiledCfg *config.CompiledConfig, outputFilePath string) error {
 
 		// Second pass: collect other declarations
 		for _, file := range sourcePkg.Syntax {
-			fileInfo := fset.File(file.Pos())
+			fileInfo := g.fset.File(file.Pos())
 			if fileInfo != nil {
 				// fmt.Printf("Processing file: %s", fileInfo.Name())
 			} else {
@@ -225,13 +153,13 @@ func Generate(compiledCfg *config.CompiledConfig, outputFilePath string) error {
 						}
 						funcDecl := &ast.FuncDecl{
 							Name: d.Name,
-							Type: qualifyType(d.Type, pkg.ImportAlias, definedTypes).(*ast.FuncType), // Qualify the function type
+							Type: qualifyType(d.Type, pkg.ImportAlias, g.definedTypes).(*ast.FuncType), // Qualify the function type
 							Body: &ast.BlockStmt{List: results},
 						}
-						if allPackageDecls[pkg.ImportAlias] == nil {
-							allPackageDecls[pkg.ImportAlias] = &packageDecls{}
+						if g.allPackageDecls[pkg.ImportAlias] == nil {
+							g.allPackageDecls[pkg.ImportAlias] = &packageDecls{}
 						}
-						allPackageDecls[pkg.ImportAlias].funcDecls = append(allPackageDecls[pkg.ImportAlias].funcDecls, funcDecl)
+						g.allPackageDecls[pkg.ImportAlias].funcDecls = append(g.allPackageDecls[pkg.ImportAlias].funcDecls, funcDecl)
 					}
 				case *ast.GenDecl:
 					if d.Tok == token.TYPE {
@@ -252,13 +180,13 @@ func Generate(compiledCfg *config.CompiledConfig, outputFilePath string) error {
 											},
 										},
 									}
-									if allPackageDecls[pkg.ImportAlias] == nil {
-										allPackageDecls[pkg.ImportAlias] = &packageDecls{}
+									if g.allPackageDecls[pkg.ImportAlias] == nil {
+										g.allPackageDecls[pkg.ImportAlias] = &packageDecls{}
 									}
 									if d.Tok == token.VAR {
-										allPackageDecls[pkg.ImportAlias].varSpecs = append(allPackageDecls[pkg.ImportAlias].varSpecs, newSpec)
+										g.allPackageDecls[pkg.ImportAlias].varSpecs = append(g.allPackageDecls[pkg.ImportAlias].varSpecs, newSpec)
 									} else if d.Tok == token.CONST {
-										allPackageDecls[pkg.ImportAlias].constSpecs = append(allPackageDecls[pkg.ImportAlias].constSpecs, newSpec)
+										g.allPackageDecls[pkg.ImportAlias].constSpecs = append(g.allPackageDecls[pkg.ImportAlias].constSpecs, newSpec)
 									}
 								}
 							}
@@ -273,14 +201,12 @@ func Generate(compiledCfg *config.CompiledConfig, outputFilePath string) error {
 
 	// Add imports first
 	var finalImportSpecs []ast.Spec
-	for _, spec := range importSpecs {
+	for _, spec := range g.importSpecs {
 		finalImportSpecs = append(finalImportSpecs, spec)
 	}
 	if len(finalImportSpecs) > 0 {
 		orderedDecls = append(orderedDecls, &ast.GenDecl{Tok: token.IMPORT, Specs: finalImportSpecs})
 	}
-
-	// definedTypes has already been populated in the first pass
 
 	// Collect all declarations by type across all packages
 	var allConstSpecs []ast.Spec
@@ -290,24 +216,24 @@ func Generate(compiledCfg *config.CompiledConfig, outputFilePath string) error {
 
 	// Sort package aliases for consistent output
 	var sortedPackageAliases []string
-	for alias := range allPackageDecls {
+	for alias := range g.allPackageDecls {
 		sortedPackageAliases = append(sortedPackageAliases, alias)
 	}
 	sort.Strings(sortedPackageAliases)
 
 	for _, alias := range sortedPackageAliases {
-		pkgDecls := allPackageDecls[alias]
-		
+		pkgDecls := g.allPackageDecls[alias]
+
 		// Collect all declarations
 		allConstSpecs = append(allConstSpecs, pkgDecls.constSpecs...)
 		allVarSpecs = append(allVarSpecs, pkgDecls.varSpecs...)
 		allTypeSpecs = append(allTypeSpecs, pkgDecls.typeSpecs...)
-		
+
 		// Update function declarations to use local type references
 		for _, funcDecl := range pkgDecls.funcDecls {
 			if fd, ok := funcDecl.(*ast.FuncDecl); ok {
 				// Re-qualify the function type with defined types
-				fd.Type = qualifyType(fd.Type, alias, definedTypes).(*ast.FuncType)
+				fd.Type = qualifyType(fd.Type, alias, g.definedTypes).(*ast.FuncType)
 			}
 			allFuncDecls = append(allFuncDecls, funcDecl)
 		}
@@ -346,43 +272,12 @@ func Generate(compiledCfg *config.CompiledConfig, outputFilePath string) error {
 	// Add all function declarations
 	orderedDecls = append(orderedDecls, allFuncDecls...)
 
-	aliasFile.Decls = orderedDecls
+	g.aliasFile.Decls = orderedDecls
 
 	// Apply replacements to each declaration
-	for i, decl := range aliasFile.Decls {
-		aliasFile.Decls[i] = compiledCfg.Replacer.Apply(decl).(ast.Decl)
+	for i, decl := range g.aliasFile.Decls {
+		g.aliasFile.Decls[i] = g.compiledCfg.Replacer.Apply(decl).(ast.Decl)
 	}
 
-	// Debug print final declarations
-	// fmt.Println("Final aliasFile.Decls:")
-	// for _, decl := range aliasFile.Decls {
-	// 	switch d := decl.(type) {
-	// 	case *ast.GenDecl:
-	// 		if d.Tok == token.IMPORT {
-	// 			for _, spec := range d.Specs {
-	// 				if s, ok := spec.(*ast.ImportSpec); ok {
-	// 					fmt.Printf("  Import: %s", s.Path.Value)
-	// 				}
-	// 			}
-	// 		} else if len(d.Specs) > 0 {
-	// 			// Handle TypeSpec and ValueSpec within GenDecl
-	// 			for _, spec := range d.Specs {
-	// 				switch s := spec.(type) {
-	// 				case *ast.TypeSpec:
-	// 					fmt.Printf("  Type: %s", s.Name.Name)
-	// 				case *ast.ValueSpec:
-	// 					for _, name := range s.Names {
-	// 						fmt.Printf("  Value: %s", name.Name)
-	// 					}
-	// 				}
-	// 			}
-	// 		}
-	// 	case *ast.FuncDecl:
-	// 		fmt.Printf("  Func: %s", d.Name.Name)
-	// 	default:
-	// 		fmt.Printf("  Other Decl Type: %T", decl)
-	// 	}
-	// }
-
-	return printer.Fprint(outFile, fset, aliasFile)
+	return printer.Fprint(outFile, g.fset, g.aliasFile)
 }

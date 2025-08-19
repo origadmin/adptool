@@ -48,8 +48,9 @@ func TestGenerate(t *testing.T) {
 	err := os.MkdirAll(outputDir, 0755)
 	assert.NoError(t, err)
 
-	// 4. Call the new Generate function
-	err = Generate(compiledCfg, outputFilePath)
+	// 4. Create a new Generator instance and call its Generate method
+	generator := NewGenerator(compiledCfg, outputFilePath)
+	err = generator.Generate()
 	assert.NoError(t, err)
 
 	// 5. Run goimports on the generated file first to clean up imports and format

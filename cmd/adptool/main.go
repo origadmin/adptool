@@ -32,8 +32,9 @@ func main() {
 	// Determine output file path
 	outputAliasFilePath := "tools/adptool/generated_alias/aliaspkg.go"
 
-	// Call the generator
-	if err := generator.Generate(compiledCfg, outputAliasFilePath); err != nil {
+	// Initialize and call the generator
+	gen := generator.NewGenerator(compiledCfg, outputAliasFilePath)
+	if err := gen.Generate(); err != nil {
 		fmt.Printf("Error generating alias package: %v\n", err)
 		os.Exit(1)
 	}
