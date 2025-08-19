@@ -176,3 +176,8 @@ adptool generate -f ./configs/custom.yaml -o ./out.go .
 ## Contributing
 
 Contributions are welcome! Please feel free to submit an Issue or Pull Request.
+
+## Directory Structure
+
+*   `testdata/sourcepkg`: Contains the source package for testing purposes.
+*   `output_dir`: The directory where the output of the command is generated.
