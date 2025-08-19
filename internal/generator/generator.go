@@ -67,11 +67,93 @@ func Generate(replacer interfaces.Replacer, sourcePackageImportPath, aliasPackag
 	})
 
 	// 3. Iterate through exported symbols of the source package and generate wrappers
-	// Actual wrapper generation will be added incrementally.
 	for _, file := range sourcePkg.Syntax {
-		for range file.Decls { // Changed to range over file.Decls without assigning to decl
-			// No placeholder comment generation for now.
-			// This loop will be populated with actual wrapper generation logic.
+		for _, decl := range file.Decls {
+			switch d := decl.(type) {
+			case *ast.FuncDecl:
+				if d.Recv == nil && d.Name.IsExported() {
+					// Create a list of argument expressions for the call
+					var args []ast.Expr
+					if d.Type.Params != nil {
+						for _, param := range d.Type.Params.List {
+							for _, name := range param.Names {
+								args = append(args, name)
+							}
+						}
+					}
+
+					// Create the call expression
+					callExpr := &ast.CallExpr{
+						Fun: &ast.SelectorExpr{
+							X:   ast.NewIdent("original"),
+							Sel: d.Name,
+						},
+						Args: args,
+					}
+
+					// Create the return statement
+					var results []ast.Stmt
+					if d.Type.Results != nil && len(d.Type.Results.List) > 0 {
+						results = []ast.Stmt{
+							&ast.ReturnStmt{
+								Results: []ast.Expr{callExpr},
+							},
+						}
+					} else {
+						results = []ast.Stmt{
+							&ast.ExprStmt{X: callExpr},
+						}
+					}
+
+					aliasFile.Decls = append(aliasFile.Decls, &ast.FuncDecl{
+						Name: d.Name,
+						Type: d.Type,
+						Body: &ast.BlockStmt{
+							List: results,
+						},
+					})
+				}
+			case *ast.GenDecl:
+				for _, spec := range d.Specs {
+					switch s := spec.(type) {
+					case *ast.TypeSpec:
+						if s.Name.IsExported() {
+							aliasFile.Decls = append(aliasFile.Decls, &ast.GenDecl{
+								Tok: token.TYPE,
+								Specs: []ast.Spec{
+									&ast.TypeSpec{
+										Name:   s.Name,
+										Assign: s.Pos(), // The '=' in type T = original.T
+										Type: &ast.SelectorExpr{
+											X:   ast.NewIdent("original"),
+											Sel: s.Name,
+										},
+									},
+								},
+							})
+						}
+					case *ast.ValueSpec: // For variables and constants
+						for _, name := range s.Names {
+							if name.IsExported() {
+								aliasFile.Decls = append(aliasFile.Decls, &ast.GenDecl{
+									Tok: d.Tok, // Use the original token (VAR or CONST)
+									Specs: []ast.Spec{
+										&ast.ValueSpec{
+											Names: []*ast.Ident{name},
+											Values: []ast.Expr{
+												&ast.SelectorExpr{
+													X:   ast.NewIdent("original"),
+													Sel: name,
+												},
+											},
+										},
+									},
+								})
+							}
+						}
+					}
+				}
+			}
 		}
 	}
 
