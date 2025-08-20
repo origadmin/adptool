@@ -2,6 +2,7 @@ package parser
 
 import (
 	"github.com/origadmin/adptool/internal/config"
+	"github.com/origadmin/adptool/internal/interfaces"
 )
 
 // VarRule is a wrapper around config.VarRule to implement the Container interface.
@@ -9,8 +10,8 @@ type VarRule struct {
 	*config.VarRule
 }
 
-func (r *VarRule) Type() RuleType {
-	return RuleTypeVar
+func (r *VarRule) Type() interfaces.RuleType {
+	return interfaces.RuleTypeVar
 }
 
 func (r *VarRule) ParseDirective(directive *Directive) error {

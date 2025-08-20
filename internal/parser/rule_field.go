@@ -2,6 +2,7 @@ package parser
 
 import (
 	"github.com/origadmin/adptool/internal/config"
+	"github.com/origadmin/adptool/internal/interfaces"
 )
 
 // FieldRule is a wrapper around config.MemberRule to implement the Container interface.
@@ -9,8 +10,8 @@ type FieldRule struct {
 	*config.MemberRule
 }
 
-func (f *FieldRule) Type() RuleType {
-	return RuleTypeField
+func (f *FieldRule) Type() interfaces.RuleType {
+	return interfaces.RuleTypeField
 }
 
 func (f *FieldRule) ParseDirective(directive *Directive) error {

@@ -2,6 +2,7 @@ package parser
 
 import (
 	"github.com/origadmin/adptool/internal/config"
+	"github.com/origadmin/adptool/internal/interfaces"
 )
 
 // ConstRule is a wrapper around config.ConstRule to implement the Container interface.
@@ -9,8 +10,8 @@ type ConstRule struct {
 	*config.ConstRule
 }
 
-func (r *ConstRule) Type() RuleType {
-	return RuleTypeConst
+func (r *ConstRule) Type() interfaces.RuleType {
+	return interfaces.RuleTypeConst
 }
 
 func (r *ConstRule) AddPackage(pkg *PackageRule) error {

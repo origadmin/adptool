@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/origadmin/adptool/internal/config"
+	"github.com/origadmin/adptool/internal/interfaces"
 )
 
 // TypeRule is a wrapper around config.TypeRule to implement the Container interface.
@@ -11,8 +12,8 @@ type TypeRule struct {
 	*config.TypeRule
 }
 
-func (r *TypeRule) Type() RuleType {
-	return RuleTypeType
+func (r *TypeRule) Type() interfaces.RuleType {
+	return interfaces.RuleTypeType
 }
 
 func (r *TypeRule) ParseDirective(directive *Directive) error {

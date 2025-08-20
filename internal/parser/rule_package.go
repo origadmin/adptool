@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/origadmin/adptool/internal/config"
+	"github.com/origadmin/adptool/internal/interfaces"
 )
 
 // PackageRule is a wrapper around config.Package to implement the Container interface.
@@ -13,8 +14,8 @@ type PackageRule struct {
 	*config.Package
 }
 
-func (p *PackageRule) Type() RuleType {
-	return RuleTypePackage
+func (p *PackageRule) Type() interfaces.RuleType {
+	return interfaces.RuleTypePackage
 }
 
 func (p *PackageRule) ParseDirective(directive *Directive) error {

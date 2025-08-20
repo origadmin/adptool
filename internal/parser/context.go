@@ -4,6 +4,8 @@ package parser
 import (
 	"fmt"
 	"log/slog"
+
+	"github.com/origadmin/adptool/internal/interfaces"
 )
 
 // Context represents a node in the parsing state hierarchy.
@@ -72,14 +74,14 @@ func (c *Context) Parent() *Context {
 // StartOrActiveContext gets an active child context or creates a new one.
 // It first checks if an active child context already exists and returns it.
 // If not, it creates a new one by calling the provided factory function.
-func (c *Context) StartOrActiveContext(ruleType RuleType) (*Context, error) {
+func (c *Context) StartOrActiveContext(ruleType interfaces.RuleType) (*Context, error) {
 	if active := c.ActiveContext(); active != nil {
 		return active, nil
 	}
 	// Execute the factory function only when a new containerFactory is needed.
 	containerFactory := NewContainerFactory(ruleType)
 	container := containerFactory()
-	if container.Type() == RuleTypeUnknown {
+	if container.Type() == interfaces.RuleTypeUnknown {
 		return nil, NewParserError("unknown rule type: %s", ruleType.String())
 	}
 	return c.StartContext(container)

@@ -2,6 +2,7 @@ package parser
 
 import (
 	"github.com/origadmin/adptool/internal/config"
+	"github.com/origadmin/adptool/internal/interfaces"
 )
 
 // MethodRule is a wrapper around config.MemberRule to implement the Container interface.
@@ -9,8 +10,8 @@ type MethodRule struct {
 	*config.MemberRule
 }
 
-func (m *MethodRule) Type() RuleType {
-	return RuleTypeMethod
+func (m *MethodRule) Type() interfaces.RuleType {
+	return interfaces.RuleTypeMethod
 }
 
 func (m *MethodRule) ParseDirective(directive *Directive) error {
