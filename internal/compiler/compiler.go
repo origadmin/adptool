@@ -1,12 +1,10 @@
 package compiler
 
 import (
-	"fmt"
 	"go/ast"
 	"go/token"
 	"log"
-	"path"   // Added for path.Base
-	"regexp" // Re-added regexp import for applyRules
+	"path" // Added for path.Base
 	"sort"
 
 	"github.com/origadmin/adptool/internal/config"
@@ -34,13 +32,6 @@ type realReplacer struct {
 	packageAliases map[string]bool
 	// 已处理节点的映射，用于避免重复处理
 	processedNodes map[ast.Node]bool
-	// 当前处理上下文
-	contextStack []contextInfo
-}
-
-// contextInfo 保存当前处理的上下文信息
-type contextInfo struct {
-	nodeType string // 节点类型，如 "const", "var", "type", "func"
 }
 
 // Apply applies the transformation rules to the given AST node.
@@ -65,31 +56,24 @@ func (r *realReplacer) Apply(ctx interfaces.Context, node ast.Node) ast.Node {
 			return node
 		}
 
-		// 获取当前上下文
-		currentContext := r.getCurrentContext()
-
 		// 根据上下文决定是否应用规则
 		shouldApplyRules := false
-		ruleType := ""
-		if currentContext.nodeType == "const_decl_name" {
+		ruleType := ctx.CurrentNodeType()
+		if ruleType == "const_decl_name" {
 			// 如果在常量声明名称上下文中，则应用规则
 			shouldApplyRules = true
-			ruleType = "const"
 			log.Printf("Apply: Applying const rules for %s in const declaration name context", n.Name)
-		} else if currentContext.nodeType == "type" {
+		} else if ruleType == "type" {
 			// 如果在类型声明上下文中，则应用规则
 			shouldApplyRules = true
-			ruleType = "type"
 			log.Printf("Apply: Applying type rules for %s in type declaration context", n.Name)
-		} else if currentContext.nodeType == "var_decl_name" {
+		} else if ruleType == "var_decl_name" {
 			// 如果在变量声明名称上下文中，则应用规则
 			shouldApplyRules = true
-			ruleType = "var"
 			log.Printf("Apply: Applying var rules for %s in var declaration name context", n.Name)
-		} else if currentContext.nodeType == "func" {
+		} else if ruleType == "func" {
 			// 如果在函数声明上下文中，则应用规则
 			shouldApplyRules = true
-			ruleType = "func"
 			log.Printf("Apply: Applying func rules for %s in func declaration context", n.Name)
 		} else {
 			log.Printf("Apply: Skipping rule application for %s as it's not in a rule-applicable context", n.Name)
@@ -125,7 +109,7 @@ func (r *realReplacer) Apply(ctx interfaces.Context, node ast.Node) ast.Node {
 					log.Printf("Apply: Using highest priority rule for %s: %+v", n.Name, highestPriorityRule)
 
 					// 只应用这一个规则
-					newName, err := applyRules(n.Name, []interfaces.RenameRule{
+					newName, err := rulesPkg.ApplyRules(n.Name, []interfaces.RenameRule{
 						{
 							Type:    highestPriorityRule.Rule.Type,
 							Value:   highestPriorityRule.Rule.Value,
@@ -182,7 +166,7 @@ func (r *realReplacer) Apply(ctx interfaces.Context, node ast.Node) ast.Node {
 						})
 					}
 
-					newName, err := applyRules(n.Name, rulesToApply)
+					newName, err := rulesPkg.ApplyRules(n.Name, rulesToApply)
 					if err != nil {
 						log.Printf("Error applying wildcard rules to identifier %s: %v", n.Name, err)
 						return node // Return original node on error
@@ -218,7 +202,7 @@ func (r *realReplacer) Apply(ctx interfaces.Context, node ast.Node) ast.Node {
 				if len(filteredRules) > 0 {
 					// 只应用第一个规则
 					firstRule := filteredRules[0]
-					newName, err := applyRules(n.Name, []interfaces.RenameRule{
+					newName, err := rulesPkg.ApplyRules(n.Name, []interfaces.RenameRule{
 						{
 							Type:    firstRule.Type,
 							Value:   firstRule.Value,
@@ -250,21 +234,17 @@ func (r *realReplacer) Apply(ctx interfaces.Context, node ast.Node) ast.Node {
 		if n.Tok == token.CONST {
 			log.Printf("Apply: Processing constant declaration")
 			// 添加常量上下文
-			r.pushContext(contextInfo{nodeType: "const"})
-			defer r.popContext()
+			ctx = ctx.Push("const")
 
 			// 处理常量声明中的值规范
 			for _, spec := range n.Specs {
 				if valueSpec, ok := spec.(*ast.ValueSpec); ok {
 					// 为常量名称添加声明上下文
-					r.pushContext(contextInfo{nodeType: "const_decl"})
+					constDeclCtx := ctx.Push("const_decl")
 					for _, name := range valueSpec.Names {
-						r.pushContext(contextInfo{nodeType: "const_decl_name"})
-						r.Apply(ctx, name)
-						r.popContext()
+						constDeclNameCtx := constDeclCtx.Push("const_decl_name")
+						r.Apply(constDeclNameCtx, name)
 					}
-					r.popContext()
-
 					// 处理值部分，但不应用规则到引用的标识符
 					// 这里我们不递归处理值部分，因为AST遍历会自动处理其中的标识符
 				}
@@ -272,34 +252,29 @@ func (r *realReplacer) Apply(ctx interfaces.Context, node ast.Node) ast.Node {
 		} else if n.Tok == token.VAR {
 			log.Printf("Apply: Processing variable declaration")
 			// 添加变量上下文
-			r.pushContext(contextInfo{nodeType: "var"})
-			defer r.popContext()
+			ctx.Push("var")
 
 			// 处理变量声明中的值规范
 			for _, spec := range n.Specs {
 				if valueSpec, ok := spec.(*ast.ValueSpec); ok {
 					// 为变量名称添加声明上下文
-					r.pushContext(contextInfo{nodeType: "var_decl"})
+					ctx.Push("var_decl")
 					for _, name := range valueSpec.Names {
-						r.pushContext(contextInfo{nodeType: "var_decl_name"})
-						r.Apply(ctx, name)
-						r.popContext()
+						valueSpecCtx := ctx.Push("var_decl_name")
+						r.Apply(valueSpecCtx, name)
 					}
-					r.popContext()
 				}
 			}
 		} else if n.Tok == token.TYPE {
 			log.Printf("Apply: Processing type declaration")
 			// 添加类型上下文
-			r.pushContext(contextInfo{nodeType: "type_decl"})
-			defer r.popContext()
+			ctx.Push("type_decl")
 
 			// 处理类型声明中的类型规范
 			for _, spec := range n.Specs {
 				if typeSpec, ok := spec.(*ast.TypeSpec); ok {
-					r.pushContext(contextInfo{nodeType: "type"})
-					r.Apply(ctx, typeSpec.Name)
-					r.popContext()
+					typeCtx := ctx.Push("type")
+					r.Apply(typeCtx, typeSpec.Name)
 				}
 			}
 		}
@@ -308,43 +283,20 @@ func (r *realReplacer) Apply(ctx interfaces.Context, node ast.Node) ast.Node {
 	case *ast.FuncDecl:
 		log.Printf("Apply: Processing function declaration: %s", n.Name.Name)
 		// 添加函数上下文
-		r.pushContext(contextInfo{nodeType: "func"})
-		r.Apply(ctx, n.Name)
-		r.popContext()
-
+		funcCtx := ctx.Push("func")
+		r.Apply(funcCtx, n.Name)
 	// 处理类型声明
 	case *ast.TypeSpec:
 		log.Printf("Apply: Processing type declaration: %s", n.Name.Name)
 		// 添加类型上下文
-		r.pushContext(contextInfo{nodeType: "type"})
-		r.Apply(ctx, n.Name)
-		r.popContext()
+		typeCtx := ctx.Push("type")
+		r.Apply(typeCtx, n.Name)
 
 	// TODO: Add more cases for other AST node types if needed
 	default:
 		// log.Printf("Real replacer applied to node: %T", node) // Too verbose
 	}
 	return node
-}
-
-// getCurrentContext 获取当前上下文
-func (r *realReplacer) getCurrentContext() contextInfo {
-	if len(r.contextStack) > 0 {
-		return r.contextStack[len(r.contextStack)-1]
-	}
-	return contextInfo{}
-}
-
-// pushContext 添加上下文到栈
-func (r *realReplacer) pushContext(ctx contextInfo) {
-	r.contextStack = append(r.contextStack, ctx)
-}
-
-// popContext 从栈中移除上下文
-func (r *realReplacer) popContext() {
-	if len(r.contextStack) > 0 {
-		r.contextStack = r.contextStack[:len(r.contextStack)-1]
-	}
 }
 
 // isWildcardConstRuleOnly 检查是否只有常量通配符规则
@@ -382,7 +334,6 @@ func NewReplacer(compiledCfg *interfaces.CompiledConfig) interfaces.Replacer {
 		config:         compiledCfg,
 		packageAliases: packageAliases,
 		processedNodes: make(map[ast.Node]bool), // 初始化已处理节点映射
-		contextStack:   make([]contextInfo, 0),  // 初始化上下文栈
 	}
 }
 
@@ -551,31 +502,4 @@ func convertPriorityRules(prules map[string][]priorityRule) map[string][]interfa
 	}
 
 	return result
-}
-
-// applyRules applies a set of rename rules to a given name and returns the result.
-// This function is copied from internal/generator/generator.go for now.
-// Ideally, this logic would be in a shared utility package or the compiler would
-// directly implement the rule application without copying.
-func applyRules(name string, rules []interfaces.RenameRule) (string, error) {
-	currentName := name
-	for _, rule := range rules {
-		switch rule.Type {
-		case "explicit":
-			if name == rule.From {
-				return rule.To, nil // Explicit rule is final
-			}
-		case "prefix":
-			currentName = rule.Value + currentName
-		case "suffix":
-			currentName = currentName + rule.Value
-		case "regex":
-			re, err := regexp.Compile(rule.Pattern)
-			if err != nil {
-				return "", fmt.Errorf("invalid regex pattern '%s': %w", rule.Pattern, err)
-			}
-			currentName = re.ReplaceAllString(currentName, rule.Replace)
-		}
-	}
-	return currentName, nil
 }
