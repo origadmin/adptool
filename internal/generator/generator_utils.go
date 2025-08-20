@@ -2,6 +2,7 @@ package generator
 
 import (
 	"go/ast"
+	"log"
 
 	"github.com/origadmin/adptool/internal/interfaces"
 )
@@ -55,39 +56,47 @@ func qualifyType(expr ast.Expr, pkgAlias string, definedTypes map[string]bool) a
 		// Check if this identifier refers to a type we've defined
 		if definedTypes != nil && definedTypes[t.Name] {
 			// Use the local type name directly
+			log.Printf("qualifyType: Using local type %s", t.Name)
 			return t
 		}
-		
+
 		// Check if this is a built-in type that should not be qualified
 		if isBuiltinType(t.Name) {
+			log.Printf("qualifyType: Using built-in type %s", t.Name)
 			return t
 		}
-		
+
 		// For identifiers that are not our own defined types, use selector expression
+		log.Printf("qualifyType: Qualifying identifier %s with package %s", t.Name, pkgAlias)
 		return &ast.SelectorExpr{
 			X:   ast.NewIdent(pkgAlias),
 			Sel: t,
 		}
 	case *ast.StarExpr:
+		log.Printf("qualifyType: Processing pointer type")
 		return &ast.StarExpr{
 			X: qualifyType(t.X, pkgAlias, definedTypes),
 		}
 	case *ast.ArrayType:
+		log.Printf("qualifyType: Processing array type")
 		return &ast.ArrayType{
 			Len: qualifyType(t.Len, pkgAlias, definedTypes),
 			Elt: qualifyType(t.Elt, pkgAlias, definedTypes),
 		}
 	case *ast.MapType:
+		log.Printf("qualifyType: Processing map type")
 		return &ast.MapType{
 			Key:   qualifyType(t.Key, pkgAlias, definedTypes),
 			Value: qualifyType(t.Value, pkgAlias, definedTypes),
 		}
 	case *ast.ChanType:
+		log.Printf("qualifyType: Processing channel type")
 		return &ast.ChanType{
 			Dir:   t.Dir,
 			Value: qualifyType(t.Value, pkgAlias, definedTypes),
 		}
 	case *ast.FuncType:
+		log.Printf("qualifyType: Processing function type")
 		// Process function parameters
 		var newParams []*ast.Field
 		if t.Params != nil {
@@ -119,22 +128,32 @@ func qualifyType(expr ast.Expr, pkgAlias string, definedTypes map[string]bool) a
 	case *ast.InterfaceType:
 		// For interface types, we generally don't need to qualify methods
 		// as they are part of the interface definition
+		log.Printf("qualifyType: Processing interface type")
 		return t
 	case *ast.StructType:
 		// For struct types, we generally don't need to qualify fields
 		// as they are part of the struct definition
+		log.Printf("qualifyType: Processing struct type")
 		return t
 	case *ast.SelectorExpr:
 		// Handle selector expressions (e.g., pkg.Type)
 		// If the selector is a defined type, use it directly
-		if definedTypes != nil && definedTypes[t.Sel.Name] {
-			// 如果是已定义的类型，直接返回类型名（不带包前缀）
-			return ast.NewIdent(t.Sel.Name)
-		}
+		log.Printf("qualifyType: Processing selector expression %s.%s",
+			getIdentName(t.X), getIdentName(t.Sel))
 		// Otherwise, return as is
+		log.Printf("qualifyType: Keeping selector expression as is")
 		return t
 	default:
 		// For all other types, return as is
+		log.Printf("qualifyType: Unknown type %T, returning as is", t)
 		return t
 	}
+}
+
+// getIdentName 获取标识符名称的辅助函数
+func getIdentName(expr ast.Expr) string {
+	if ident, ok := expr.(*ast.Ident); ok {
+		return ident.Name
+	}
+	return ""
 }

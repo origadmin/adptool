@@ -5,6 +5,7 @@ import (
 	"go/ast"
 	"go/printer"
 	"go/token"
+	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -61,6 +62,65 @@ func (g *Generator) Generate(packages []*PackageInfo) error {
 	// Process each source package
 	if err := g.processPackages(packages); err != nil {
 		return err
+	}
+
+	// Apply replacements using the Replacer to all collected declarations
+	// This needs to happen before buildOutputFile but after all declarations are collected
+	if g.replacer != nil {
+		// Apply replacer to all collected declarations across all packages
+		for alias, pkgDecls := range g.allPackageDecls {
+			// Apply to type declarations
+			for i, spec := range pkgDecls.typeSpecs {
+				if typeSpec, ok := spec.(*ast.TypeSpec); ok {
+					// Apply replacer to the type spec
+					replaced := g.replacer.Apply(typeSpec)
+					if replacedSpec, ok := replaced.(*ast.TypeSpec); ok {
+						pkgDecls.typeSpecs[i] = replacedSpec
+						
+						// Update definedTypes with the new type name
+						originalName := strings.TrimPrefix(
+							strings.TrimPrefix(
+								strings.TrimPrefix(
+									strings.TrimPrefix(typeSpec.Name.Name, "Const"), "Type"), "Var"), "Func")
+						newName := strings.TrimPrefix(
+							strings.TrimPrefix(
+								strings.TrimPrefix(
+									strings.TrimPrefix(replacedSpec.Name.Name, "Const"), "Type"), "Var"), "Func")
+						
+						// Keep the type in definedTypes with its original name
+						if _, exists := g.definedTypes[originalName]; !exists {
+							g.definedTypes[originalName] = true
+						}
+						log.Printf("Generate: Applied replacer to type %s (original: %s, new: %s) in package %s", 
+							typeSpec.Name.Name, originalName, newName, alias)
+					}
+				}
+			}
+			
+			// Apply to const declarations
+			for i, spec := range pkgDecls.constSpecs {
+				replaced := g.replacer.Apply(spec)
+				if replacedSpec, ok := replaced.(*ast.ValueSpec); ok {
+					pkgDecls.constSpecs[i] = replacedSpec
+				}
+			}
+			
+			// Apply to var declarations
+			for i, spec := range pkgDecls.varSpecs {
+				replaced := g.replacer.Apply(spec)
+				if replacedSpec, ok := replaced.(*ast.ValueSpec); ok {
+					pkgDecls.varSpecs[i] = replacedSpec
+				}
+			}
+			
+			// Apply to function declarations
+			for i, decl := range pkgDecls.funcDecls {
+				replaced := g.replacer.Apply(decl)
+				if replacedDecl, ok := replaced.(*ast.FuncDecl); ok {
+					pkgDecls.funcDecls[i] = replacedDecl
+				}
+			}
+		}
 	}
 
 	// Build the output file structure
@@ -172,6 +232,17 @@ func (g *Generator) collectTypeDeclaration(typeSpec *ast.TypeSpec, importAlias s
 			g.allPackageDecls[importAlias] = &packageDecls{}
 		}
 		g.allPackageDecls[importAlias].typeSpecs = append(g.allPackageDecls[importAlias].typeSpecs, newSpec)
+		
+		// Add to definedTypes map using the original name (without prefix)
+		// 从带前缀的名称中提取原始名称
+		originalTypeName := strings.TrimPrefix(
+			strings.TrimPrefix(
+				strings.TrimPrefix(
+					strings.TrimPrefix(typeSpec.Name.Name, "Const"), "Type"), "Var"), "Func")
+		g.definedTypes[originalTypeName] = true
+		
+		log.Printf("collectTypeDeclaration: Added %s (original: %s) to definedTypes. Current definedTypes: %v", 
+			typeSpec.Name.Name, originalTypeName, g.definedTypes)
 	}
 }
 
@@ -199,6 +270,9 @@ func (g *Generator) addTypeDeclaration(typeSpec *ast.TypeSpec, importAlias strin
 			strings.TrimPrefix(
 				strings.TrimPrefix(typeSpec.Name.Name, "Const"), "Type"), "Var"), "Func")
 	g.definedTypes[originalName] = true
+	
+	log.Printf("addTypeDeclaration: Added %s (original: %s) to definedTypes. Current definedTypes: %v", 
+		typeSpec.Name.Name, originalName, g.definedTypes)
 }
 
 // collectOtherDeclarations collects function, variable, and constant declarations from the source package.
@@ -260,7 +334,7 @@ func (g *Generator) collectFunctionDeclaration(funcDecl *ast.FuncDecl, importAli
 			results = []ast.Stmt{&ast.ExprStmt{X: callExpr}}
 		}
 
-		// Create function declaration
+		// Create function declaration with qualified types
 		newFuncDecl := &ast.FuncDecl{
 			Name: funcDecl.Name,
 			Type: qualifyType(funcDecl.Type, importAlias, g.definedTypes).(*ast.FuncType),
@@ -281,6 +355,9 @@ func (g *Generator) collectValueDeclaration(genDecl *ast.GenDecl, importAlias st
 		if valueSpec, ok := spec.(*ast.ValueSpec); ok {
 			for _, name := range valueSpec.Names {
 				if name.IsExported() {
+					// Apply replacer to get the correct name
+					renamedName := g.replacer.Apply(name).(*ast.Ident)
+					
 					// Create new value specification
 					// 使用原始名称而不是已经被重命名的名称
 					originalName := &ast.Ident{
@@ -291,7 +368,7 @@ func (g *Generator) collectValueDeclaration(genDecl *ast.GenDecl, importAlias st
 					}
 					
 					newSpec := &ast.ValueSpec{
-						Names: []*ast.Ident{name},
+						Names: []*ast.Ident{renamedName}, // 使用重命名后的标识符
 						Values: []ast.Expr{
 							&ast.SelectorExpr{
 								X:   ast.NewIdent(importAlias),
@@ -363,15 +440,6 @@ func (g *Generator) buildOutputFile() {
 	orderedDecls = append(orderedDecls, allFuncDecls...)
 
 	g.aliasFile.Decls = orderedDecls
-
-	// Apply replacements using the Replacer if available
-	// 确保在收集所有声明之后但在构建输出文件之前应用 replacer
-	if g.replacer != nil {
-		visitor := &replacerVisitor{replacer: g.replacer}
-		for _, decl := range g.aliasFile.Decls {
-			ast.Walk(visitor, decl)
-		}
-	}
 }
 
 // buildImportDeclaration builds the import declaration.
@@ -385,6 +453,8 @@ func (g *Generator) buildImportDeclaration() ast.Decl {
 
 // collectAllDeclarations collects all declarations from all packages.
 func (g *Generator) collectAllDeclarations() ([]ast.Spec, []ast.Spec, []ast.Spec, []ast.Decl) {
+	log.Printf("collectAllDeclarations: Current definedTypes: %v", g.definedTypes)
+	
 	var allConstSpecs []ast.Spec
 	var allVarSpecs []ast.Spec
 	var allTypeSpecs []ast.Spec
@@ -407,10 +477,6 @@ func (g *Generator) collectAllDeclarations() ([]ast.Spec, []ast.Spec, []ast.Spec
 
 		// Update function declarations to use local type references
 		for _, funcDecl := range pkgDecls.funcDecls {
-			if fd, ok := funcDecl.(*ast.FuncDecl); ok {
-				// Re-qualify the function type with defined types
-				fd.Type = qualifyType(fd.Type, alias, g.definedTypes).(*ast.FuncType)
-			}
 			allFuncDecls = append(allFuncDecls, funcDecl)
 		}
 	}

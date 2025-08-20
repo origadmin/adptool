@@ -20,8 +20,8 @@ type compiledRules map[string][]interfaces.RenameRule
 
 // priorityRule represents a rule with its priority level and package context
 type priorityRule struct {
-	rule     interfaces.RenameRule
-	priority int // 0: global, 1: package level, 2: type specific
+	rule        interfaces.RenameRule
+	priority    int    // 0: global, 1: package level, 2: type specific
 	packageName string // Package name for package-level rules
 	isWildcard  bool   // Whether this is a wildcard rule
 }
@@ -54,20 +54,20 @@ func (r *realReplacer) Apply(node ast.Node) ast.Node {
 		// 标记节点已处理
 		r.processedNodes[node] = true
 	}
-	
+
 	switch n := node.(type) {
 	case *ast.Ident:
 		log.Printf("Apply: Processing identifier: %s", n.Name)
-		
+
 		// 检查是否为包别名，如果是则不应用重命名规则
 		if r.packageAliases != nil && r.packageAliases[n.Name] {
 			log.Printf("Apply: Skipping package alias %s", n.Name)
 			return node
 		}
-		
+
 		// 获取当前上下文
 		currentContext := r.getCurrentContext()
-		
+
 		// 根据上下文决定是否应用规则
 		shouldApplyRules := false
 		ruleType := ""
@@ -94,22 +94,19 @@ func (r *realReplacer) Apply(node ast.Node) ast.Node {
 		} else {
 			log.Printf("Apply: Skipping rule application for %s as it's not in a rule-applicable context", n.Name)
 		}
-		
+
 		if shouldApplyRules {
 			// 获取当前节点的包上下文
 			// 在这个简化版本中，我们将实现一个基本的匹配逻辑
 			// 实际应用中，可能需要通过AST节点的上下文来确定当前所在的包
-			
+
 			// 首先检查是否有针对该标识符的特定规则
 			if priorityRulesToApply, ok := r.config.PriorityRules[n.Name]; ok {
 				log.Printf("Apply: Found priority rules for %s: %+v", n.Name, priorityRulesToApply)
 
 				// 根据规则类型过滤规则
-				var filteredRules []struct {
-					Rule     interfaces.RenameRule
-					Priority int
-				}
-				
+				var filteredRules []interfaces.PriorityRule
+
 				if ruleType != "" {
 					for _, rule := range priorityRulesToApply {
 						// 这里需要根据规则的来源判断规则类型
@@ -153,27 +150,24 @@ func (r *realReplacer) Apply(node ast.Node) ast.Node {
 				log.Printf("Apply: Found wildcard rules: %+v", priorityWildcardRules)
 
 				// 根据规则类型过滤通配符规则
-				var filteredRules []struct {
-					Rule     interfaces.RenameRule
-					Priority int
-				}
-				
+				var filteredRules []interfaces.PriorityRule
+
 				if ruleType != "" {
 					for _, rule := range priorityWildcardRules {
 						// 根据上下文类型过滤规则
 						// 这里需要更复杂的逻辑来确定规则类型与上下文的匹配
 						// 简化处理：假设规则的Value可以标识规则类型
-						if (ruleType == "const" && rule.Rule.Value == "Const") || 
-						   (ruleType == "type" && rule.Rule.Value == "Type") ||
-						   (ruleType == "var" && rule.Rule.Value == "Var") ||
-						   (ruleType == "func" && rule.Rule.Value == "Func") {
+						if (ruleType == "const" && rule.Rule.Value == "Const") ||
+							(ruleType == "type" && rule.Rule.Value == "Type") ||
+							(ruleType == "var" && rule.Rule.Value == "Var") ||
+							(ruleType == "func" && rule.Rule.Value == "Func") {
 							filteredRules = append(filteredRules, rule)
 						}
 					}
 				} else {
 					filteredRules = priorityWildcardRules
 				}
-				
+
 				// 应用通配符规则
 				if len(filteredRules) > 0 {
 					var rulesToApply []interfaces.RenameRule
@@ -187,7 +181,7 @@ func (r *realReplacer) Apply(node ast.Node) ast.Node {
 							Replace: rule.Rule.Replace,
 						})
 					}
-					
+
 					newName, err := applyRules(n.Name, rulesToApply)
 					if err != nil {
 						log.Printf("Error applying wildcard rules to identifier %s: %v", n.Name, err)
@@ -205,14 +199,14 @@ func (r *realReplacer) Apply(node ast.Node) ast.Node {
 
 				// 根据规则类型过滤规则
 				var filteredRules []interfaces.RenameRule
-				
+
 				if ruleType != "" {
 					for _, rule := range rulesToApply {
 						// 根据上下文类型过滤规则
-						if (ruleType == "const" && rule.Value == "Const") || 
-						   (ruleType == "type" && rule.Value == "Type") ||
-						   (ruleType == "var" && rule.Value == "Var") ||
-						   (ruleType == "func" && rule.Value == "Func") {
+						if (ruleType == "const" && rule.Value == "Const") ||
+							(ruleType == "type" && rule.Value == "Type") ||
+							(ruleType == "var" && rule.Value == "Var") ||
+							(ruleType == "func" && rule.Value == "Func") {
 							filteredRules = append(filteredRules, rule)
 						}
 					}
@@ -258,7 +252,7 @@ func (r *realReplacer) Apply(node ast.Node) ast.Node {
 			// 添加常量上下文
 			r.pushContext(contextInfo{nodeType: "const"})
 			defer r.popContext()
-			
+
 			// 处理常量声明中的值规范
 			for _, spec := range n.Specs {
 				if valueSpec, ok := spec.(*ast.ValueSpec); ok {
@@ -270,7 +264,7 @@ func (r *realReplacer) Apply(node ast.Node) ast.Node {
 						r.popContext()
 					}
 					r.popContext()
-					
+
 					// 处理值部分，但不应用规则到引用的标识符
 					// 这里我们不递归处理值部分，因为AST遍历会自动处理其中的标识符
 				}
@@ -280,7 +274,7 @@ func (r *realReplacer) Apply(node ast.Node) ast.Node {
 			// 添加变量上下文
 			r.pushContext(contextInfo{nodeType: "var"})
 			defer r.popContext()
-			
+
 			// 处理变量声明中的值规范
 			for _, spec := range n.Specs {
 				if valueSpec, ok := spec.(*ast.ValueSpec); ok {
@@ -299,7 +293,7 @@ func (r *realReplacer) Apply(node ast.Node) ast.Node {
 			// 添加类型上下文
 			r.pushContext(contextInfo{nodeType: "type_decl"})
 			defer r.popContext()
-			
+
 			// 处理类型声明中的类型规范
 			for _, spec := range n.Specs {
 				if typeSpec, ok := spec.(*ast.TypeSpec); ok {
@@ -309,7 +303,7 @@ func (r *realReplacer) Apply(node ast.Node) ast.Node {
 				}
 			}
 		}
-		
+
 	// 处理函数声明
 	case *ast.FuncDecl:
 		log.Printf("Apply: Processing function declaration: %s", n.Name.Name)
@@ -317,7 +311,7 @@ func (r *realReplacer) Apply(node ast.Node) ast.Node {
 		r.pushContext(contextInfo{nodeType: "func"})
 		r.Apply(n.Name)
 		r.popContext()
-		
+
 	// 处理类型声明
 	case *ast.TypeSpec:
 		log.Printf("Apply: Processing type declaration: %s", n.Name.Name)
@@ -377,13 +371,13 @@ func NewReplacer(compiledCfg *interfaces.CompiledConfig) interfaces.Replacer {
 	if compiledCfg == nil {
 		return nil
 	}
-	
+
 	// 初始化包别名字典
 	packageAliases := make(map[string]bool)
 	for _, pkg := range compiledCfg.Packages {
 		packageAliases[pkg.ImportAlias] = true
 	}
-	
+
 	return &realReplacer{
 		config:         compiledCfg,
 		packageAliases: packageAliases,
@@ -457,7 +451,7 @@ func Compile(cfg *config.Config) (*interfaces.CompiledConfig, error) {
 		for _, c := range pkg.Constants {
 			processConfigRules(c, 1, pkg.Import)
 		}
-		
+
 		// 添加包级通配符规则
 		// 这里可以添加针对整个包的通配符规则处理
 	}
@@ -509,7 +503,7 @@ func Compile(cfg *config.Config) (*interfaces.CompiledConfig, error) {
 		if finalAlias == "" {
 			finalAlias = path.Base(pkg.Import)
 		}
-		
+
 		compiledPkg := &interfaces.CompiledPackage{
 			ImportPath:  pkg.Import,
 			ImportAlias: finalAlias,
@@ -540,34 +534,22 @@ func Compile(cfg *config.Config) (*interfaces.CompiledConfig, error) {
 }
 
 // convertPriorityRules converts the internal priorityRule map to the format used in CompiledConfig
-func convertPriorityRules(prules map[string][]priorityRule) map[string][]struct {
-	Rule     interfaces.RenameRule
-	Priority int
-} {
-	result := make(map[string][]struct {
-		Rule     interfaces.RenameRule
-		Priority int
-	})
-	
+func convertPriorityRules(prules map[string][]priorityRule) map[string][]interfaces.PriorityRule {
+	result := make(map[string][]interfaces.PriorityRule)
+
 	for name, rules := range prules {
-		converted := make([]struct {
-			Rule     interfaces.RenameRule
-			Priority int
-		}, len(rules))
-		
+		converted := make([]interfaces.PriorityRule, len(rules))
+
 		for i, rule := range rules {
-			converted[i] = struct {
-				Rule     interfaces.RenameRule
-				Priority int
-			}{
+			converted[i] = interfaces.PriorityRule{
 				Rule:     rule.rule,
 				Priority: rule.priority,
 			}
 		}
-		
+
 		result[name] = converted
 	}
-	
+
 	return result
 }
 
