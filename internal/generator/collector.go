@@ -81,11 +81,11 @@ func (c *Collector) loadPackage(importPath string) (*packages.Package, error) {
 }
 
 func (c *Collector) collectImports(sourcePkg *packages.Package) {
-	for importPath := range sourcePkg.Imports {
-		if _, exists := c.importSpecs[importPath]; !exists {
-			c.importSpecs[importPath] = &ast.ImportSpec{
-				Path: &ast.BasicLit{Kind: token.STRING, Value: fmt.Sprintf("%q", importPath)},
-				Name: nil, // Default to no alias
+	for _, file := range sourcePkg.Syntax {
+		for _, importSpec := range file.Imports {
+			importPath := strings.Trim(importSpec.Path.Value, "")
+			if _, exists := c.importSpecs[importPath]; !exists {
+				c.importSpecs[importPath] = importSpec
 			}
 		}
 	}
@@ -107,7 +107,7 @@ func (c *Collector) collectTypeDeclarations(sourcePkg *packages.Package, importA
 
 func (c *Collector) collectTypeDeclaration(typeSpec *ast.TypeSpec, importAlias string) {
 	if typeSpec.Name.IsExported() {
-		originalName := c.extractOriginalName(typeSpec.Name.Name)
+		originalName := typeSpec.Name.Name
 
 		newSpec := &ast.TypeSpec{
 			Name: typeSpec.Name,
@@ -150,7 +150,7 @@ func (c *Collector) collectOtherDeclarations(sourcePkg *packages.Package, import
 
 func (c *Collector) collectFunctionDeclaration(funcDecl *ast.FuncDecl, importAlias string) {
 	if funcDecl.Recv == nil && funcDecl.Name.IsExported() {
-		originalName := c.extractOriginalName(funcDecl.Name.Name)
+		originalName := funcDecl.Name.Name
 
 		var args []ast.Expr
 		if funcDecl.Type.Params != nil {
@@ -194,22 +194,15 @@ func (c *Collector) collectValueDeclaration(genDecl *ast.GenDecl, importAlias st
 		if valueSpec, ok := spec.(*ast.ValueSpec); ok {
 			for _, name := range valueSpec.Names {
 				if name.IsExported() {
-					originalName := c.extractOriginalName(name.Name)
-
-					finalName := name
-					if c.replacer != nil {
-						if renamed, ok := c.replacer.Apply(name).(*ast.Ident); ok {
-							finalName = renamed
-						}
-					}
+					originalName := name.Name
 
 					newSpec := &ast.ValueSpec{
-						Names: []*ast.Ident{finalName},
+						Names: []*ast.Ident{name},
 						Values: []ast.Expr{
 							&ast.SelectorExpr{
 								X:   ast.NewIdent(importAlias),
 								Sel: ast.NewIdent(originalName),
-							},
+						},
 						},
 					}
 
@@ -235,13 +228,12 @@ func (c *Collector) applyReplacements() {
 				replaced := c.replacer.Apply(typeSpec)
 				if replacedSpec, ok := replaced.(*ast.TypeSpec); ok {
 					pkgDecls.typeSpecs[i] = replacedSpec
-					originalName := c.extractOriginalName(typeSpec.Name.Name)
-					newName := c.extractOriginalName(replacedSpec.Name.Name)
+					// Update definedTypes with the new type name
+					originalName := replacedSpec.Name.Name
 					if _, exists := c.definedTypes[originalName]; !exists {
 						c.definedTypes[originalName] = true
 					}
-					log.Printf("applyReplacements: Applied replacer to type %s (original: %s, new: %s) in package %s",
-						typeSpec.Name.Name, originalName, newName, alias)
+					log.Printf("applyReplacements: Applied replacer to type %s", replacedSpec.Name.Name)
 				}
 			}
 		}
@@ -268,12 +260,4 @@ func (c *Collector) applyReplacements() {
 			}
 		}
 	}
-}
-
-func (c *Collector) extractOriginalName(name string) string {
-	originalName := strings.TrimPrefix(name, "Const")
-	originalName = strings.TrimPrefix(originalName, "Type")
-	originalName = strings.TrimPrefix(originalName, "Var")
-	originalName = strings.TrimPrefix(originalName, "Func")
-	return originalName
 }
