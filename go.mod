@@ -2,8 +2,6 @@ module github.com/origadmin/adptool
 
 go 1.23.0
 
-toolchain go1.23.10
-
 require (
 	github.com/spf13/viper v1.20.1
 	github.com/stretchr/testify v1.10.0
