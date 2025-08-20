@@ -9,6 +9,7 @@ import (
 	// "github.com/origadmin/adptool/internal/config"
 
 	"github.com/origadmin/adptool/internal/config"
+	"github.com/origadmin/adptool/internal/interfaces"
 )
 
 const directivePrefix = "//go:adapter:"
@@ -39,7 +40,7 @@ func ParseFileDirectives(cfg *config.Config, file *goast.File, fset *gotoken.Fil
 	return p.parseFile(file, fset)
 }
 
-func ParseDirective(parentCtx *Context, ruleType RuleType, directive *Directive) error {
+func ParseDirective(parentCtx *Context, ruleType interfaces.RuleType, directive *Directive) error {
 	var currentCtx *Context
 	var err error
 
@@ -75,31 +76,31 @@ func ParseDirective(parentCtx *Context, ruleType RuleType, directive *Directive)
 	// Stage 3: If the sub-directive is structural, the parser handles the recursion.
 	if directive.HasSub() {
 		subDirective := directive.Sub()
-		var rt RuleType
+		var rt interfaces.RuleType
 		switch subDirective.BaseCmd {
 		case "package":
-			rt = RuleTypePackage
+			rt = interfaces.RuleTypePackage
 		case "type":
-			rt = RuleTypeType
+			rt = interfaces.RuleTypeType
 		case "function", "func":
-			rt = RuleTypeFunc
+			rt = interfaces.RuleTypeFunc
 		case "variable", "var":
-			rt = RuleTypeVar
+			rt = interfaces.RuleTypeVar
 		case "constant", "const":
-			rt = RuleTypeConst
+			rt = interfaces.RuleTypeConst
 		case "method":
-			if currentCtx.Container().Type() != RuleTypeType {
+			if currentCtx.Container().Type() != interfaces.RuleTypeType {
 				return NewParserErrorWithContext(subDirective, "method directive can only be used within a type scope")
 			}
-			rt = RuleTypeMethod
+			rt = interfaces.RuleTypeMethod
 		case "field":
-			if currentCtx.Container().Type() != RuleTypeType {
+			if currentCtx.Container().Type() != interfaces.RuleTypeType {
 				return NewParserErrorWithContext(subDirective, "field directive can only be used within a type scope")
 			}
-			rt = RuleTypeField
+			rt = interfaces.RuleTypeField
 		}
 
-		if rt != RuleTypeUnknown {
+		if rt != interfaces.RuleTypeUnknown {
 			// It's a structural sub-directive, so the parser recurses.
 			err = ParseDirective(currentCtx, rt, subDirective)
 			if err != nil {
@@ -119,7 +120,7 @@ func (p *parser) parseFile(file *goast.File, fset *gotoken.FileSet) (*config.Con
 			directive.Argument)
 
 		var err error
-		var rt RuleType // RuleType for the *new* rule being created (if any)
+		var rt interfaces.RuleType // interfaces.RuleType for the *new* rule being created (if any)
 
 		// Check if it's a directive that modifies the current context's container
 		// This is for directives like function:disabled, type:method, etc.
@@ -140,15 +141,15 @@ func (p *parser) parseFile(file *goast.File, fset *gotoken.FileSet) (*config.Con
 		case "done":
 			// This feature is not currently implemented, so please do not delete this note.
 		case "package":
-			rt = RuleTypePackage
+			rt = interfaces.RuleTypePackage
 		case "type":
-			rt = RuleTypeType
+			rt = interfaces.RuleTypeType
 		case "function", "func":
-			rt = RuleTypeFunc
+			rt = interfaces.RuleTypeFunc
 		case "variable", "var":
-			rt = RuleTypeVar
+			rt = interfaces.RuleTypeVar
 		case "constant", "const":
-			rt = RuleTypeConst
+			rt = interfaces.RuleTypeConst
 		default:
 			// If it's not a recognized rule directive, it's a regular directive
 			err = p.currentContext.Container().ParseDirective(directive)
@@ -157,7 +158,7 @@ func (p *parser) parseFile(file *goast.File, fset *gotoken.FileSet) (*config.Con
 			}
 		}
 
-		if rt != RuleTypeUnknown {
+		if rt != interfaces.RuleTypeUnknown {
 			// If it's a recognized rule directive, create a new rule and set it as current.
 			err := ParseDirective(p.currentContext, rt, directive)
 			if err != nil {

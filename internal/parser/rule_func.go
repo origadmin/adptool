@@ -2,6 +2,7 @@ package parser
 
 import (
 	"github.com/origadmin/adptool/internal/config"
+	"github.com/origadmin/adptool/internal/interfaces"
 )
 
 // FuncRule is a wrapper around config.FuncRule to implement the Container interface.
@@ -9,8 +10,8 @@ type FuncRule struct {
 	*config.FuncRule
 }
 
-func (r *FuncRule) Type() RuleType {
-	return RuleTypeFunc
+func (r *FuncRule) Type() interfaces.RuleType {
+	return interfaces.RuleTypeFunc
 }
 
 func (r *FuncRule) ParseDirective(directive *Directive) error {

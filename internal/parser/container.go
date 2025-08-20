@@ -2,6 +2,8 @@ package parser
 
 import (
 	"fmt"
+
+	"github.com/origadmin/adptool/internal/interfaces"
 )
 
 // ContainerFactory defines a function that creates a new instance of a Container.
@@ -10,7 +12,7 @@ type ContainerFactory func() Container
 // --- Factory ---
 
 type factory struct {
-	// The registry is now a slice of factory functions, indexed by RuleType.
+	// The registry is now a slice of factory functions, indexed by interfaces.RuleType.
 	registry []ContainerFactory
 }
 
@@ -18,9 +20,9 @@ var defaultFactory = &factory{
 	registry: make([]ContainerFactory, 10), // Initial capacity
 }
 
-// RegisterContainer registers a factory function for a given RuleType.
+// RegisterContainer registers a factory function for a given interfaces.RuleType.
 // It will resize the registry slice if necessary.
-func RegisterContainer(rt RuleType, factoryFunc ContainerFactory) {
+func RegisterContainer(rt interfaces.RuleType, factoryFunc ContainerFactory) {
 	if int(rt) >= len(defaultFactory.registry) {
 		// Resize the slice to be large enough.
 		newRegistry := make([]ContainerFactory, rt+1)
@@ -33,10 +35,10 @@ func RegisterContainer(rt RuleType, factoryFunc ContainerFactory) {
 	defaultFactory.registry[rt] = factoryFunc
 }
 
-// NewContainer creates a new Container instance for a given RuleType.
+// NewContainer creates a new Container instance for a given interfaces.RuleType.
 // It returns nil if the type is not registered or invalid.
-func NewContainer(ruleType RuleType) Container {
-	if ruleType <= RuleTypeUnknown || int(ruleType) >= len(defaultFactory.registry) || defaultFactory.registry[ruleType] == nil {
+func NewContainer(ruleType interfaces.RuleType) Container {
+	if ruleType <= interfaces.RuleTypeUnknown || int(ruleType) >= len(defaultFactory.registry) || defaultFactory.registry[ruleType] == nil {
 		// This should not happen in normal operation as the parser should have
 		// already validated the rule type via BuildContainer.
 		return invalidRuleInstance
@@ -48,7 +50,7 @@ func NewContainer(ruleType RuleType) Container {
 // and participate in the hierarchical configuration structure.
 type Container interface {
 	// Type returns the type of this container.
-	Type() RuleType
+	Type() interfaces.RuleType
 	// ParseDirective applies a sub-command (e.g., ":rename", ":disabled") to the rule.
 	// It takes the builder to interact with the broader parsing state if necessary (e.g., to set an active member).
 	ParseDirective(directive *Directive) error
@@ -83,8 +85,8 @@ type InvalidRule struct{}
 
 var invalidRuleInstance = &InvalidRule{}
 
-func (i *InvalidRule) Type() RuleType {
-	return RuleTypeUnknown
+func (i *InvalidRule) Type() interfaces.RuleType {
+	return interfaces.RuleTypeUnknown
 }
 
 // ParseDirective for an invalid rule always returns an error.

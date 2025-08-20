@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/origadmin/adptool/internal/config"
+	"github.com/origadmin/adptool/internal/interfaces"
 )
 
 // RootConfig is a wrapper around config.Config to implement the Container interface.
@@ -13,8 +14,8 @@ type RootConfig struct {
 	*config.Config
 }
 
-func (r *RootConfig) Type() RuleType {
-	return RuleTypeRoot
+func (r *RootConfig) Type() interfaces.RuleType {
+	return interfaces.RuleTypeRoot
 }
 
 func (r *RootConfig) ParseDirective(directive *Directive) error {

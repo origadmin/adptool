@@ -5,6 +5,8 @@ import (
 	"strings"
 
 	"github.com/stretchr/testify/mock"
+
+	"github.com/origadmin/adptool/internal/interfaces"
 )
 
 // MockContainer is a mock implementation of the Container interface for testing.
@@ -13,9 +15,9 @@ type MockContainer struct {
 	mock.Mock
 }
 
-func (m *MockContainer) Type() RuleType {
+func (m *MockContainer) Type() interfaces.RuleType {
 	args := m.Called()
-	return args.Get(0).(RuleType)
+	return args.Get(0).(interfaces.RuleType)
 }
 
 func (m *MockContainer) ParseDirective(directive *Directive) error {
