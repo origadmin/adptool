@@ -156,7 +156,7 @@ func (g *Generator) collectTypeDeclaration(typeSpec *ast.TypeSpec, importAlias s
 	if typeSpec.Name.IsExported() {
 		// Extract original name by removing prefixes
 		originalName := g.extractOriginalName(typeSpec.Name.Name)
-		
+
 		// Create new type specification as an alias
 		newSpec := &ast.TypeSpec{
 			Name: typeSpec.Name,
@@ -172,11 +172,11 @@ func (g *Generator) collectTypeDeclaration(typeSpec *ast.TypeSpec, importAlias s
 			g.allPackageDecls[importAlias] = &packageDecls{}
 		}
 		g.allPackageDecls[importAlias].typeSpecs = append(g.allPackageDecls[importAlias].typeSpecs, newSpec)
-		
+
 		// Add to definedTypes map using the original name
 		g.definedTypes[originalName] = true
-		
-		log.Printf("collectTypeDeclaration: Added %s (original: %s) to definedTypes", 
+
+		log.Printf("collectTypeDeclaration: Added %s (original: %s) to definedTypes",
 			typeSpec.Name.Name, originalName)
 	}
 }
@@ -257,7 +257,7 @@ func (g *Generator) collectValueDeclaration(genDecl *ast.GenDecl, importAlias st
 				if name.IsExported() {
 					// Extract original name by removing prefixes
 					originalName := g.extractOriginalName(name.Name)
-					
+
 					// Apply replacer to get the correct name if available
 					finalName := name
 					if g.replacer != nil {
@@ -265,7 +265,7 @@ func (g *Generator) collectValueDeclaration(genDecl *ast.GenDecl, importAlias st
 							finalName = renamed
 						}
 					}
-					
+
 					// Create new value specification
 					newSpec := &ast.ValueSpec{
 						Names: []*ast.Ident{finalName},
@@ -303,21 +303,21 @@ func (g *Generator) applyReplacements() {
 				replaced := g.replacer.Apply(typeSpec)
 				if replacedSpec, ok := replaced.(*ast.TypeSpec); ok {
 					pkgDecls.typeSpecs[i] = replacedSpec
-					
+
 					// Update definedTypes with the new type name
 					originalName := g.extractOriginalName(typeSpec.Name.Name)
 					newName := g.extractOriginalName(replacedSpec.Name.Name)
-					
+
 					// Keep the type in definedTypes with its original name
 					if _, exists := g.definedTypes[originalName]; !exists {
 						g.definedTypes[originalName] = true
 					}
-					log.Printf("applyReplacements: Applied replacer to type %s (original: %s, new: %s) in package %s", 
+					log.Printf("applyReplacements: Applied replacer to type %s (original: %s, new: %s) in package %s",
 						typeSpec.Name.Name, originalName, newName, alias)
 				}
 			}
 		}
-		
+
 		// Apply to const declarations
 		for i, spec := range pkgDecls.constSpecs {
 			replaced := g.replacer.Apply(spec)
@@ -325,7 +325,7 @@ func (g *Generator) applyReplacements() {
 				pkgDecls.constSpecs[i] = replacedSpec
 			}
 		}
-		
+
 		// Apply to var declarations
 		for i, spec := range pkgDecls.varSpecs {
 			replaced := g.replacer.Apply(spec)
@@ -333,11 +333,13 @@ func (g *Generator) applyReplacements() {
 				pkgDecls.varSpecs[i] = replacedSpec
 			}
 		}
-		
+
 		// Apply to function declarations
 		for i, decl := range pkgDecls.funcDecls {
 			replaced := g.replacer.Apply(decl)
 			if replacedDecl, ok := replaced.(*ast.FuncDecl); ok {
+				// Make sure function types are qualified properly
+				replacedDecl.Type = qualifyType(replacedDecl.Type, alias, g.definedTypes).(*ast.FuncType)
 				pkgDecls.funcDecls[i] = replacedDecl
 			}
 		}
@@ -399,7 +401,7 @@ func (g *Generator) buildImportDeclaration() ast.Decl {
 	for _, spec := range g.importSpecs {
 		finalImportSpecs = append(finalImportSpecs, spec)
 	}
-	
+
 	// Sort imports for consistent output
 	sort.Slice(finalImportSpecs, func(i, j int) bool {
 		var iPath, jPath string
@@ -411,14 +413,14 @@ func (g *Generator) buildImportDeclaration() ast.Decl {
 		}
 		return iPath < jPath
 	})
-	
+
 	return &ast.GenDecl{Tok: token.IMPORT, Specs: finalImportSpecs}
 }
 
 // collectAllDeclarations collects all declarations from all packages.
 func (g *Generator) collectAllDeclarations() ([]ast.Spec, []ast.Spec, []ast.Spec, []ast.Decl) {
 	log.Printf("collectAllDeclarations: Current definedTypes: %v", g.definedTypes)
-	
+
 	var allConstSpecs []ast.Spec
 	var allVarSpecs []ast.Spec
 	var allTypeSpecs []ast.Spec

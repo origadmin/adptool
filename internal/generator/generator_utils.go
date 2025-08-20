@@ -140,6 +140,13 @@ func qualifyType(expr ast.Expr, pkgAlias string, definedTypes map[string]bool) a
 		// If the selector is a defined type, use it directly
 		log.Printf("qualifyType: Processing selector expression %s.%s",
 			getIdentName(t.X), getIdentName(t.Sel))
+
+		// Check if the selector refers to a type we've defined
+		if definedTypes != nil && definedTypes[getIdentName(t.Sel)] {
+			log.Printf("qualifyType: Using local type %s directly", getIdentName(t.Sel))
+			return t.Sel
+		}
+
 		// Otherwise, return as is
 		log.Printf("qualifyType: Keeping selector expression as is")
 		return t
@@ -150,7 +157,70 @@ func qualifyType(expr ast.Expr, pkgAlias string, definedTypes map[string]bool) a
 	}
 }
 
-// getIdentName 获取标识符名称的辅助函数
+// qualifyFieldList qualifies all types in a field list with the package alias if needed.
+func qualifyFieldList(list *ast.FieldList, importAlias string, definedTypes map[string]bool) *ast.FieldList {
+	if list == nil {
+		return nil
+	}
+
+	newList := &ast.FieldList{
+		Opening: list.Opening,
+		List:    make([]*ast.Field, len(list.List)),
+		Closing: list.Closing,
+	}
+
+	for i, field := range list.List {
+		newList.List[i] = &ast.Field{
+			Doc:     field.Doc,
+			Names:   field.Names,
+			Type:    qualifyExpr(field.Type, importAlias, definedTypes),
+			Tag:     field.Tag,
+			Comment: field.Comment,
+		}
+	}
+
+	return newList
+}
+
+// qualifyExpr qualifies an expression (type) with the package alias if needed.
+func qualifyExpr(expr ast.Expr, importAlias string, definedTypes map[string]bool) ast.Expr {
+	switch t := expr.(type) {
+	case *ast.Ident:
+		// If this is a defined type, qualify it with the import alias
+		if definedTypes[t.Name] {
+			return &ast.SelectorExpr{
+				X:   ast.NewIdent(importAlias),
+				Sel: t,
+			}
+		}
+		return t
+	case *ast.SelectorExpr:
+		// Already qualified, leave as is
+		return t
+	case *ast.StarExpr:
+		return &ast.StarExpr{
+			Star: t.Star,
+			X:    qualifyExpr(t.X, importAlias, definedTypes),
+		}
+	case *ast.ArrayType:
+		return &ast.ArrayType{
+			Lbrack: t.Lbrack,
+			Len:    t.Len,
+			Elt:    qualifyExpr(t.Elt, importAlias, definedTypes),
+		}
+	case *ast.MapType:
+		return &ast.MapType{
+			Map:   t.Map,
+			Key:   qualifyExpr(t.Key, importAlias, definedTypes),
+			Value: qualifyExpr(t.Value, importAlias, definedTypes),
+		}
+	// Add more type cases as needed
+	default:
+		return t
+	}
+}
+
+// getIdentName 获取标识符名称的辅助函数，现在能正确处理SelectorExpr类型
 func getIdentName(expr ast.Expr) string {
 	if ident, ok := expr.(*ast.Ident); ok {
 		return ident.Name
