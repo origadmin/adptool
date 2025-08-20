@@ -64,9 +64,7 @@ func TestGenerator_Generate(t *testing.T) {
 }
 
 func TestGenerate(t *testing.T) {
-	// 1. Create a mock replacer, removed for now. use the compiler package instead
-
-	// 2. Create the config and compiled config for the test
+	// 1. Create the config and compiled config for the test
 	var cfg = &config.Config{
 		OutputPackageName: "aliaspkg",
 		Constants: []*config.ConstRule{
@@ -115,7 +113,9 @@ func TestGenerate(t *testing.T) {
 				Alias:  "source2",
 			},
 		},
-	} // Compile the config using the compiler package
+	}
+	
+	// Compile the config using the compiler package
 	compiledCfg, err := compiler.Compile(cfg)
 	if err != nil {
 		t.Fatalf("Failed to compile config: %v", err)
