@@ -10,13 +10,15 @@ type CompiledPackage struct {
 	Constants   interface{} // Constants defined in this package
 }
 
+type PriorityRule struct {
+	Rule     RenameRule
+	Priority int
+}
+
 // CompiledConfig holds all the compiled information needed for generation.
 type CompiledConfig struct {
 	PackageName   string // The name of the package to be generated
 	Packages      []*CompiledPackage
-	Rules         map[string][]RenameRule // Compiled rules for generator
-	PriorityRules map[string][]struct {
-		Rule     RenameRule
-		Priority int
-	} // Priority rules for generator
+	Rules         map[string][]RenameRule   // Compiled rules for generator
+	PriorityRules map[string][]PriorityRule // Priority rules for generator
 }
