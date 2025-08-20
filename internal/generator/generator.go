@@ -6,11 +6,13 @@ import (
 	"go/printer"
 	"go/token"
 	"os"
+	"path/filepath"
 	"sort"
 
 	"golang.org/x/tools/go/packages"
 
-	"github.com/origadmin/adptool/internal/config"
+	"github.com/origadmin/adptool/internal/interfaces"
+	"github.com/origadmin/adptool/internal/rules"
 )
 
 // packageDecls struct (already exists, but will be part of Generator's context)
@@ -23,38 +25,40 @@ type packageDecls struct {
 
 // Generator holds the state and configuration for code generation.
 type Generator struct {
-	compiledCfg     *config.CompiledConfig
+	packageName     string
 	outputFilePath  string
 	fset            *token.FileSet
 	aliasFile       *ast.File
 	importSpecs     map[string]*ast.ImportSpec
 	allPackageDecls map[string]*packageDecls
 	definedTypes    map[string]bool
+	replacer        interfaces.Replacer // replacer field (lowercase to indicate it's an internal field)
 }
 
 // NewGenerator creates a new Generator instance.
-func NewGenerator(compiledCfg *config.CompiledConfig, outputFilePath string) *Generator {
+func NewGenerator(packageName string, outputFilePath string, replacer interfaces.Replacer) *Generator {
 	return &Generator{
-		compiledCfg:    compiledCfg,
+		packageName:    packageName,
 		outputFilePath: outputFilePath,
 		fset:           token.NewFileSet(),
 		aliasFile: &ast.File{
-			Name:  ast.NewIdent(compiledCfg.PackageName),
+			Name:  ast.NewIdent(packageName),
 			Decls: []ast.Decl{},
 		},
 		importSpecs:     make(map[string]*ast.ImportSpec),
 		allPackageDecls: make(map[string]*packageDecls),
 		definedTypes:    make(map[string]bool),
+		replacer:        replacer,
 	}
 }
 
 // Generate generates the output code.
-func (g *Generator) Generate() error {
+func (g *Generator) Generate(packages []*PackageInfo) error {
 	// Initialize generator state
 	g.initializeState()
 
 	// Process each source package
-	if err := g.processPackages(); err != nil {
+	if err := g.processPackages(packages); err != nil {
 		return err
 	}
 
@@ -72,8 +76,8 @@ func (g *Generator) initializeState() {
 }
 
 // processPackages processes each source package and collects declarations.
-func (g *Generator) processPackages() error {
-	for _, pkg := range g.compiledCfg.Packages {
+func (g *Generator) processPackages(packages []*PackageInfo) error {
+	for _, pkg := range packages {
 		// Add the primary package being adapted to the import list
 		g.importSpecs[pkg.ImportPath] = &ast.ImportSpec{
 			Path: &ast.BasicLit{Kind: token.STRING, Value: fmt.Sprintf("%q", pkg.ImportPath)},
@@ -166,7 +170,11 @@ func (g *Generator) collectOtherDeclarations(sourcePkg *packages.Package, import
 			case *ast.FuncDecl:
 				g.collectFunctionDeclaration(d, importAlias)
 			case *ast.GenDecl:
-				if d.Tok != token.TYPE { // Skip type declarations, already processed
+				switch d.Tok {
+				case token.CONST:
+					// Handle constants - rules will be applied later by the replacer
+					g.collectValueDeclaration(d, importAlias)
+				case token.VAR:
 					g.collectValueDeclaration(d, importAlias)
 				}
 			}
@@ -187,7 +195,7 @@ func (g *Generator) collectFunctionDeclaration(funcDecl *ast.FuncDecl, importAli
 				}
 			}
 		}
-		
+
 		// Create function call expression
 		callExpr := &ast.CallExpr{
 			Fun: &ast.SelectorExpr{
@@ -196,7 +204,7 @@ func (g *Generator) collectFunctionDeclaration(funcDecl *ast.FuncDecl, importAli
 			},
 			Args: args,
 		}
-		
+
 		// Create function body with appropriate return statement
 		var results []ast.Stmt
 		if funcDecl.Type.Results != nil && len(funcDecl.Type.Results.List) > 0 {
@@ -204,14 +212,14 @@ func (g *Generator) collectFunctionDeclaration(funcDecl *ast.FuncDecl, importAli
 		} else {
 			results = []ast.Stmt{&ast.ExprStmt{X: callExpr}}
 		}
-		
+
 		// Create function declaration
 		newFuncDecl := &ast.FuncDecl{
 			Name: funcDecl.Name,
 			Type: qualifyType(funcDecl.Type, importAlias, g.definedTypes).(*ast.FuncType),
 			Body: &ast.BlockStmt{List: results},
 		}
-		
+
 		// Add to package declarations
 		if g.allPackageDecls[importAlias] == nil {
 			g.allPackageDecls[importAlias] = &packageDecls{}
@@ -236,12 +244,12 @@ func (g *Generator) collectValueDeclaration(genDecl *ast.GenDecl, importAlias st
 							},
 						},
 					}
-					
+
 					// Add to package declarations based on token type
 					if g.allPackageDecls[importAlias] == nil {
 						g.allPackageDecls[importAlias] = &packageDecls{}
 					}
-					
+
 					if genDecl.Tok == token.VAR {
 						g.allPackageDecls[importAlias].varSpecs = append(g.allPackageDecls[importAlias].varSpecs, newSpec)
 					} else if genDecl.Tok == token.CONST {
@@ -258,7 +266,10 @@ func (g *Generator) buildOutputFile() {
 	var orderedDecls []ast.Decl
 
 	// Add imports first
-	orderedDecls = append(orderedDecls, g.buildImportDeclaration())
+	importDecl := g.buildImportDeclaration()
+	if len(importDecl.(*ast.GenDecl).Specs) > 0 {
+		orderedDecls = append(orderedDecls, importDecl)
+	}
 
 	// Collect all declarations by type across all packages
 	allConstSpecs, allVarSpecs, allTypeSpecs, allFuncDecls := g.collectAllDeclarations()
@@ -298,9 +309,14 @@ func (g *Generator) buildOutputFile() {
 
 	g.aliasFile.Decls = orderedDecls
 
-	// Apply replacements to each declaration
-	for i, decl := range g.aliasFile.Decls {
-		g.aliasFile.Decls[i] = g.compiledCfg.Replacer.Apply(decl).(ast.Decl)
+	// Apply replacements using the Replacer if available
+	if g.replacer != nil {
+		for _, decl := range g.aliasFile.Decls {
+			ast.Inspect(decl, func(n ast.Node) bool {
+				g.replacer.Apply(n)
+				return true
+			})
+		}
 	}
 }
 
@@ -351,11 +367,27 @@ func (g *Generator) collectAllDeclarations() ([]ast.Spec, []ast.Spec, []ast.Spec
 // writeOutputFile writes the output file.
 func (g *Generator) writeOutputFile() error {
 	outFile, err := os.Create(g.outputFilePath)
-	fmt.Printf("Attempting to create file: %s, Error: %v\n", g.outputFilePath, err)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create output file: %w", err)
 	}
 	defer outFile.Close()
 
-	return printer.Fprint(outFile, g.fset, g.aliasFile)
+	// Ensure the directory exists
+	outputDir := filepath.Dir(g.outputFilePath)
+	if err := os.MkdirAll(outputDir, 0755); err != nil {
+		return fmt.Errorf("failed to create output directory: %w", err)
+	}
+
+	// Write the file content
+	if err := printer.Fprint(outFile, g.fset, g.aliasFile); err != nil {
+		return fmt.Errorf("failed to write generated code: %w", err)
+	}
+
+	return nil
+}
+
+// ApplyRules applies a set of rename rules to a given name and returns the result.
+// This is a wrapper around rules.ApplyRules for backward compatibility.
+func ApplyRules(name string, rulesList []interfaces.RenameRule) (string, error) {
+	return rules.ApplyRules(name, rulesList)
 }

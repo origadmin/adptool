@@ -5,9 +5,9 @@ import (
 	"os/exec"
 )
 
-// RunGoimports formats the Go file at the given path using goimports.
+// RunGoImports formats the Go file at the given path using goimports.
 // It returns an error if goimports fails or is not found.
-func RunGoimports(filePath string) error {
+func RunGoImports(filePath string) error {
 	goimportsCmd := "goimports"
 	_, err := exec.LookPath(goimportsCmd)
 	if err != nil {
