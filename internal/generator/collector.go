@@ -12,11 +12,11 @@ import (
 	"github.com/origadmin/adptool/internal/interfaces"
 )
 
-// packageDecls holds declarations for a single package
+// packageDecls holds declarations for a single package.
 type packageDecls struct {
 	typeSpecs  []ast.Spec
-	varSpecs   []ast.Spec
-	constSpecs []ast.Spec
+	varDecls   []ast.Decl // Changed from varSpecs to store GenDecls
+	constDecls []ast.Decl // Changed from constSpecs to store GenDecls
 	funcDecls  []ast.Decl
 }
 
@@ -123,10 +123,9 @@ func (c *Collector) collectTypeDeclaration(typeSpec *ast.TypeSpec, importAlias s
 		}
 		c.allPackageDecls[importAlias].typeSpecs = append(c.allPackageDecls[importAlias].typeSpecs, newSpec)
 
-		c.definedTypes[originalName] = true
-
-		log.Printf("collectTypeDeclaration: Added %s (original: %s) to definedTypes",
-			typeSpec.Name.Name, originalName)
+		// Removed: c.definedTypes[originalName] = true
+		// Removed: log.Printf("collectTypeDeclaration: Added %s (original: %s) to definedTypes",
+		// 	typeSpec.Name.Name, originalName)
 	}
 }
 
@@ -202,18 +201,19 @@ func (c *Collector) collectValueDeclaration(genDecl *ast.GenDecl, importAlias st
 							&ast.SelectorExpr{
 								X:   ast.NewIdent(importAlias),
 								Sel: ast.NewIdent(originalName),
-						},
+							},
 						},
 					}
+					newDecl := &ast.GenDecl{Tok: tok, Specs: []ast.Spec{newSpec}}
 
 					if c.allPackageDecls[importAlias] == nil {
 						c.allPackageDecls[importAlias] = &packageDecls{}
 					}
 
 					if tok == token.VAR {
-						c.allPackageDecls[importAlias].varSpecs = append(c.allPackageDecls[importAlias].varSpecs, newSpec)
+						c.allPackageDecls[importAlias].varDecls = append(c.allPackageDecls[importAlias].varDecls, newDecl)
 					} else if tok == token.CONST {
-						c.allPackageDecls[importAlias].constSpecs = append(c.allPackageDecls[importAlias].constSpecs, newSpec)
+						c.allPackageDecls[importAlias].constDecls = append(c.allPackageDecls[importAlias].constDecls, newDecl)
 					}
 				}
 			}
@@ -222,39 +222,45 @@ func (c *Collector) collectValueDeclaration(genDecl *ast.GenDecl, importAlias st
 }
 
 func (c *Collector) applyReplacements() {
+	newDefinedTypes := make(map[string]bool)
+
 	for alias, pkgDecls := range c.allPackageDecls {
+		// First, process all type declarations and populate the new defined types map.
 		for i, spec := range pkgDecls.typeSpecs {
 			if typeSpec, ok := spec.(*ast.TypeSpec); ok {
 				replaced := c.replacer.Apply(typeSpec)
 				if replacedSpec, ok := replaced.(*ast.TypeSpec); ok {
 					pkgDecls.typeSpecs[i] = replacedSpec
-					// Update definedTypes with the new type name
-					originalName := replacedSpec.Name.Name
-					if _, exists := c.definedTypes[originalName]; !exists {
-						c.definedTypes[originalName] = true
-					}
+					// Add the new, final type name to the map.
+					newDefinedTypes[replacedSpec.Name.Name] = true
 					log.Printf("applyReplacements: Applied replacer to type %s", replacedSpec.Name.Name)
 				}
 			}
 		}
 
-		for i, spec := range pkgDecls.constSpecs {
-			replaced := c.replacer.Apply(spec)
-			if replacedSpec, ok := replaced.(*ast.ValueSpec); ok {
-				pkgDecls.constSpecs[i] = replacedSpec
+		// BEFORE processing functions and other declarations, replace the collector's
+		// definedTypes map with the newly created, correct one.
+		c.definedTypes = newDefinedTypes
+
+		// Now, process other declarations using the correct definedTypes map.
+		for i, decl := range pkgDecls.constDecls {
+			replaced := c.replacer.Apply(decl)
+			if replacedDecl, ok := replaced.(*ast.GenDecl); ok {
+				pkgDecls.constDecls[i] = replacedDecl
 			}
 		}
 
-		for i, spec := range pkgDecls.varSpecs {
-			replaced := c.replacer.Apply(spec)
-			if replacedSpec, ok := replaced.(*ast.ValueSpec); ok {
-				pkgDecls.varSpecs[i] = replacedSpec
+		for i, decl := range pkgDecls.varDecls {
+			replaced := c.replacer.Apply(decl)
+			if replacedDecl, ok := replaced.(*ast.GenDecl); ok {
+				pkgDecls.varDecls[i] = replacedDecl
 			}
 		}
 
 		for i, decl := range pkgDecls.funcDecls {
 			replaced := c.replacer.Apply(decl)
 			if replacedDecl, ok := replaced.(*ast.FuncDecl); ok {
+				// This call will now use the correct definedTypes map.
 				replacedDecl.Type = qualifyType(replacedDecl.Type, alias, c.definedTypes).(*ast.FuncType)
 				pkgDecls.funcDecls[i] = replacedDecl
 			}

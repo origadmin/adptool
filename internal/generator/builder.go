@@ -130,13 +130,22 @@ func (b *Builder) collectAllDeclarations(allPackageDecls map[string]*packageDecl
 	for _, alias := range sortedPackageAliases {
 		pkgDecls := allPackageDecls[alias]
 
-		allConstSpecs = append(allConstSpecs, pkgDecls.constSpecs...)
-		allVarSpecs = append(allVarSpecs, pkgDecls.varSpecs...)
-		allTypeSpecs = append(allTypeSpecs, pkgDecls.typeSpecs...)
-
-		for _, funcDecl := range pkgDecls.funcDecls {
-			allFuncDecls = append(allFuncDecls, funcDecl)
+		// Extract specs from const declarations
+		for _, decl := range pkgDecls.constDecls {
+			if genDecl, ok := decl.(*ast.GenDecl); ok {
+				allConstSpecs = append(allConstSpecs, genDecl.Specs...)
+			}
 		}
+
+		// Extract specs from var declarations
+		for _, decl := range pkgDecls.varDecls {
+			if genDecl, ok := decl.(*ast.GenDecl); ok {
+				allVarSpecs = append(allVarSpecs, genDecl.Specs...)
+			}
+		}
+
+		allTypeSpecs = append(allTypeSpecs, pkgDecls.typeSpecs...)
+		allFuncDecls = append(allFuncDecls, pkgDecls.funcDecls...)
 	}
 
 	return allConstSpecs, allVarSpecs, allTypeSpecs, allFuncDecls
