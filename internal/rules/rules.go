@@ -3,43 +3,14 @@ package rules
 import (
 	"fmt"
 	"regexp"
+	"sort"
 
-	"github.com/origadmin/adptool/internal/config" // Assuming config is accessible
+	"github.com/origadmin/adptool/internal/config"
+	"github.com/origadmin/adptool/internal/interfaces"
 )
 
-// RenameRule defines a single renaming rule.
-type RenameRule struct {
-	Type    string // e.g., "prefix", "suffix", "explicit", "regex"
-	Value   string // For prefix/suffix
-	From    string // For explicit
-	To      string // For explicit
-	Pattern string // For regex
-	Replace string // For regex
-}
-
-// ConvertRuleSetToRenameRules converts a config.RuleSet to a slice of RenameRule.
-func ConvertRuleSetToRenameRules(rs *config.RuleSet) []RenameRule {
-	var renameRules []RenameRule
-
-	if rs.Prefix != "" {
-		renameRules = append(renameRules, RenameRule{Type: "prefix", Value: rs.Prefix})
-	}
-	if rs.Suffix != "" {
-		renameRules = append(renameRules, RenameRule{Type: "suffix", Value: rs.Suffix})
-	}
-	for _, explicit := range rs.Explicit {
-		renameRules = append(renameRules, RenameRule{Type: "explicit", From: explicit.From, To: explicit.To})
-	}
-	for _, regex := range rs.Regex {
-		renameRules = append(renameRules, RenameRule{Type: "regex", Pattern: regex.Pattern, Replace: regex.Replace})
-	}
-	// Add other rule types as needed
-
-	return renameRules
-}
-
 // ApplyRules applies a set of rename rules to a given name and returns the result.
-func ApplyRules(name string, rules []RenameRule) (string, error) {
+func ApplyRules(name string, rules []interfaces.RenameRule) (string, error) {
 	currentName := name
 	for _, rule := range rules {
 		switch rule.Type {
@@ -60,4 +31,53 @@ func ApplyRules(name string, rules []RenameRule) (string, error) {
 		}
 	}
 	return currentName, nil
+}
+
+// ConvertRuleSetToRenameRules converts a RuleSet to a slice of RenameRule.
+func ConvertRuleSetToRenameRules(rs *config.RuleSet) []interfaces.RenameRule {
+	var renameRules []interfaces.RenameRule
+
+	if rs == nil {
+		return renameRules
+	}
+
+	// Process explicit rules first (highest priority)
+	if len(rs.Explicit) > 0 {
+		// Sort by 'From' field to ensure deterministic order
+		explicitRules := make([]*config.ExplicitRule, len(rs.Explicit))
+		copy(explicitRules, rs.Explicit)
+		sort.Slice(explicitRules, func(i, j int) bool {
+			return explicitRules[i].From < explicitRules[j].From
+		})
+
+		for _, explicit := range explicitRules {
+			renameRules = append(renameRules, interfaces.RenameRule{Type: "explicit", From: explicit.From, To: explicit.To})
+		}
+	}
+
+	// Process prefix rules (medium priority)
+	if rs.Prefix != "" {
+		renameRules = append(renameRules, interfaces.RenameRule{Type: "prefix", Value: rs.Prefix})
+	}
+
+	// Process suffix rules (lower priority)
+	if rs.Suffix != "" {
+		renameRules = append(renameRules, interfaces.RenameRule{Type: "suffix", Value: rs.Suffix})
+	}
+
+	// Process regex rules (lowest priority)
+	if len(rs.Regex) > 0 {
+		// Sort by pattern to ensure deterministic order
+		regexRules := make([]*config.RegexRule, len(rs.Regex))
+		copy(regexRules, rs.Regex)
+		sort.Slice(regexRules, func(i, j int) bool {
+			return regexRules[i].Pattern < regexRules[j].Pattern
+		})
+
+		for _, regex := range regexRules {
+			renameRules = append(renameRules, interfaces.RenameRule{Type: "regex", Pattern: regex.Pattern, Replace: regex.Replace})
+		}
+	}
+
+	return renameRules
 }

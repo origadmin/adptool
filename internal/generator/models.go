@@ -1,35 +1,7 @@
 package generator
 
-// Directive represents a parsed //go:adapter directive.
-type Directive struct {
-	Type  string // e.g., "package", "type", "func", "method", "ignore"
-	Value string // The value associated with the directive
-	Line  int    // The line number where the directive was found
-}
-
-// AdapterSpec holds all the information needed to generate an adapter file.
-type AdapterSpec struct {
-	PackageName  string            // The package name for the generated file
-	Imports      map[string]string // Map of import path to alias
-	AdaptedItems []AdaptedItem
-}
-
-// AdaptedItem represents a single item (type, func, etc.) to be adapted.
-type AdaptedItem struct {
-	OriginalName string     // e.g., "Config", "New"
-	TargetName   string     // The final generated name after applying rules
-	ItemType     string     // "type", "func", "method"
-	Rules        []RenameRule // List of rules to apply
-
-	// More fields will be needed, e.g., for method's receiver
-}
-
-// RenameRule defines a rule for renaming an item.
-type RenameRule struct {
-	Type    string // "explicit", "prefix", "suffix", "regex"
-	Value   string // For prefix/suffix
-	From    string // For explicit
-	To      string // For explicit
-	Pattern string // For regex
-	Replace string // For regex
+// PackageInfo holds the minimal package information needed by the generator.
+type PackageInfo struct {
+	ImportPath  string // The import path of the package
+	ImportAlias string // The alias for the package import
 }

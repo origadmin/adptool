@@ -47,6 +47,8 @@ func NewContainer(ruleType RuleType) Container {
 // Container defines the interface for any object that can hold parsed rules
 // and participate in the hierarchical configuration structure.
 type Container interface {
+	// Type returns the type of this container.
+	Type() RuleType
 	// ParseDirective applies a sub-command (e.g., ":rename", ":disabled") to the rule.
 	// It takes the builder to interact with the broader parsing state if necessary (e.g., to set an active member).
 	ParseDirective(directive *Directive) error
@@ -71,7 +73,6 @@ type Container interface {
 	// Finalize performs any post-processing or validation for this container
 	// after all its direct rules have been added.
 	Finalize(parent Container) error
-	Type() RuleType
 }
 
 // --- Invalid Rule ---

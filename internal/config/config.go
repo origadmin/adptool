@@ -5,8 +5,6 @@ import (
 	"os"
 
 	"gopkg.in/yaml.v3"
-
-	"github.com/origadmin/adptool/internal/interfaces"
 )
 
 // New creates a new, fully initialized Config object.
@@ -51,7 +49,7 @@ func NewDefaults() *Defaults {
 
 // Config is the root of the .adptool.yaml configuration file.
 type Config struct {
-	OutputPackageName string        `yaml:"output_package_name,omitempty"`
+	OutputPackageName string        `yaml:"output_package_name,omitempty" mapstructure:"output_package_name,omitempty" json:"output_package_name,omitempty" toml:"output_package_name,omitempty"`
 	Ignores           []string      `yaml:"ignores,omitempty" mapstructure:"ignores,omitempty" json:"ignores,omitempty" toml:"ignores,omitempty"`
 	Defaults          *Defaults     `yaml:"defaults,omitempty" mapstructure:"defaults,omitempty" json:"defaults,omitempty" toml:"defaults,omitempty"`
 	Props             []*PropsEntry `yaml:"props,omitempty" mapstructure:"props,omitempty" json:"props,omitempty" toml:"props,omitempty"`
@@ -60,23 +58,6 @@ type Config struct {
 	Functions         []*FuncRule   `yaml:"functions,omitempty" mapstructure:"functions,omitempty" json:"functions,omitempty" toml:"functions,omitempty"`
 	Variables         []*VarRule    `yaml:"variables,omitempty" mapstructure:"variables,omitempty" json:"variables,omitempty" toml:"variables,omitempty"`
 	Constants         []*ConstRule  `yaml:"constants,omitempty" mapstructure:"constants,omitempty" json:"constants,omitempty" toml:"constants,omitempty"`
-}
-
-// CompiledPackage holds the compiled information for a single source package.
-type CompiledPackage struct {
-	ImportPath  string
-	ImportAlias string
-	Types       []*TypeRule  // Types defined in this package
-	Functions   []*FuncRule  // Functions defined in this package
-	Variables   []*VarRule   // Variables defined in this package
-	Constants   []*ConstRule // Constants defined in this package
-}
-
-// CompiledConfig holds all the compiled information needed for generation.
-type CompiledConfig struct {
-	PackageName string // The name of the package to be generated
-	Packages    []*CompiledPackage
-	Replacer    interfaces.Replacer
 }
 
 // PropsEntry defines a single variable entry in the config.
