@@ -81,6 +81,16 @@ func (r *realReplacer) Apply(node ast.Node) ast.Node {
 			shouldApplyRules = true
 			ruleType = "type"
 			log.Printf("Apply: Applying type rules for %s in type declaration context", n.Name)
+		} else if currentContext.nodeType == "var_decl_name" {
+			// 如果在变量声明名称上下文中，则应用规则
+			shouldApplyRules = true
+			ruleType = "var"
+			log.Printf("Apply: Applying var rules for %s in var declaration name context", n.Name)
+		} else if currentContext.nodeType == "func" {
+			// 如果在函数声明上下文中，则应用规则
+			shouldApplyRules = true
+			ruleType = "func"
+			log.Printf("Apply: Applying func rules for %s in func declaration context", n.Name)
 		} else {
 			log.Printf("Apply: Skipping rule application for %s as it's not in a rule-applicable context", n.Name)
 		}
@@ -154,7 +164,9 @@ func (r *realReplacer) Apply(node ast.Node) ast.Node {
 						// 这里需要更复杂的逻辑来确定规则类型与上下文的匹配
 						// 简化处理：假设规则的Value可以标识规则类型
 						if (ruleType == "const" && rule.Rule.Value == "Const") || 
-						   (ruleType == "type" && rule.Rule.Value == "Type") {
+						   (ruleType == "type" && rule.Rule.Value == "Type") ||
+						   (ruleType == "var" && rule.Rule.Value == "Var") ||
+						   (ruleType == "func" && rule.Rule.Value == "Func") {
 							filteredRules = append(filteredRules, rule)
 						}
 					}
@@ -198,7 +210,9 @@ func (r *realReplacer) Apply(node ast.Node) ast.Node {
 					for _, rule := range rulesToApply {
 						// 根据上下文类型过滤规则
 						if (ruleType == "const" && rule.Value == "Const") || 
-						   (ruleType == "type" && rule.Value == "Type") {
+						   (ruleType == "type" && rule.Value == "Type") ||
+						   (ruleType == "var" && rule.Value == "Var") ||
+						   (ruleType == "func" && rule.Value == "Func") {
 							filteredRules = append(filteredRules, rule)
 						}
 					}
@@ -266,6 +280,20 @@ func (r *realReplacer) Apply(node ast.Node) ast.Node {
 			// 添加变量上下文
 			r.pushContext(contextInfo{nodeType: "var"})
 			defer r.popContext()
+			
+			// 处理变量声明中的值规范
+			for _, spec := range n.Specs {
+				if valueSpec, ok := spec.(*ast.ValueSpec); ok {
+					// 为变量名称添加声明上下文
+					r.pushContext(contextInfo{nodeType: "var_decl"})
+					for _, name := range valueSpec.Names {
+						r.pushContext(contextInfo{nodeType: "var_decl_name"})
+						r.Apply(name)
+						r.popContext()
+					}
+					r.popContext()
+				}
+			}
 		} else if n.Tok == token.TYPE {
 			log.Printf("Apply: Processing type declaration")
 			// 添加类型上下文
@@ -287,7 +315,8 @@ func (r *realReplacer) Apply(node ast.Node) ast.Node {
 		log.Printf("Apply: Processing function declaration: %s", n.Name.Name)
 		// 添加函数上下文
 		r.pushContext(contextInfo{nodeType: "func"})
-		defer r.popContext()
+		r.Apply(n.Name)
+		r.popContext()
 		
 	// 处理类型声明
 	case *ast.TypeSpec:

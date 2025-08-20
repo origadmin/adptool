@@ -152,7 +152,10 @@ func (g *Generator) collectTypeDeclaration(typeSpec *ast.TypeSpec, importAlias s
 		// Create new type specification
 		// 使用原始名称而不是已经被重命名的名称
 		originalName := &ast.Ident{
-			Name: strings.TrimPrefix(strings.TrimPrefix(typeSpec.Name.Name, "Const"), "Type"), // 简单地移除前缀获取原始名称
+			Name: strings.TrimPrefix(
+				strings.TrimPrefix(
+					strings.TrimPrefix(
+						strings.TrimPrefix(typeSpec.Name.Name, "Const"), "Type"), "Var"), "Func"), // 简单地移除前缀获取原始名称
 		}
 		
 		newSpec := &ast.TypeSpec{
@@ -161,6 +164,7 @@ func (g *Generator) collectTypeDeclaration(typeSpec *ast.TypeSpec, importAlias s
 				X:   ast.NewIdent(importAlias),
 				Sel: originalName,
 			},
+			Assign: 1, // 添加等号使其成为别名而不是新类型
 		}
 
 		// Add to package declarations
@@ -176,16 +180,25 @@ func (g *Generator) addTypeDeclaration(typeSpec *ast.TypeSpec, importAlias strin
 	if g.allPackageDecls[importAlias] == nil {
 		g.allPackageDecls[importAlias] = &packageDecls{}
 	}
-	g.allPackageDecls[importAlias].typeSpecs = append(g.allPackageDecls[importAlias].typeSpecs, &ast.TypeSpec{
+	
+	// Create a new type specification with an alias
+	newTypeSpec := &ast.TypeSpec{
 		Name: typeSpec.Name,
 		Type: &ast.SelectorExpr{
 			X:   ast.NewIdent(importAlias),
 			Sel: typeSpec.Name,
 		},
-		Assign: token.Pos(1), // Set non-zero position to make it an alias type (type A = B)
-	})
-	// Add to definedTypes map
-	g.definedTypes[typeSpec.Name.Name] = true
+		Assign: token.Pos(1), // Non-zero position indicates this is an alias
+	}
+	
+	g.allPackageDecls[importAlias].typeSpecs = append(g.allPackageDecls[importAlias].typeSpecs, newTypeSpec)
+	// Add to definedTypes map using the original name (without prefix)
+	// 从带前缀的名称中提取原始名称
+	originalName := strings.TrimPrefix(
+		strings.TrimPrefix(
+			strings.TrimPrefix(
+				strings.TrimPrefix(typeSpec.Name.Name, "Const"), "Type"), "Var"), "Func")
+	g.definedTypes[originalName] = true
 }
 
 // collectOtherDeclarations collects function, variable, and constant declarations from the source package.
@@ -222,11 +235,19 @@ func (g *Generator) collectFunctionDeclaration(funcDecl *ast.FuncDecl, importAli
 			}
 		}
 
+		// 使用原始名称而不是已经被重命名的名称
+		originalName := &ast.Ident{
+			Name: strings.TrimPrefix(
+				strings.TrimPrefix(
+					strings.TrimPrefix(
+						strings.TrimPrefix(funcDecl.Name.Name, "Const"), "Type"), "Var"), "Func"), // 简单地移除前缀获取原始名称
+		}
+
 		// Create function call expression
 		callExpr := &ast.CallExpr{
 			Fun: &ast.SelectorExpr{
 				X:   ast.NewIdent(importAlias),
-				Sel: funcDecl.Name,
+				Sel: originalName,
 			},
 			Args: args,
 		}
@@ -263,7 +284,10 @@ func (g *Generator) collectValueDeclaration(genDecl *ast.GenDecl, importAlias st
 					// Create new value specification
 					// 使用原始名称而不是已经被重命名的名称
 					originalName := &ast.Ident{
-						Name: strings.TrimPrefix(strings.TrimPrefix(name.Name, "Const"), "Type"), // 简单地移除前缀获取原始名称
+						Name: strings.TrimPrefix(
+							strings.TrimPrefix(
+								strings.TrimPrefix(
+									strings.TrimPrefix(name.Name, "Const"), "Type"), "Var"), "Func"), // 简单地移除前缀获取原始名称
 					}
 					
 					newSpec := &ast.ValueSpec{
