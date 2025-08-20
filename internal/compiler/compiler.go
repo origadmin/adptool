@@ -141,9 +141,9 @@ func (r *realReplacer) Apply(ctx interfaces.Context, node ast.Node) ast.Node {
 						// 根据上下文类型过滤规则
 						// 这里需要更复杂的逻辑来确定规则类型与上下文的匹配
 						// 简化处理：假设规则的Value可以标识规则类型
-						if (ruleType == "const" && rule.Rule.Value == "Const") ||
+						if (ruleType == "const_decl_name" && rule.Rule.Value == "Const") ||
 							(ruleType == "type" && rule.Rule.Value == "Type") ||
-							(ruleType == "var" && rule.Rule.Value == "Var") ||
+							(ruleType == "var_decl_name" && rule.Rule.Value == "Var") ||
 							(ruleType == "func" && rule.Rule.Value == "Func") {
 							filteredRules = append(filteredRules, rule)
 						}
