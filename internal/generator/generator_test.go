@@ -65,8 +65,44 @@ func TestGenerate(t *testing.T) {
 	// 1. Create a mock replacer, removed for now. use the compiler package instead
 
 	// 2. Create the config and compiled config for the test
-	cfg := &config.Config{
+	var cfg = &config.Config{
 		OutputPackageName: "aliaspkg",
+		Constants: []*config.ConstRule{
+			{
+				Name:     "*",
+				Disabled: false,
+				RuleSet: config.RuleSet{
+					Prefix: "Const",
+				},
+			},
+		},
+		Types: []*config.TypeRule{
+			{
+				Name:     "*",
+				Disabled: false,
+				RuleSet: config.RuleSet{
+					Prefix: "Type",
+				},
+			},
+		},
+		Variables: []*config.VarRule{
+			{
+				Name:     "*",
+				Disabled: false,
+				RuleSet: config.RuleSet{
+					Prefix: "Var",
+				},
+			},
+		},
+		Functions: []*config.FuncRule{
+			{
+				Name:     "*",
+				Disabled: false,
+				RuleSet: config.RuleSet{
+					Prefix: "Func",
+				},
+			},
+		},
 		Packages: []*config.Package{
 			{
 				Import: "github.com/origadmin/adptool/testdata/sourcepkg",
@@ -77,9 +113,7 @@ func TestGenerate(t *testing.T) {
 				Alias:  "source2",
 			},
 		},
-	}
-
-	// Compile the config using the compiler package
+	} // Compile the config using the compiler package
 	compiledCfg, err := compiler.Compile(cfg)
 	if err != nil {
 		t.Fatalf("Failed to compile config: %v", err)
@@ -117,6 +151,9 @@ func TestGenerate(t *testing.T) {
 	generatedContent, err := os.ReadFile(outputFilePath)
 	assert.NoError(t, err)
 	assert.NotEmpty(t, generatedContent, "Generated file content is empty after goimports")
+
+	// 输出生成的代码内容用于调试
+	t.Logf("Generated code content:\n%s", string(generatedContent))
 
 	// Verify basic expected content
 	content := string(generatedContent)
