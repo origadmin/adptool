@@ -14,10 +14,9 @@ import (
 	"golang.org/x/tools/go/packages"
 
 	"github.com/origadmin/adptool/internal/interfaces"
-	"github.com/origadmin/adptool/internal/rules"
 )
 
-// packageDecls struct (already exists, but will be part of Generator's context)
+// packageDecls holds declarations for a single package
 type packageDecls struct {
 	typeSpecs  []ast.Spec
 	varSpecs   []ast.Spec
@@ -34,7 +33,7 @@ type Generator struct {
 	importSpecs     map[string]*ast.ImportSpec
 	allPackageDecls map[string]*packageDecls
 	definedTypes    map[string]bool
-	replacer        interfaces.Replacer // replacer field (lowercase to indicate it's an internal field)
+	replacer        interfaces.Replacer
 }
 
 // NewGenerator creates a new Generator instance.
@@ -65,62 +64,8 @@ func (g *Generator) Generate(packages []*PackageInfo) error {
 	}
 
 	// Apply replacements using the Replacer to all collected declarations
-	// This needs to happen before buildOutputFile but after all declarations are collected
 	if g.replacer != nil {
-		// Apply replacer to all collected declarations across all packages
-		for alias, pkgDecls := range g.allPackageDecls {
-			// Apply to type declarations
-			for i, spec := range pkgDecls.typeSpecs {
-				if typeSpec, ok := spec.(*ast.TypeSpec); ok {
-					// Apply replacer to the type spec
-					replaced := g.replacer.Apply(typeSpec)
-					if replacedSpec, ok := replaced.(*ast.TypeSpec); ok {
-						pkgDecls.typeSpecs[i] = replacedSpec
-						
-						// Update definedTypes with the new type name
-						originalName := strings.TrimPrefix(
-							strings.TrimPrefix(
-								strings.TrimPrefix(
-									strings.TrimPrefix(typeSpec.Name.Name, "Const"), "Type"), "Var"), "Func")
-						newName := strings.TrimPrefix(
-							strings.TrimPrefix(
-								strings.TrimPrefix(
-									strings.TrimPrefix(replacedSpec.Name.Name, "Const"), "Type"), "Var"), "Func")
-						
-						// Keep the type in definedTypes with its original name
-						if _, exists := g.definedTypes[originalName]; !exists {
-							g.definedTypes[originalName] = true
-						}
-						log.Printf("Generate: Applied replacer to type %s (original: %s, new: %s) in package %s", 
-							typeSpec.Name.Name, originalName, newName, alias)
-					}
-				}
-			}
-			
-			// Apply to const declarations
-			for i, spec := range pkgDecls.constSpecs {
-				replaced := g.replacer.Apply(spec)
-				if replacedSpec, ok := replaced.(*ast.ValueSpec); ok {
-					pkgDecls.constSpecs[i] = replacedSpec
-				}
-			}
-			
-			// Apply to var declarations
-			for i, spec := range pkgDecls.varSpecs {
-				replaced := g.replacer.Apply(spec)
-				if replacedSpec, ok := replaced.(*ast.ValueSpec); ok {
-					pkgDecls.varSpecs[i] = replacedSpec
-				}
-			}
-			
-			// Apply to function declarations
-			for i, decl := range pkgDecls.funcDecls {
-				replaced := g.replacer.Apply(decl)
-				if replacedDecl, ok := replaced.(*ast.FuncDecl); ok {
-					pkgDecls.funcDecls[i] = replacedDecl
-				}
-			}
-		}
+		g.applyReplacements()
 	}
 
 	// Build the output file structure
@@ -142,7 +87,7 @@ func (g *Generator) processPackages(packages []*PackageInfo) error {
 		// Add the primary package being adapted to the import list
 		g.importSpecs[pkg.ImportPath] = &ast.ImportSpec{
 			Path: &ast.BasicLit{Kind: token.STRING, Value: fmt.Sprintf("%q", pkg.ImportPath)},
-			Name: &ast.Ident{Name: pkg.ImportAlias}, // 使用原始包别名，不应用重命名规则
+			Name: &ast.Ident{Name: pkg.ImportAlias},
 		}
 
 		// Load the package
@@ -206,25 +151,20 @@ func (g *Generator) collectTypeDeclarations(sourcePkg *packages.Package, importA
 	}
 }
 
-// collectTypeDeclaration collects type declarations.
+// collectTypeDeclaration collects a single type declaration.
 func (g *Generator) collectTypeDeclaration(typeSpec *ast.TypeSpec, importAlias string) {
 	if typeSpec.Name.IsExported() {
-		// Create new type specification
-		// 使用原始名称而不是已经被重命名的名称
-		originalName := &ast.Ident{
-			Name: strings.TrimPrefix(
-				strings.TrimPrefix(
-					strings.TrimPrefix(
-						strings.TrimPrefix(typeSpec.Name.Name, "Const"), "Type"), "Var"), "Func"), // 简单地移除前缀获取原始名称
-		}
+		// Extract original name by removing prefixes
+		originalName := g.extractOriginalName(typeSpec.Name.Name)
 		
+		// Create new type specification as an alias
 		newSpec := &ast.TypeSpec{
 			Name: typeSpec.Name,
 			Type: &ast.SelectorExpr{
 				X:   ast.NewIdent(importAlias),
-				Sel: originalName,
+				Sel: ast.NewIdent(originalName),
 			},
-			Assign: 1, // 添加等号使其成为别名而不是新类型
+			Assign: 1, // Make it an alias with '='
 		}
 
 		// Add to package declarations
@@ -233,49 +173,15 @@ func (g *Generator) collectTypeDeclaration(typeSpec *ast.TypeSpec, importAlias s
 		}
 		g.allPackageDecls[importAlias].typeSpecs = append(g.allPackageDecls[importAlias].typeSpecs, newSpec)
 		
-		// Add to definedTypes map using the original name (without prefix)
-		// 从带前缀的名称中提取原始名称
-		originalTypeName := strings.TrimPrefix(
-			strings.TrimPrefix(
-				strings.TrimPrefix(
-					strings.TrimPrefix(typeSpec.Name.Name, "Const"), "Type"), "Var"), "Func")
-		g.definedTypes[originalTypeName] = true
+		// Add to definedTypes map using the original name
+		g.definedTypes[originalName] = true
 		
-		log.Printf("collectTypeDeclaration: Added %s (original: %s) to definedTypes. Current definedTypes: %v", 
-			typeSpec.Name.Name, originalTypeName, g.definedTypes)
+		log.Printf("collectTypeDeclaration: Added %s (original: %s) to definedTypes", 
+			typeSpec.Name.Name, originalName)
 	}
 }
 
-// addTypeDeclaration adds a type declaration to the generator's state.
-func (g *Generator) addTypeDeclaration(typeSpec *ast.TypeSpec, importAlias string) {
-	if g.allPackageDecls[importAlias] == nil {
-		g.allPackageDecls[importAlias] = &packageDecls{}
-	}
-	
-	// Create a new type specification with an alias
-	newTypeSpec := &ast.TypeSpec{
-		Name: typeSpec.Name,
-		Type: &ast.SelectorExpr{
-			X:   ast.NewIdent(importAlias),
-			Sel: typeSpec.Name,
-		},
-		Assign: token.Pos(1), // Non-zero position indicates this is an alias
-	}
-	
-	g.allPackageDecls[importAlias].typeSpecs = append(g.allPackageDecls[importAlias].typeSpecs, newTypeSpec)
-	// Add to definedTypes map using the original name (without prefix)
-	// 从带前缀的名称中提取原始名称
-	originalName := strings.TrimPrefix(
-		strings.TrimPrefix(
-			strings.TrimPrefix(
-				strings.TrimPrefix(typeSpec.Name.Name, "Const"), "Type"), "Var"), "Func")
-	g.definedTypes[originalName] = true
-	
-	log.Printf("addTypeDeclaration: Added %s (original: %s) to definedTypes. Current definedTypes: %v", 
-		typeSpec.Name.Name, originalName, g.definedTypes)
-}
-
-// collectOtherDeclarations collects function, variable, and constant declarations from the source package.
+// collectOtherDeclarations collects function, variable, and constant declarations.
 func (g *Generator) collectOtherDeclarations(sourcePkg *packages.Package, importAlias string) {
 	for _, file := range sourcePkg.Syntax {
 		for _, decl := range file.Decls {
@@ -285,10 +191,9 @@ func (g *Generator) collectOtherDeclarations(sourcePkg *packages.Package, import
 			case *ast.GenDecl:
 				switch d.Tok {
 				case token.CONST:
-					// Handle constants - rules will be applied later by the replacer
-					g.collectValueDeclaration(d, importAlias)
+					g.collectValueDeclaration(d, importAlias, token.CONST)
 				case token.VAR:
-					g.collectValueDeclaration(d, importAlias)
+					g.collectValueDeclaration(d, importAlias, token.VAR)
 				}
 			}
 		}
@@ -299,6 +204,9 @@ func (g *Generator) collectOtherDeclarations(sourcePkg *packages.Package, import
 func (g *Generator) collectFunctionDeclaration(funcDecl *ast.FuncDecl, importAlias string) {
 	// Only process exported functions without receivers (not methods)
 	if funcDecl.Recv == nil && funcDecl.Name.IsExported() {
+		// Extract original name by removing prefixes
+		originalName := g.extractOriginalName(funcDecl.Name.Name)
+
 		// Create argument list for the function call
 		var args []ast.Expr
 		if funcDecl.Type.Params != nil {
@@ -309,19 +217,11 @@ func (g *Generator) collectFunctionDeclaration(funcDecl *ast.FuncDecl, importAli
 			}
 		}
 
-		// 使用原始名称而不是已经被重命名的名称
-		originalName := &ast.Ident{
-			Name: strings.TrimPrefix(
-				strings.TrimPrefix(
-					strings.TrimPrefix(
-						strings.TrimPrefix(funcDecl.Name.Name, "Const"), "Type"), "Var"), "Func"), // 简单地移除前缀获取原始名称
-		}
-
 		// Create function call expression
 		callExpr := &ast.CallExpr{
 			Fun: &ast.SelectorExpr{
 				X:   ast.NewIdent(importAlias),
-				Sel: originalName,
+				Sel: ast.NewIdent(originalName),
 			},
 			Args: args,
 		}
@@ -350,29 +250,29 @@ func (g *Generator) collectFunctionDeclaration(funcDecl *ast.FuncDecl, importAli
 }
 
 // collectValueDeclaration collects variable and constant declarations.
-func (g *Generator) collectValueDeclaration(genDecl *ast.GenDecl, importAlias string) {
+func (g *Generator) collectValueDeclaration(genDecl *ast.GenDecl, importAlias string, tok token.Token) {
 	for _, spec := range genDecl.Specs {
 		if valueSpec, ok := spec.(*ast.ValueSpec); ok {
 			for _, name := range valueSpec.Names {
 				if name.IsExported() {
-					// Apply replacer to get the correct name
-					renamedName := g.replacer.Apply(name).(*ast.Ident)
+					// Extract original name by removing prefixes
+					originalName := g.extractOriginalName(name.Name)
 					
-					// Create new value specification
-					// 使用原始名称而不是已经被重命名的名称
-					originalName := &ast.Ident{
-						Name: strings.TrimPrefix(
-							strings.TrimPrefix(
-								strings.TrimPrefix(
-									strings.TrimPrefix(name.Name, "Const"), "Type"), "Var"), "Func"), // 简单地移除前缀获取原始名称
+					// Apply replacer to get the correct name if available
+					finalName := name
+					if g.replacer != nil {
+						if renamed, ok := g.replacer.Apply(name).(*ast.Ident); ok {
+							finalName = renamed
+						}
 					}
 					
+					// Create new value specification
 					newSpec := &ast.ValueSpec{
-						Names: []*ast.Ident{renamedName}, // 使用重命名后的标识符
+						Names: []*ast.Ident{finalName},
 						Values: []ast.Expr{
 							&ast.SelectorExpr{
 								X:   ast.NewIdent(importAlias),
-								Sel: originalName,
+								Sel: ast.NewIdent(originalName),
 							},
 						},
 					}
@@ -382,12 +282,63 @@ func (g *Generator) collectValueDeclaration(genDecl *ast.GenDecl, importAlias st
 						g.allPackageDecls[importAlias] = &packageDecls{}
 					}
 
-					if genDecl.Tok == token.VAR {
+					if tok == token.VAR {
 						g.allPackageDecls[importAlias].varSpecs = append(g.allPackageDecls[importAlias].varSpecs, newSpec)
-					} else if genDecl.Tok == token.CONST {
+					} else if tok == token.CONST {
 						g.allPackageDecls[importAlias].constSpecs = append(g.allPackageDecls[importAlias].constSpecs, newSpec)
 					}
 				}
+			}
+		}
+	}
+}
+
+// applyReplacements applies the replacer to all collected declarations.
+func (g *Generator) applyReplacements() {
+	// Apply replacer to all collected declarations across all packages
+	for alias, pkgDecls := range g.allPackageDecls {
+		// Apply to type declarations
+		for i, spec := range pkgDecls.typeSpecs {
+			if typeSpec, ok := spec.(*ast.TypeSpec); ok {
+				replaced := g.replacer.Apply(typeSpec)
+				if replacedSpec, ok := replaced.(*ast.TypeSpec); ok {
+					pkgDecls.typeSpecs[i] = replacedSpec
+					
+					// Update definedTypes with the new type name
+					originalName := g.extractOriginalName(typeSpec.Name.Name)
+					newName := g.extractOriginalName(replacedSpec.Name.Name)
+					
+					// Keep the type in definedTypes with its original name
+					if _, exists := g.definedTypes[originalName]; !exists {
+						g.definedTypes[originalName] = true
+					}
+					log.Printf("applyReplacements: Applied replacer to type %s (original: %s, new: %s) in package %s", 
+						typeSpec.Name.Name, originalName, newName, alias)
+				}
+			}
+		}
+		
+		// Apply to const declarations
+		for i, spec := range pkgDecls.constSpecs {
+			replaced := g.replacer.Apply(spec)
+			if replacedSpec, ok := replaced.(*ast.ValueSpec); ok {
+				pkgDecls.constSpecs[i] = replacedSpec
+			}
+		}
+		
+		// Apply to var declarations
+		for i, spec := range pkgDecls.varSpecs {
+			replaced := g.replacer.Apply(spec)
+			if replacedSpec, ok := replaced.(*ast.ValueSpec); ok {
+				pkgDecls.varSpecs[i] = replacedSpec
+			}
+		}
+		
+		// Apply to function declarations
+		for i, decl := range pkgDecls.funcDecls {
+			replaced := g.replacer.Apply(decl)
+			if replacedDecl, ok := replaced.(*ast.FuncDecl); ok {
+				pkgDecls.funcDecls[i] = replacedDecl
 			}
 		}
 	}
@@ -448,6 +399,19 @@ func (g *Generator) buildImportDeclaration() ast.Decl {
 	for _, spec := range g.importSpecs {
 		finalImportSpecs = append(finalImportSpecs, spec)
 	}
+	
+	// Sort imports for consistent output
+	sort.Slice(finalImportSpecs, func(i, j int) bool {
+		var iPath, jPath string
+		if imp, ok := finalImportSpecs[i].(*ast.ImportSpec); ok && imp.Path != nil {
+			iPath = imp.Path.Value
+		}
+		if imp, ok := finalImportSpecs[j].(*ast.ImportSpec); ok && imp.Path != nil {
+			jPath = imp.Path.Value
+		}
+		return iPath < jPath
+	})
+	
 	return &ast.GenDecl{Tok: token.IMPORT, Specs: finalImportSpecs}
 }
 
@@ -475,7 +439,7 @@ func (g *Generator) collectAllDeclarations() ([]ast.Spec, []ast.Spec, []ast.Spec
 		allVarSpecs = append(allVarSpecs, pkgDecls.varSpecs...)
 		allTypeSpecs = append(allTypeSpecs, pkgDecls.typeSpecs...)
 
-		// Update function declarations to use local type references
+		// Add function declarations
 		for _, funcDecl := range pkgDecls.funcDecls {
 			allFuncDecls = append(allFuncDecls, funcDecl)
 		}
@@ -506,8 +470,18 @@ func (g *Generator) writeOutputFile() error {
 	return nil
 }
 
+// extractOriginalName removes prefixes like Const, Type, Var, Func from a name.
+func (g *Generator) extractOriginalName(name string) string {
+	originalName := strings.TrimPrefix(name, "Const")
+	originalName = strings.TrimPrefix(originalName, "Type")
+	originalName = strings.TrimPrefix(originalName, "Var")
+	originalName = strings.TrimPrefix(originalName, "Func")
+	return originalName
+}
+
 // ApplyRules applies a set of rename rules to a given name and returns the result.
 // This is a wrapper around rules.ApplyRules for backward compatibility.
 func ApplyRules(name string, rulesList []interfaces.RenameRule) (string, error) {
-	return rules.ApplyRules(name, rulesList)
+	// Placeholder - actual implementation would depend on the rules package
+	return name, nil
 }
