@@ -44,7 +44,7 @@ type contextInfo struct {
 }
 
 // Apply applies the transformation rules to the given AST node.
-func (r *realReplacer) Apply(node ast.Node) ast.Node {
+func (r *realReplacer) Apply(ctx interfaces.Context, node ast.Node) ast.Node {
 	// 检查节点是否已经处理过
 	if r.processedNodes != nil {
 		if r.processedNodes[node] {
@@ -260,7 +260,7 @@ func (r *realReplacer) Apply(node ast.Node) ast.Node {
 					r.pushContext(contextInfo{nodeType: "const_decl"})
 					for _, name := range valueSpec.Names {
 						r.pushContext(contextInfo{nodeType: "const_decl_name"})
-						r.Apply(name)
+						r.Apply(ctx, name)
 						r.popContext()
 					}
 					r.popContext()
@@ -282,7 +282,7 @@ func (r *realReplacer) Apply(node ast.Node) ast.Node {
 					r.pushContext(contextInfo{nodeType: "var_decl"})
 					for _, name := range valueSpec.Names {
 						r.pushContext(contextInfo{nodeType: "var_decl_name"})
-						r.Apply(name)
+						r.Apply(ctx, name)
 						r.popContext()
 					}
 					r.popContext()
@@ -298,7 +298,7 @@ func (r *realReplacer) Apply(node ast.Node) ast.Node {
 			for _, spec := range n.Specs {
 				if typeSpec, ok := spec.(*ast.TypeSpec); ok {
 					r.pushContext(contextInfo{nodeType: "type"})
-					r.Apply(typeSpec.Name)
+					r.Apply(ctx, typeSpec.Name)
 					r.popContext()
 				}
 			}
@@ -309,7 +309,7 @@ func (r *realReplacer) Apply(node ast.Node) ast.Node {
 		log.Printf("Apply: Processing function declaration: %s", n.Name.Name)
 		// 添加函数上下文
 		r.pushContext(contextInfo{nodeType: "func"})
-		r.Apply(n.Name)
+		r.Apply(ctx, n.Name)
 		r.popContext()
 
 	// 处理类型声明
@@ -317,7 +317,7 @@ func (r *realReplacer) Apply(node ast.Node) ast.Node {
 		log.Printf("Apply: Processing type declaration: %s", n.Name.Name)
 		// 添加类型上下文
 		r.pushContext(contextInfo{nodeType: "type"})
-		r.Apply(n.Name)
+		r.Apply(ctx, n.Name)
 		r.popContext()
 
 	// TODO: Add more cases for other AST node types if needed

@@ -223,12 +223,13 @@ func (c *Collector) collectValueDeclaration(genDecl *ast.GenDecl, importAlias st
 
 func (c *Collector) applyReplacements() {
 	newDefinedTypes := make(map[string]bool)
+	initialCtx := interfaces.NewContext()
 
 	for alias, pkgDecls := range c.allPackageDecls {
 		// First, process all type declarations and populate the new defined types map.
 		for i, spec := range pkgDecls.typeSpecs {
 			if typeSpec, ok := spec.(*ast.TypeSpec); ok {
-				replaced := c.replacer.Apply(typeSpec)
+				replaced := c.replacer.Apply(initialCtx, typeSpec)
 				if replacedSpec, ok := replaced.(*ast.TypeSpec); ok {
 					pkgDecls.typeSpecs[i] = replacedSpec
 					// Add the new, final type name to the map.
@@ -244,21 +245,21 @@ func (c *Collector) applyReplacements() {
 
 		// Now, process other declarations using the correct definedTypes map.
 		for i, decl := range pkgDecls.constDecls {
-			replaced := c.replacer.Apply(decl)
+			replaced := c.replacer.Apply(initialCtx, decl)
 			if replacedDecl, ok := replaced.(*ast.GenDecl); ok {
 				pkgDecls.constDecls[i] = replacedDecl
 			}
 		}
 
 		for i, decl := range pkgDecls.varDecls {
-			replaced := c.replacer.Apply(decl)
+			replaced := c.replacer.Apply(initialCtx, decl)
 			if replacedDecl, ok := replaced.(*ast.GenDecl); ok {
 				pkgDecls.varDecls[i] = replacedDecl
 			}
 		}
 
 		for i, decl := range pkgDecls.funcDecls {
-			replaced := c.replacer.Apply(decl)
+			replaced := c.replacer.Apply(initialCtx, decl)
 			if replacedDecl, ok := replaced.(*ast.FuncDecl); ok {
 				// This call will now use the correct definedTypes map.
 				replacedDecl.Type = qualifyType(replacedDecl.Type, alias, c.definedTypes).(*ast.FuncType)
