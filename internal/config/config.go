@@ -7,6 +7,13 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// RuleHolder defines the interface for any rule-holding configuration element.
+type RuleHolder interface {
+	IsDisabled() bool
+	GetName() string
+	GetRuleSet() *RuleSet
+}
+
 // New creates a new, fully initialized Config object.
 func New() *Config {
 	return &Config{
@@ -58,6 +65,24 @@ type Config struct {
 	Functions         []*FuncRule   `yaml:"functions,omitempty" mapstructure:"functions,omitempty" json:"functions,omitempty" toml:"functions,omitempty"`
 	Variables         []*VarRule    `yaml:"variables,omitempty" mapstructure:"variables,omitempty" json:"variables,omitempty" toml:"variables,omitempty"`
 	Constants         []*ConstRule  `yaml:"constants,omitempty" mapstructure:"constants,omitempty" json:"constants,omitempty" toml:"constants,omitempty"`
+}
+
+// GetGlobalRules returns all global rule holders from the configuration.
+func (c *Config) GetGlobalRules() []RuleHolder {
+	var rules []RuleHolder
+	for _, t := range c.Types {
+		rules = append(rules, t)
+	}
+	for _, f := range c.Functions {
+		rules = append(rules, f)
+	}
+	for _, v := range c.Variables {
+		rules = append(rules, v)
+	}
+	for _, c := range c.Constants {
+		rules = append(rules, c)
+	}
+	return rules
 }
 
 // PropsEntry defines a single variable entry in the config.
@@ -217,6 +242,24 @@ type Package struct {
 	Functions []*FuncRule   `yaml:"functions,omitempty" mapstructure:"functions,omitempty" json:"functions,omitempty" toml:"functions,omitempty"`
 	Variables []*VarRule    `yaml:"variables,omitempty" mapstructure:"variables,omitempty" json:"variables,omitempty" toml:"variables,omitempty"`
 	Constants []*ConstRule  `yaml:"constants,omitempty" mapstructure:"constants,omitempty" json:"constants,omitempty" toml:"constants,omitempty"`
+}
+
+// GetPackageRules returns all rule holders from the package.
+func (p *Package) GetPackageRules() []RuleHolder {
+	var rules []RuleHolder
+	for _, t := range p.Types {
+		rules = append(rules, t)
+	}
+	for _, f := range p.Functions {
+		rules = append(rules, f)
+	}
+	for _, v := range p.Variables {
+		rules = append(rules, v)
+	}
+	for _, c := range p.Constants {
+		rules = append(rules, c)
+	}
+	return rules
 }
 
 // Defaults defines the global default behaviors for the entire system.
