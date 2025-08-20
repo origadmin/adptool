@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"golang.org/x/tools/go/packages"
 
@@ -81,7 +82,7 @@ func (g *Generator) processPackages(packages []*PackageInfo) error {
 		// Add the primary package being adapted to the import list
 		g.importSpecs[pkg.ImportPath] = &ast.ImportSpec{
 			Path: &ast.BasicLit{Kind: token.STRING, Value: fmt.Sprintf("%q", pkg.ImportPath)},
-			Name: ast.NewIdent(pkg.ImportAlias),
+			Name: &ast.Ident{Name: pkg.ImportAlias}, // 使用原始包别名，不应用重命名规则
 		}
 
 		// Load the package
@@ -137,11 +138,36 @@ func (g *Generator) collectTypeDeclarations(sourcePkg *packages.Package, importA
 			if genDecl, ok := decl.(*ast.GenDecl); ok && genDecl.Tok == token.TYPE {
 				for _, spec := range genDecl.Specs {
 					if typeSpec, ok := spec.(*ast.TypeSpec); ok && typeSpec.Name.IsExported() {
-						g.addTypeDeclaration(typeSpec, importAlias)
+						g.collectTypeDeclaration(typeSpec, importAlias)
 					}
 				}
 			}
 		}
+	}
+}
+
+// collectTypeDeclaration collects type declarations.
+func (g *Generator) collectTypeDeclaration(typeSpec *ast.TypeSpec, importAlias string) {
+	if typeSpec.Name.IsExported() {
+		// Create new type specification
+		// 使用原始名称而不是已经被重命名的名称
+		originalName := &ast.Ident{
+			Name: strings.TrimPrefix(strings.TrimPrefix(typeSpec.Name.Name, "Const"), "Type"), // 简单地移除前缀获取原始名称
+		}
+		
+		newSpec := &ast.TypeSpec{
+			Name: typeSpec.Name,
+			Type: &ast.SelectorExpr{
+				X:   ast.NewIdent(importAlias),
+				Sel: originalName,
+			},
+		}
+
+		// Add to package declarations
+		if g.allPackageDecls[importAlias] == nil {
+			g.allPackageDecls[importAlias] = &packageDecls{}
+		}
+		g.allPackageDecls[importAlias].typeSpecs = append(g.allPackageDecls[importAlias].typeSpecs, newSpec)
 	}
 }
 
@@ -235,12 +261,17 @@ func (g *Generator) collectValueDeclaration(genDecl *ast.GenDecl, importAlias st
 			for _, name := range valueSpec.Names {
 				if name.IsExported() {
 					// Create new value specification
+					// 使用原始名称而不是已经被重命名的名称
+					originalName := &ast.Ident{
+						Name: strings.TrimPrefix(strings.TrimPrefix(name.Name, "Const"), "Type"), // 简单地移除前缀获取原始名称
+					}
+					
 					newSpec := &ast.ValueSpec{
 						Names: []*ast.Ident{name},
 						Values: []ast.Expr{
 							&ast.SelectorExpr{
 								X:   ast.NewIdent(importAlias),
-								Sel: name,
+								Sel: originalName,
 							},
 						},
 					}
@@ -310,12 +341,11 @@ func (g *Generator) buildOutputFile() {
 	g.aliasFile.Decls = orderedDecls
 
 	// Apply replacements using the Replacer if available
+	// 确保在收集所有声明之后但在构建输出文件之前应用 replacer
 	if g.replacer != nil {
+		visitor := &replacerVisitor{replacer: g.replacer}
 		for _, decl := range g.aliasFile.Decls {
-			ast.Inspect(decl, func(n ast.Node) bool {
-				g.replacer.Apply(n)
-				return true
-			})
+			ast.Walk(visitor, decl)
 		}
 	}
 }

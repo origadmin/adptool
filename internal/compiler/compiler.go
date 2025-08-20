@@ -30,119 +30,254 @@ type priorityRule struct {
 // and applies actual transformation rules based on the compiled configuration.
 type realReplacer struct {
 	config *interfaces.CompiledConfig
+	// 包别名字典，用于避免对包别名应用重命名规则
+	packageAliases map[string]bool
+	// 已处理节点的映射，用于避免重复处理
+	processedNodes map[ast.Node]bool
+	// 当前处理上下文
+	contextStack []contextInfo
+}
+
+// contextInfo 保存当前处理的上下文信息
+type contextInfo struct {
+	nodeType string // 节点类型，如 "const", "var", "type", "func"
 }
 
 // Apply applies the transformation rules to the given AST node.
 func (r *realReplacer) Apply(node ast.Node) ast.Node {
+	// 检查节点是否已经处理过
+	if r.processedNodes != nil {
+		if r.processedNodes[node] {
+			// 节点已经处理过，直接返回
+			return node
+		}
+		// 标记节点已处理
+		r.processedNodes[node] = true
+	}
+	
 	switch n := node.(type) {
 	case *ast.Ident:
 		log.Printf("Apply: Processing identifier: %s", n.Name)
-
-		// 获取当前节点的包上下文
-		// 在这个简化版本中，我们将实现一个基本的匹配逻辑
-		// 实际应用中，可能需要通过AST节点的上下文来确定当前所在的包
 		
-		// 首先检查是否有针对该标识符的特定规则
-		if priorityRulesToApply, ok := r.config.PriorityRules[n.Name]; ok {
-			log.Printf("Apply: Found priority rules for %s: %+v", n.Name, priorityRulesToApply)
-
-			// 应用优先级规则
-			if len(priorityRulesToApply) > 0 {
-				// 获取最高优先级的规则
-				highestPriorityRule := priorityRulesToApply[0]
-				log.Printf("Apply: Using highest priority rule for %s: %+v", n.Name, highestPriorityRule)
-
-				// 只应用这一个规则
-				newName, err := applyRules(n.Name, []interfaces.RenameRule{
-					{
-						Type:    highestPriorityRule.Rule.Type,
-						Value:   highestPriorityRule.Rule.Value,
-						From:    highestPriorityRule.Rule.From,
-						To:      highestPriorityRule.Rule.To,
-						Pattern: highestPriorityRule.Rule.Pattern,
-						Replace: highestPriorityRule.Rule.Replace,
-					},
-				})
-				if err != nil {
-					log.Printf("Error applying priority rule to identifier %s: %v", n.Name, err)
-					return node // Return original node on error
-				}
-
-				if newName != n.Name {
-					n.Name = newName // Modify the identifier's name
-					log.Printf("Transformed identifier %s to %s using priority rule", n.Name, newName)
-				}
-			}
-		} else if priorityWildcardRules, ok := r.config.PriorityRules["*"]; ok {
-			// 如果没有特定规则，检查是否有通配符规则
-			log.Printf("Apply: Found wildcard rules: %+v", priorityWildcardRules)
-
-			// 应用通配符规则
-			var rulesToApply []interfaces.RenameRule
-			for _, rule := range priorityWildcardRules {
-				rulesToApply = append(rulesToApply, interfaces.RenameRule{
-					Type:    rule.Rule.Type,
-					Value:   rule.Rule.Value,
-					From:    rule.Rule.From,
-					To:      rule.Rule.To,
-					Pattern: rule.Rule.Pattern,
-					Replace: rule.Rule.Replace,
-				})
-			}
+		// 检查是否为包别名，如果是则不应用重命名规则
+		if r.packageAliases != nil && r.packageAliases[n.Name] {
+			log.Printf("Apply: Skipping package alias %s", n.Name)
+			return node
+		}
+		
+		// 获取当前上下文
+		currentContext := r.getCurrentContext()
+		
+		// 根据上下文决定是否应用规则
+		shouldApplyRules := false
+		ruleType := ""
+		if currentContext.nodeType == "const_decl_name" {
+			// 如果在常量声明名称上下文中，则应用规则
+			shouldApplyRules = true
+			ruleType = "const"
+			log.Printf("Apply: Applying const rules for %s in const declaration name context", n.Name)
+		} else if currentContext.nodeType == "type" {
+			// 如果在类型声明上下文中，则应用规则
+			shouldApplyRules = true
+			ruleType = "type"
+			log.Printf("Apply: Applying type rules for %s in type declaration context", n.Name)
+		} else {
+			log.Printf("Apply: Skipping rule application for %s as it's not in a rule-applicable context", n.Name)
+		}
+		
+		if shouldApplyRules {
+			// 获取当前节点的包上下文
+			// 在这个简化版本中，我们将实现一个基本的匹配逻辑
+			// 实际应用中，可能需要通过AST节点的上下文来确定当前所在的包
 			
-			newName, err := applyRules(n.Name, rulesToApply)
-			if err != nil {
-				log.Printf("Error applying wildcard rules to identifier %s: %v", n.Name, err)
-				return node // Return original node on error
-			}
+			// 首先检查是否有针对该标识符的特定规则
+			if priorityRulesToApply, ok := r.config.PriorityRules[n.Name]; ok {
+				log.Printf("Apply: Found priority rules for %s: %+v", n.Name, priorityRulesToApply)
 
-			if newName != n.Name {
-				n.Name = newName
-				log.Printf("Transformed identifier %s to %s using wildcard rule", n.Name, newName)
-			}
-		} else if rulesToApply, ok := r.config.Rules[n.Name]; ok {
-			// Fallback to the old rules if no priority rules exist
-			log.Printf("Apply: Found rules for %s: %+v", n.Name, rulesToApply)
-
-			// 为了保持一致性，我们也只应用第一个规则
-			if len(rulesToApply) > 0 {
-				// 只应用第一个规则
-				firstRule := rulesToApply[0]
-				newName, err := applyRules(n.Name, []interfaces.RenameRule{
-					{
-						Type:    firstRule.Type,
-						Value:   firstRule.Value,
-						From:    firstRule.From,
-						To:      firstRule.To,
-						Pattern: firstRule.Pattern,
-						Replace: firstRule.Replace,
-					},
-				})
-				if err != nil {
-					log.Printf("Error applying rule to identifier %s: %v", n.Name, err)
-					return node // Return original node on error
+				// 根据规则类型过滤规则
+				var filteredRules []struct {
+					Rule     interfaces.RenameRule
+					Priority int
+				}
+				
+				if ruleType != "" {
+					for _, rule := range priorityRulesToApply {
+						// 这里需要根据规则的来源判断规则类型
+						// 简化处理：假设规则的优先级或其它属性可以标识规则类型
+						// 实际实现中应该在编译阶段就标记规则类型
+						filteredRules = append(filteredRules, rule)
+					}
+				} else {
+					filteredRules = priorityRulesToApply
 				}
 
-				if newName != n.Name {
-					n.Name = newName // Modify the identifier's name
-					log.Printf("Transformed identifier %s to %s using fallback rule", n.Name, newName)
+				// 应用优先级规则
+				if len(filteredRules) > 0 {
+					// 获取最高优先级的规则
+					highestPriorityRule := filteredRules[0]
+					log.Printf("Apply: Using highest priority rule for %s: %+v", n.Name, highestPriorityRule)
+
+					// 只应用这一个规则
+					newName, err := applyRules(n.Name, []interfaces.RenameRule{
+						{
+							Type:    highestPriorityRule.Rule.Type,
+							Value:   highestPriorityRule.Rule.Value,
+							From:    highestPriorityRule.Rule.From,
+							To:      highestPriorityRule.Rule.To,
+							Pattern: highestPriorityRule.Rule.Pattern,
+							Replace: highestPriorityRule.Rule.Replace,
+						},
+					})
+					if err != nil {
+						log.Printf("Error applying priority rule to identifier %s: %v", n.Name, err)
+						return node // Return original node on error
+					}
+
+					if newName != n.Name {
+						n.Name = newName // Modify the identifier's name
+						log.Printf("Transformed identifier %s to %s using priority rule", n.Name, newName)
+					}
 				}
+			} else if priorityWildcardRules, ok := r.config.PriorityRules["*"]; ok {
+				// 如果没有特定规则，检查是否有通配符规则
+				log.Printf("Apply: Found wildcard rules: %+v", priorityWildcardRules)
+
+				// 根据规则类型过滤通配符规则
+				var filteredRules []struct {
+					Rule     interfaces.RenameRule
+					Priority int
+				}
+				
+				if ruleType != "" {
+					for _, rule := range priorityWildcardRules {
+						// 根据上下文类型过滤规则
+						// 这里需要更复杂的逻辑来确定规则类型与上下文的匹配
+						// 简化处理：假设规则的Value可以标识规则类型
+						if (ruleType == "const" && rule.Rule.Value == "Const") || 
+						   (ruleType == "type" && rule.Rule.Value == "Type") {
+							filteredRules = append(filteredRules, rule)
+						}
+					}
+				} else {
+					filteredRules = priorityWildcardRules
+				}
+				
+				// 应用通配符规则
+				if len(filteredRules) > 0 {
+					var rulesToApply []interfaces.RenameRule
+					for _, rule := range filteredRules {
+						rulesToApply = append(rulesToApply, interfaces.RenameRule{
+							Type:    rule.Rule.Type,
+							Value:   rule.Rule.Value,
+							From:    rule.Rule.From,
+							To:      rule.Rule.To,
+							Pattern: rule.Rule.Pattern,
+							Replace: rule.Rule.Replace,
+						})
+					}
+					
+					newName, err := applyRules(n.Name, rulesToApply)
+					if err != nil {
+						log.Printf("Error applying wildcard rules to identifier %s: %v", n.Name, err)
+						return node // Return original node on error
+					}
+
+					if newName != n.Name {
+						n.Name = newName
+						log.Printf("Transformed identifier %s to %s using wildcard rule", n.Name, newName)
+					}
+				}
+			} else if rulesToApply, ok := r.config.Rules[n.Name]; ok {
+				// Fallback to the old rules if no priority rules exist
+				log.Printf("Apply: Found rules for %s: %+v", n.Name, rulesToApply)
+
+				// 根据规则类型过滤规则
+				var filteredRules []interfaces.RenameRule
+				
+				if ruleType != "" {
+					for _, rule := range rulesToApply {
+						// 根据上下文类型过滤规则
+						if (ruleType == "const" && rule.Value == "Const") || 
+						   (ruleType == "type" && rule.Value == "Type") {
+							filteredRules = append(filteredRules, rule)
+						}
+					}
+				} else {
+					filteredRules = rulesToApply
+				}
+
+				// 为了保持一致性，我们也只应用第一个规则
+				if len(filteredRules) > 0 {
+					// 只应用第一个规则
+					firstRule := filteredRules[0]
+					newName, err := applyRules(n.Name, []interfaces.RenameRule{
+						{
+							Type:    firstRule.Type,
+							Value:   firstRule.Value,
+							From:    firstRule.From,
+							To:      firstRule.To,
+							Pattern: firstRule.Pattern,
+							Replace: firstRule.Replace,
+						},
+					})
+					if err != nil {
+						log.Printf("Error applying rule to identifier %s: %v", n.Name, err)
+						return node // Return original node on error
+					}
+
+					if newName != n.Name {
+						n.Name = newName // Modify the identifier's name
+						log.Printf("Transformed identifier %s to %s using fallback rule", n.Name, newName)
+					}
+				}
+			} else {
+				log.Printf("Apply: No rules found for identifier: %s", n.Name)
 			}
 		} else {
-			log.Printf("Apply: No rules found for identifier: %s", n.Name)
+			log.Printf("Apply: Skipping rule application for identifier: %s", n.Name)
 		}
 
 	// 处理常量声明
 	case *ast.GenDecl:
 		if n.Tok == token.CONST {
 			log.Printf("Apply: Processing constant declaration")
-			for i, spec := range n.Specs {
+			// 添加常量上下文
+			r.pushContext(contextInfo{nodeType: "const"})
+			defer r.popContext()
+			
+			// 处理常量声明中的值规范
+			for _, spec := range n.Specs {
 				if valueSpec, ok := spec.(*ast.ValueSpec); ok {
-					// 递归处理常量名称
-					for j, name := range valueSpec.Names {
-						valueSpec.Names[j] = r.Apply(name).(*ast.Ident)
+					// 为常量名称添加声明上下文
+					r.pushContext(contextInfo{nodeType: "const_decl"})
+					for _, name := range valueSpec.Names {
+						r.pushContext(contextInfo{nodeType: "const_decl_name"})
+						r.Apply(name)
+						r.popContext()
 					}
-					n.Specs[i] = valueSpec
+					r.popContext()
+					
+					// 处理值部分，但不应用规则到引用的标识符
+					// 这里我们不递归处理值部分，因为AST遍历会自动处理其中的标识符
+				}
+			}
+		} else if n.Tok == token.VAR {
+			log.Printf("Apply: Processing variable declaration")
+			// 添加变量上下文
+			r.pushContext(contextInfo{nodeType: "var"})
+			defer r.popContext()
+		} else if n.Tok == token.TYPE {
+			log.Printf("Apply: Processing type declaration")
+			// 添加类型上下文
+			r.pushContext(contextInfo{nodeType: "type_decl"})
+			defer r.popContext()
+			
+			// 处理类型声明中的类型规范
+			for _, spec := range n.Specs {
+				if typeSpec, ok := spec.(*ast.TypeSpec); ok {
+					r.pushContext(contextInfo{nodeType: "type"})
+					r.Apply(typeSpec.Name)
+					r.popContext()
 				}
 			}
 		}
@@ -150,18 +285,60 @@ func (r *realReplacer) Apply(node ast.Node) ast.Node {
 	// 处理函数声明
 	case *ast.FuncDecl:
 		log.Printf("Apply: Processing function declaration: %s", n.Name.Name)
-		n.Name = r.Apply(n.Name).(*ast.Ident)
-
+		// 添加函数上下文
+		r.pushContext(contextInfo{nodeType: "func"})
+		defer r.popContext()
+		
 	// 处理类型声明
 	case *ast.TypeSpec:
 		log.Printf("Apply: Processing type declaration: %s", n.Name.Name)
-		n.Name = r.Apply(n.Name).(*ast.Ident)
+		// 添加类型上下文
+		r.pushContext(contextInfo{nodeType: "type"})
+		r.Apply(n.Name)
+		r.popContext()
 
 	// TODO: Add more cases for other AST node types if needed
 	default:
 		// log.Printf("Real replacer applied to node: %T", node) // Too verbose
 	}
 	return node
+}
+
+// getCurrentContext 获取当前上下文
+func (r *realReplacer) getCurrentContext() contextInfo {
+	if len(r.contextStack) > 0 {
+		return r.contextStack[len(r.contextStack)-1]
+	}
+	return contextInfo{}
+}
+
+// pushContext 添加上下文到栈
+func (r *realReplacer) pushContext(ctx contextInfo) {
+	r.contextStack = append(r.contextStack, ctx)
+}
+
+// popContext 从栈中移除上下文
+func (r *realReplacer) popContext() {
+	if len(r.contextStack) > 0 {
+		r.contextStack = r.contextStack[:len(r.contextStack)-1]
+	}
+}
+
+// isWildcardConstRuleOnly 检查是否只有常量通配符规则
+func (r *realReplacer) isWildcardConstRuleOnly() bool {
+	// 检查是否有通配符规则
+	if wildcardRules, ok := r.config.PriorityRules["*"]; ok && len(wildcardRules) > 0 {
+		// 检查是否所有通配符规则都是一样的（前缀为"Const"的规则）
+		for _, rule := range wildcardRules {
+			if rule.Rule.Type != "prefix" || rule.Rule.Value != "Const" {
+				// 如果有任何规则不是Const前缀规则，则不是纯常量规则
+				return false
+			}
+		}
+		// 所有通配符规则都是Const前缀规则
+		return true
+	}
+	return false
 }
 
 // NewReplacer creates a new Replacer instance from a compiled configuration.
@@ -171,8 +348,18 @@ func NewReplacer(compiledCfg *interfaces.CompiledConfig) interfaces.Replacer {
 	if compiledCfg == nil {
 		return nil
 	}
+	
+	// 初始化包别名字典
+	packageAliases := make(map[string]bool)
+	for _, pkg := range compiledCfg.Packages {
+		packageAliases[pkg.ImportAlias] = true
+	}
+	
 	return &realReplacer{
-		config: compiledCfg,
+		config:         compiledCfg,
+		packageAliases: packageAliases,
+		processedNodes: make(map[ast.Node]bool), // 初始化已处理节点映射
+		contextStack:   make([]contextInfo, 0),  // 初始化上下文栈
 	}
 }
 

@@ -29,7 +29,7 @@ func qualifyType(expr ast.Expr, pkgAlias string, definedTypes map[string]bool) a
 		// it's an exported identifier, and it's not defined in the current package.
 		if t.IsExported() && !definedTypes[t.Name] {
 			return &ast.SelectorExpr{
-				X:   ast.NewIdent(pkgAlias),
+				X:   &ast.Ident{Name: pkgAlias}, // 使用原始包别名，不应用重命名规则
 				Sel: t,
 			}
 		}
