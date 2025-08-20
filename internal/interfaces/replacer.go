@@ -7,7 +7,7 @@ import (
 // Replacer defines the interface for applying code transformations based on compiled rules.
 // It takes an AST node and returns a potentially modified node.
 type Replacer interface {
-	Apply(node ast.Node) ast.Node
+	Apply(ctx Context, node ast.Node) ast.Node
 }
 
 
