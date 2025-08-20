@@ -19,76 +19,122 @@ func (v replacerVisitor) Visit(n ast.Node) ast.Visitor {
 	return v // Continue traversal
 }
 
-// qualifyType recursively qualifies ast.Ident nodes within an ast.Expr
-// with the given package alias if they are not already qualified.
-// definedTypes is a map of type names that are defined in the current package.
+// isBuiltinType checks if a type name is a built-in Go type that should not be qualified.
+func isBuiltinType(name string) bool {
+	builtinTypes := map[string]bool{
+		"bool":       true,
+		"byte":       true,
+		"complex64":  true,
+		"complex128": true,
+		"error":      true,
+		"float32":    true,
+		"float64":    true,
+		"int":        true,
+		"int8":       true,
+		"int16":      true,
+		"int32":      true,
+		"int64":      true,
+		"rune":       true,
+		"string":     true,
+		"uint":       true,
+		"uint8":      true,
+		"uint16":     true,
+		"uint32":     true,
+		"uint64":     true,
+		"uintptr":    true,
+	}
+
+	return builtinTypes[name]
+}
+
+// qualifyType recursively qualifies types with the given package alias.
+// It ensures that references to types from the source package use the correct alias.
 func qualifyType(expr ast.Expr, pkgAlias string, definedTypes map[string]bool) ast.Expr {
 	switch t := expr.(type) {
 	case *ast.Ident:
-		// Only qualify if it's not already qualified (i.e., not a SelectorExpr),
-		// it's an exported identifier, and it's not defined in the current package.
-		if t.IsExported() && !definedTypes[t.Name] {
-			return &ast.SelectorExpr{
-				X:   &ast.Ident{Name: pkgAlias}, // 使用原始包别名，不应用重命名规则
-				Sel: t,
-			}
+		// Check if this identifier refers to a type we've defined
+		if definedTypes != nil && definedTypes[t.Name] {
+			// Use the local type name directly
+			return t
 		}
-		return t
+		
+		// Check if this is a built-in type that should not be qualified
+		if isBuiltinType(t.Name) {
+			return t
+		}
+		
+		// For identifiers that are not our own defined types, use selector expression
+		return &ast.SelectorExpr{
+			X:   ast.NewIdent(pkgAlias),
+			Sel: t,
+		}
 	case *ast.StarExpr:
-		t.X = qualifyType(t.X, pkgAlias, definedTypes)
-		return t
+		return &ast.StarExpr{
+			X: qualifyType(t.X, pkgAlias, definedTypes),
+		}
 	case *ast.ArrayType:
-		t.Elt = qualifyType(t.Elt, pkgAlias, definedTypes)
-		return t
+		return &ast.ArrayType{
+			Len: qualifyType(t.Len, pkgAlias, definedTypes),
+			Elt: qualifyType(t.Elt, pkgAlias, definedTypes),
+		}
 	case *ast.MapType:
-		t.Key = qualifyType(t.Key, pkgAlias, definedTypes)
-		t.Value = qualifyType(t.Value, pkgAlias, definedTypes)
-		return t
+		return &ast.MapType{
+			Key:   qualifyType(t.Key, pkgAlias, definedTypes),
+			Value: qualifyType(t.Value, pkgAlias, definedTypes),
+		}
 	case *ast.ChanType:
-		t.Value = qualifyType(t.Value, pkgAlias, definedTypes)
-		return t
+		return &ast.ChanType{
+			Dir:   t.Dir,
+			Value: qualifyType(t.Value, pkgAlias, definedTypes),
+		}
 	case *ast.FuncType:
+		// Process function parameters
+		var newParams []*ast.Field
 		if t.Params != nil {
 			for _, field := range t.Params.List {
-				field.Type = qualifyType(field.Type, pkgAlias, definedTypes)
+				newField := &ast.Field{
+					Names: field.Names,
+					Type:  qualifyType(field.Type, pkgAlias, definedTypes),
+				}
+				newParams = append(newParams, newField)
 			}
 		}
+
+		// Process function results
+		var newResults []*ast.Field
 		if t.Results != nil {
 			for _, field := range t.Results.List {
-				field.Type = qualifyType(field.Type, pkgAlias, definedTypes)
-			}
-		}
-		return t
-	case *ast.InterfaceType:
-		// Interface methods' types need to be qualified
-		if t.Methods != nil {
-			for _, field := range t.Methods.List {
-				if funcType, ok := field.Type.(*ast.FuncType); ok {
-					field.Type = qualifyType(funcType, pkgAlias, definedTypes)
+				newField := &ast.Field{
+					Names: field.Names,
+					Type:  qualifyType(field.Type, pkgAlias, definedTypes),
 				}
+				newResults = append(newResults, newField)
 			}
 		}
+
+		return &ast.FuncType{
+			Params:  &ast.FieldList{List: newParams},
+			Results: &ast.FieldList{List: newResults},
+		}
+	case *ast.InterfaceType:
+		// For interface types, we generally don't need to qualify methods
+		// as they are part of the interface definition
 		return t
 	case *ast.StructType:
-		// Struct fields' types need to be qualified
-		if t.Fields != nil {
-			for _, field := range t.Fields.List {
-				field.Type = qualifyType(field.Type, pkgAlias, definedTypes)
-			}
-		}
+		// For struct types, we generally don't need to qualify fields
+		// as they are part of the struct definition
 		return t
 	case *ast.SelectorExpr:
-		// If it's already a SelectorExpr, check if it's a reference to a type from the source package
-		// that we've defined locally
-		if ident, ok := t.X.(*ast.Ident); ok && ident.Name == pkgAlias {
-			typeName := t.Sel.Name
-			if definedTypes[typeName] {
-				// Replace with local alias
-				return ast.NewIdent(typeName)
-			}
+		// Handle selector expressions (e.g., pkg.Type)
+		// If the selector is a defined type, use it directly
+		if definedTypes != nil && definedTypes[t.Sel.Name] {
+			// 如果是已定义的类型，直接返回类型名（不带包前缀）
+			return ast.NewIdent(t.Sel.Name)
 		}
+		// Otherwise, return as is
 		return t
 	default:
-		return expr
+		// For all other types, return as is
+		return t
 	}
 }
