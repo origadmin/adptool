@@ -193,6 +193,8 @@ func (c *Collector) collectValueDeclaration(genDecl *ast.GenDecl, importAlias st
 		if valueSpec, ok := spec.(*ast.ValueSpec); ok {
 			for _, name := range valueSpec.Names {
 				if name.IsExported() {
+					
+
 					originalName := name.Name
 
 					newSpec := &ast.ValueSpec{
