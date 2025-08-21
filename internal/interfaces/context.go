@@ -5,8 +5,8 @@ package interfaces
 type Context interface {
 	WithValue(key, value interface{}) Context
 	Value(key interface{}) interface{}
-	Push(nodeType string) Context
-	CurrentNodeType() string
+	Push(nodeType RuleType) Context
+	CurrentNodeType() RuleType
 }
 
 // private type to prevent collisions with other packages
@@ -14,23 +14,23 @@ type contextKey string
 
 // contextImpl is the concrete implementation of the Context interface.
 type contextImpl struct {
-	values map[interface{}]interface{}
-	nodeTypeStack []string
+	values        map[interface{}]interface{}
+	nodeTypeStack []RuleType
 }
 
 // NewContext creates a new root context.
 func NewContext() Context {
 	return &contextImpl{
-		values: make(map[interface{}]interface{}),
-		nodeTypeStack: make([]string, 0),
+		values:        make(map[interface{}]interface{}),
+		nodeTypeStack: make([]RuleType, 0),
 	}
 }
 
 // WithValue returns a new Context that carries a value associated with a key.
 func (c *contextImpl) WithValue(key, value interface{}) Context {
 	newCtx := &contextImpl{
-		values: make(map[interface{}]interface{}),
-		nodeTypeStack: make([]string, len(c.nodeTypeStack)),
+		values:        make(map[interface{}]interface{}),
+		nodeTypeStack: make([]RuleType, len(c.nodeTypeStack)),
 	}
 	// Copy parent context values
 	for k, v := range c.values {
@@ -49,8 +49,8 @@ func (c *contextImpl) Value(key interface{}) interface{} {
 }
 
 // Push adds a node type to the context stack.
-func (c *contextImpl) Push(nodeType string) Context {
-	newStack := make([]string, len(c.nodeTypeStack)+1)
+func (c *contextImpl) Push(nodeType RuleType) Context {
+	newStack := make([]RuleType, len(c.nodeTypeStack)+1)
 	copy(newStack, c.nodeTypeStack)
 	newStack[len(c.nodeTypeStack)] = nodeType
 
@@ -65,12 +65,10 @@ func (c *contextImpl) Push(nodeType string) Context {
 	return newCtx
 }
 
-
-
 // CurrentNodeType returns the current node type from the context stack.
-func (c *contextImpl) CurrentNodeType() string {
+func (c *contextImpl) CurrentNodeType() RuleType {
 	if len(c.nodeTypeStack) > 0 {
 		return c.nodeTypeStack[len(c.nodeTypeStack)-1]
 	}
-	return ""
+	return RuleTypeUnknown
 }

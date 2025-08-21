@@ -42,3 +42,26 @@ const (
 	RuleTypeMethod
 	RuleTypeField
 )
+
+func ParseRuleType(s string) RuleType {
+	switch s {
+	case "root":
+		return RuleTypeRoot
+	case "package":
+		return RuleTypePackage
+	case "type":
+		return RuleTypeType
+	case "func":
+		return RuleTypeFunc
+	case "var":
+		return RuleTypeVar
+	case "const":
+		return RuleTypeConst
+	case "method":
+		return RuleTypeMethod
+	case "field":
+		return RuleTypeField
+	default:
+		return RuleTypeUnknown
+	}
+}
