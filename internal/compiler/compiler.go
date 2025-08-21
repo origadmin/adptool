@@ -157,10 +157,10 @@ func (r *realReplacer) findAndApplyRule(name string, ruleType interfaces.RuleTyp
 func filterRulesByContext(rules []interfaces.PriorityRule, ruleType interfaces.RuleType, pkgName string) []interfaces.PriorityRule {
 	var filtered []interfaces.PriorityRule
 	for _, r := range rules {
-		isCorrectType := (ruleType == interfaces.RuleTypeConst && r.Rule.Value == "Const") ||
-			(ruleType == interfaces.RuleTypeType && r.Rule.Value == "Type") ||
-			(ruleType == interfaces.RuleTypeVar && r.Rule.Value == "Var") ||
-			(ruleType == interfaces.RuleTypeFunc && r.Rule.Value == "Func")
+		isCorrectType := (ruleType == interfaces.RuleTypeConst && r.Rule.RuleType == interfaces.RuleTypeConst) ||
+			(ruleType == interfaces.RuleTypeType && r.Rule.RuleType == interfaces.RuleTypeType) ||
+			(ruleType == interfaces.RuleTypeVar && r.Rule.RuleType == interfaces.RuleTypeVar) ||
+			(ruleType == interfaces.RuleTypeFunc && r.Rule.RuleType == interfaces.RuleTypeFunc)
 
 		if !isCorrectType {
 			continue
@@ -286,17 +286,8 @@ func processRuleHolder(priorityRules map[string][]internalPriorityRule, holder c
 	renameRules := rulesPkg.ConvertRuleSetToRenameRules(ruleSet)
 	isWildcard := name == "*"
 	for _, rule := range renameRules {
-		// Convert RuleType to string value for the rule
-		switch ruleType {
-		case interfaces.RuleTypeType:
-			rule.Value = "Type"
-		case interfaces.RuleTypeFunc:
-			rule.Value = "Func"
-		case interfaces.RuleTypeVar:
-			rule.Value = "Var"
-		case interfaces.RuleTypeConst:
-			rule.Value = "Const"
-		}
+		// Set the RuleType for the rule
+		rule.RuleType = ruleType
 		priorityRules[name] = append(priorityRules[name], internalPriorityRule{
 			rule:        rule,
 			priority:    priority,
