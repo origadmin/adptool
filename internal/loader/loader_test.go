@@ -94,7 +94,7 @@ constants:
     disabled: true
 
 packages:
-  - import: "github.com/my/package"
+  - import: "github.com/origadmin/adptool/testdata/sourcepkg"
     alias: "mypkg"
     vars:
       - name: PackageVar1
@@ -204,7 +204,7 @@ packages:
 				},
 				Packages: []*config.Package{
 					{
-						Import: "github.com/my/package",
+						Import: "github.com/origadmin/adptool/testdata/sourcepkg",
 						Alias:  "mypkg",
 						Props: []*config.PropsEntry{
 							{

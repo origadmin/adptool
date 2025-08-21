@@ -143,7 +143,8 @@ func TestGenerate(t *testing.T) {
 	outputFilePath := filepath.Join(t.TempDir(), "test_alias.go")
 
 	// 4. Create a new Generator instance and call its Generate method
-	generator := NewGenerator(compiledCfg.PackageName, outputFilePath, compiler.NewReplacer(compiledCfg))
+	// 禁用自动格式化，因为测试中会手动调用goimports
+	generator := NewGenerator(compiledCfg.PackageName, outputFilePath, compiler.NewReplacer(compiledCfg)).WithFormatCode(false)
 	err = generator.Generate(packageInfos)
 	assert.NoError(t, err)
 

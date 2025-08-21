@@ -73,7 +73,7 @@ constants:
     disabled: true
 
 packages:
-  - import: "github.com/my/package"
+  - import: "github.com/origadmin/adptool/testdata/sourcepkg"
     alias: "mypkg"
     vars:
       - name: "PackageVar1"
