@@ -29,6 +29,12 @@ func (g *Generator) Generate(packages []*PackageInfo) error {
 	return g.builder.Write()
 }
 
+// WithFormatCode 设置是否在生成代码后自动格式化
+func (g *Generator) WithFormatCode(format bool) *Generator {
+	g.builder.WithFormatCode(format)
+	return g
+}
+
 // ApplyRules applies a set of rename rules to a given name and returns the result.
 // This is a wrapper around rules.ApplyRules for backward compatibility.
 func ApplyRules(name string, rulesList []interfaces.RenameRule) (string, error) {

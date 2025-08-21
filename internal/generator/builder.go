@@ -9,6 +9,8 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+
+	"github.com/origadmin/adptool/internal/util"
 )
 
 // Builder is responsible for building the output file from collected declarations.
@@ -16,6 +18,7 @@ type Builder struct {
 	fset           *token.FileSet
 	outputFilePath string
 	aliasFile      *ast.File
+	formatCode     bool // 控制是否自动格式化代码
 }
 
 // NewBuilder creates a new Builder.
@@ -27,7 +30,14 @@ func NewBuilder(packageName string, outputFilePath string) *Builder {
 			Name:  ast.NewIdent(packageName),
 			Decls: []ast.Decl{},
 		},
+		formatCode: true, // 默认启用代码格式化
 	}
+}
+
+// WithFormatCode 设置是否在生成代码后自动格式化
+func (b *Builder) WithFormatCode(format bool) *Builder {
+	b.formatCode = format
+	return b
 }
 
 // Build builds the output file structure from the collected data.
@@ -88,6 +98,13 @@ func (b *Builder) Write() error {
 
 	if err := printer.Fprint(outFile, b.fset, b.aliasFile); err != nil {
 		return fmt.Errorf("failed to write generated code: %w", err)
+	}
+
+	// 根据formatCode选项决定是否运行goimports
+	if b.formatCode {
+		if err := util.RunGoImports(b.outputFilePath); err != nil {
+			return fmt.Errorf("failed to format generated code with goimports: %w", err)
+		}
 	}
 
 	return nil
