@@ -1,6 +1,7 @@
 package compiler
 
 import (
+	"fmt"
 	"go/ast"
 	"go/token"
 	"path"
@@ -137,48 +138,88 @@ func (r *realReplacer) findAndApplyRule(name string, ruleType interfaces.RuleTyp
 	// 根据规则类型直接查找对应类型的规则，提高效率
 	// 首先查找包级别的规则
 	if pkgName != "" {
-		switch ruleType {
-		case interfaces.RuleTypeType:
-			if r.config.PackageTypeRules != nil {
-				if rules, ok := r.config.PackageTypeRules[pkgName][name]; ok {
-					applicableRules = append(applicableRules, rules...)
+		// 检查指定包是否有包级别的规则
+		hasPackageRules := r.hasPackageRules(pkgName, ruleType)
+
+		if hasPackageRules {
+			// 如果有包级别的规则，则只应用该包的规则
+			switch ruleType {
+			case interfaces.RuleTypeType:
+				if r.config.PackageTypeRules != nil {
+					// 显式获取当前包的规则，避免跨包应用
+					pkgRules := r.config.PackageTypeRules[pkgName]
+					if pkgRules != nil {
+						if rules, ok := pkgRules[name]; ok {
+							applicableRules = append(applicableRules, rules...)
+						}
+						if rules, ok := pkgRules["*"]; ok {
+							applicableRules = append(applicableRules, rules...)
+						}
+					}
 				}
-				if rules, ok := r.config.PackageTypeRules[pkgName]["*"]; ok {
-					applicableRules = append(applicableRules, rules...)
+			case interfaces.RuleTypeFunc:
+				if r.config.PackageFuncRules != nil {
+					if rules, ok := r.config.PackageFuncRules[pkgName][name]; ok {
+						applicableRules = append(applicableRules, rules...)
+					}
+					if rules, ok := r.config.PackageFuncRules[pkgName]["*"]; ok {
+						applicableRules = append(applicableRules, rules...)
+					}
+				}
+			case interfaces.RuleTypeVar:
+				if r.config.PackageVarRules != nil {
+					if rules, ok := r.config.PackageVarRules[pkgName][name]; ok {
+						applicableRules = append(applicableRules, rules...)
+					}
+					if rules, ok := r.config.PackageVarRules[pkgName]["*"]; ok {
+						applicableRules = append(applicableRules, rules...)
+					}
+				}
+			case interfaces.RuleTypeConst:
+				if r.config.PackageConstRules != nil {
+					if rules, ok := r.config.PackageConstRules[pkgName][name]; ok {
+						applicableRules = append(applicableRules, rules...)
+					}
+					if rules, ok := r.config.PackageConstRules[pkgName]["*"]; ok {
+						applicableRules = append(applicableRules, rules...)
+					}
 				}
 			}
-		case interfaces.RuleTypeFunc:
-			if r.config.PackageFuncRules != nil {
-				if rules, ok := r.config.PackageFuncRules[pkgName][name]; ok {
+		} else {
+			// 如果没有包级别的规则，则应用全局规则
+			switch ruleType {
+			case interfaces.RuleTypeType:
+				if rules, ok := r.config.TypeRules[name]; ok {
 					applicableRules = append(applicableRules, rules...)
 				}
-				if rules, ok := r.config.PackageFuncRules[pkgName]["*"]; ok {
+				if rules, ok := r.config.TypeRules["*"]; ok {
 					applicableRules = append(applicableRules, rules...)
 				}
-			}
-		case interfaces.RuleTypeVar:
-			if r.config.PackageVarRules != nil {
-				if rules, ok := r.config.PackageVarRules[pkgName][name]; ok {
+			case interfaces.RuleTypeFunc:
+				if rules, ok := r.config.FuncRules[name]; ok {
 					applicableRules = append(applicableRules, rules...)
 				}
-				if rules, ok := r.config.PackageVarRules[pkgName]["*"]; ok {
+				if rules, ok := r.config.FuncRules["*"]; ok {
 					applicableRules = append(applicableRules, rules...)
 				}
-			}
-		case interfaces.RuleTypeConst:
-			if r.config.PackageConstRules != nil {
-				if rules, ok := r.config.PackageConstRules[pkgName][name]; ok {
+			case interfaces.RuleTypeVar:
+				if rules, ok := r.config.VarRules[name]; ok {
 					applicableRules = append(applicableRules, rules...)
 				}
-				if rules, ok := r.config.PackageConstRules[pkgName]["*"]; ok {
+				if rules, ok := r.config.VarRules["*"]; ok {
+					applicableRules = append(applicableRules, rules...)
+				}
+			case interfaces.RuleTypeConst:
+				if rules, ok := r.config.ConstRules[name]; ok {
+					applicableRules = append(applicableRules, rules...)
+				}
+				if rules, ok := r.config.ConstRules["*"]; ok {
 					applicableRules = append(applicableRules, rules...)
 				}
 			}
 		}
-	}
-
-	// 如果没有找到包级别的规则或者没有指定包，则查找全局规则
-	if len(applicableRules) == 0 {
+	} else {
+		// 没有包名时，直接应用全局规则
 		switch ruleType {
 		case interfaces.RuleTypeType:
 			if rules, ok := r.config.TypeRules[name]; ok {
@@ -211,38 +252,54 @@ func (r *realReplacer) findAndApplyRule(name string, ruleType interfaces.RuleTyp
 		}
 	}
 
-	// 过滤匹配包名的规则（主要用于全局规则）
-	var filtered []interfaces.PriorityRule
-	for _, rule := range applicableRules {
-		// 如果是包级别的规则，已经经过筛选，直接添加
-		if pkgName != "" && isPackageRule(rule, pkgName) {
-			filtered = append(filtered, rule)
-			continue
-		}
-		
-		// 对于全局规则，检查包名匹配
-		if pkgName != "" {
-			if rule.PackageName == pkgName || rule.PackageName == "" {
-				filtered = append(filtered, rule)
-			}
-		} else {
-			if rule.PackageName == "" {
-				filtered = append(filtered, rule)
-			}
-		}
-	}
-
-	if len(filtered) == 0 {
+	if len(applicableRules) == 0 {
 		return "", false
 	}
 
 	// 应用优先级最高的规则
-	highestPriorityRule := filtered[0].Rule
+	highestPriorityRule := applicableRules[0].Rule
 	newName, err := rulesPkg.ApplyRules(name, []interfaces.RenameRule{highestPriorityRule})
 	if err != nil {
 		return "", false
 	}
 	return newName, newName != name
+}
+
+// hasPackageRules 检查指定包是否有指定类型的规则
+func (r *realReplacer) hasPackageRules(pkgName string, ruleType interfaces.RuleType) bool {
+	if pkgName == "" {
+		return false
+	}
+
+	switch ruleType {
+	case interfaces.RuleTypeType:
+		if r.config.PackageTypeRules != nil {
+			// 检查包规则是否存在且非空
+			if rules, ok := r.config.PackageTypeRules[pkgName]; ok && len(rules) > 0 {
+				return true
+			}
+		}
+	case interfaces.RuleTypeFunc:
+		if r.config.PackageFuncRules != nil {
+			if rules, ok := r.config.PackageFuncRules[pkgName]; ok && len(rules) > 0 {
+				return true
+			}
+		}
+	case interfaces.RuleTypeVar:
+		if r.config.PackageVarRules != nil {
+			if rules, ok := r.config.PackageVarRules[pkgName]; ok && len(rules) > 0 {
+				return true
+			}
+		}
+	case interfaces.RuleTypeConst:
+		if r.config.PackageConstRules != nil {
+			if rules, ok := r.config.PackageConstRules[pkgName]; ok && len(rules) > 0 {
+				return true
+			}
+		}
+	}
+
+	return false
 }
 
 // isPackageRule 检查规则是否为指定包的规则
@@ -298,14 +355,18 @@ func isApplicableRuleType(ruleType interfaces.RuleType) bool {
 
 // Compile takes a configuration and returns a compiled representation of it.
 func Compile(cfg *config.Config) (*interfaces.CompiledConfig, error) {
+	fmt.Printf("Compiling configuration with %d global type rules, %d global function rules, %d global variable rules, %d global constant rules\n",
+		len(cfg.Types), len(cfg.Functions), len(cfg.Variables), len(cfg.Constants))
+	fmt.Printf("Compiling configuration with %d global type rules, %d global function rules, %d global variable rules, %d global constant rules\n",
+		len(cfg.Types), len(cfg.Functions), len(cfg.Variables), len(cfg.Constants))
 	priorityRules := make(map[string][]internalPriorityRule)
-	
+
 	// 按类型分类的全局规则
 	typeRules := make(map[string][]interfaces.PriorityRule)
 	funcRules := make(map[string][]interfaces.PriorityRule)
 	varRules := make(map[string][]interfaces.PriorityRule)
 	constRules := make(map[string][]interfaces.PriorityRule)
-	
+
 	// 按包和类型分类的规则
 	packageTypeRules := make(map[string]map[string][]interfaces.PriorityRule)
 	packageFuncRules := make(map[string]map[string][]interfaces.PriorityRule)
@@ -317,40 +378,52 @@ func Compile(cfg *config.Config) (*interfaces.CompiledConfig, error) {
 	}
 
 	for _, r := range cfg.Types {
+		fmt.Printf("Processing global type rule: %s\n", r.GetName())
 		process(r, 0, "", interfaces.RuleTypeType)
 	}
 	for _, r := range cfg.Functions {
+		fmt.Printf("Processing global function rule: %s\n", r.GetName())
 		process(r, 0, "", interfaces.RuleTypeFunc)
 	}
 	for _, r := range cfg.Variables {
+		fmt.Printf("Processing global variable rule: %s\n", r.GetName())
 		process(r, 0, "", interfaces.RuleTypeVar)
 	}
 	for _, r := range cfg.Constants {
+		fmt.Printf("Processing global constant rule: %s\n", r.GetName())
 		process(r, 0, "", interfaces.RuleTypeConst)
 	}
 
 	for _, pkg := range cfg.Packages {
+		fmt.Printf("Processing package: %s (alias: %s)\n", pkg.Import, pkg.Alias)
+
 		for _, r := range pkg.Types {
+			fmt.Printf("  Processing package type rule: %s\n", r.GetName())
 			process(r, 1, pkg.Import, interfaces.RuleTypeType)
 		}
 		for _, r := range pkg.Functions {
+			fmt.Printf("  Processing package function rule: %s\n", r.GetName())
 			process(r, 1, pkg.Import, interfaces.RuleTypeFunc)
 		}
 		for _, r := range pkg.Variables {
+			fmt.Printf("  Processing package variable rule: %s\n", r.GetName())
 			process(r, 1, pkg.Import, interfaces.RuleTypeVar)
 		}
 		for _, r := range pkg.Constants {
+			fmt.Printf("  Processing package constant rule: %s\n", r.GetName())
 			process(r, 1, pkg.Import, interfaces.RuleTypeConst)
 		}
 
 		for _, t := range pkg.Types {
 			if t.Fields != nil {
 				for _, field := range t.Fields {
+					fmt.Printf("    Processing type field rule: %s\n", field.GetName())
 					process(field, 2, pkg.Import, interfaces.RuleTypeVar)
 				}
 			}
 			if t.Methods != nil {
 				for _, method := range t.Methods {
+					fmt.Printf("    Processing type method rule: %s\n", method.GetName())
 					process(method, 2, pkg.Import, interfaces.RuleTypeFunc)
 				}
 			}
@@ -358,24 +431,26 @@ func Compile(cfg *config.Config) (*interfaces.CompiledConfig, error) {
 	}
 
 	sortPriorityRules(priorityRules)
-	
+
 	// 将规则按类型分类
+	fmt.Println("Categorizing rules by type...")
 	categorizeRules(priorityRules, typeRules, funcRules, varRules, constRules)
-	
+
 	// 将规则按包和类型分类
+	fmt.Println("Categorizing rules by package and type...")
 	categorizePackageRules(priorityRules, packageTypeRules, packageFuncRules, packageVarRules, packageConstRules)
 
 	compiledPackages := compilePackages(cfg.Packages)
 
 	compiledCfg := &interfaces.CompiledConfig{
-		PackageName:   cfg.OutputPackageName,
-		Packages:      compiledPackages,
-		Rules:         convertPriorityToLegacy(priorityRules),
-		PriorityRules: convertToExternalPriorityRules(priorityRules),
-		TypeRules:     typeRules,
-		FuncRules:     funcRules,
-		VarRules:      varRules,
-		ConstRules:    constRules,
+		PackageName:       cfg.OutputPackageName,
+		Packages:          compiledPackages,
+		Rules:             convertPriorityToLegacy(priorityRules),
+		PriorityRules:     convertToExternalPriorityRules(priorityRules),
+		TypeRules:         typeRules,
+		FuncRules:         funcRules,
+		VarRules:          varRules,
+		ConstRules:        constRules,
 		PackageTypeRules:  packageTypeRules,
 		PackageFuncRules:  packageFuncRules,
 		PackageVarRules:   packageVarRules,
@@ -481,6 +556,8 @@ func convertPriorityToLegacy(prules map[string][]internalPriorityRule) map[strin
 
 // categorizeRules 将规则按类型分类存储，提高运行时效率
 func categorizeRules(priorityRules map[string][]internalPriorityRule, typeRules, funcRules, varRules, constRules map[string][]interfaces.PriorityRule) {
+	fmt.Println("Starting to categorize rules by type")
+	fmt.Println("Starting to categorize rules by type")
 	for name, rules := range priorityRules {
 		for _, rule := range rules {
 			externalRule := interfaces.PriorityRule{
@@ -488,7 +565,7 @@ func categorizeRules(priorityRules map[string][]internalPriorityRule, typeRules,
 				Priority:    rule.priority,
 				PackageName: rule.packageName,
 			}
-			
+
 			switch rule.rule.RuleType {
 			case interfaces.RuleTypeType:
 				typeRules[name] = append(typeRules[name], externalRule)
@@ -501,7 +578,7 @@ func categorizeRules(priorityRules map[string][]internalPriorityRule, typeRules,
 			}
 		}
 	}
-	
+
 	// 对每种类型的规则进行排序
 	sortCategorizedRules(typeRules)
 	sortCategorizedRules(funcRules)
@@ -510,24 +587,32 @@ func categorizeRules(priorityRules map[string][]internalPriorityRule, typeRules,
 }
 
 // categorizePackageRules 将规则按包和类型分类存储，提高运行时效率
-func categorizePackageRules(priorityRules map[string][]internalPriorityRule, 
+func categorizePackageRules(priorityRules map[string][]internalPriorityRule,
 	packageTypeRules, packageFuncRules, packageVarRules, packageConstRules map[string]map[string][]interfaces.PriorityRule) {
+	fmt.Println("Starting to categorize rules by package and type")
+	fmt.Println("Starting to categorize rules by package and type")
+	// Track processed packages to avoid redundant initialization and sorting
+	processedPackages := make(map[string]bool)
+
 	for name, rules := range priorityRules {
 		for _, rule := range rules {
-			// 只处理包级别的规则
+			// 只处理包级别的规则，并且确保规则属于当前正在处理的包
 			if rule.packageName == "" {
 				continue
 			}
-			
+
 			externalRule := interfaces.PriorityRule{
 				Rule:        rule.rule,
 				Priority:    rule.priority,
 				PackageName: rule.packageName,
 			}
-			
-			// 确保包的map已初始化
-			ensurePackageMapInitialized(packageTypeRules, packageFuncRules, packageVarRules, packageConstRules, rule.packageName)
-			
+
+			// 初始化包的map（仅在首次遇到该包时）
+			if !processedPackages[rule.packageName] {
+				ensurePackageMapInitialized(packageTypeRules, packageFuncRules, packageVarRules, packageConstRules, rule.packageName)
+				processedPackages[rule.packageName] = true
+			}
+
 			switch rule.rule.RuleType {
 			case interfaces.RuleTypeType:
 				packageTypeRules[rule.packageName][name] = append(packageTypeRules[rule.packageName][name], externalRule)
@@ -540,19 +625,19 @@ func categorizePackageRules(priorityRules map[string][]internalPriorityRule,
 			}
 		}
 	}
-	
-	// 对每种类型的规则进行排序
-	for _, rules := range packageTypeRules {
-		sortCategorizedRules(rules)
+
+	// 在添加完规则后，对每种类型的规则进行排序（按包）
+	for pkg := range packageTypeRules {
+		sortCategorizedRules(packageTypeRules[pkg])
 	}
-	for _, rules := range packageFuncRules {
-		sortCategorizedRules(rules)
+	for pkg := range packageFuncRules {
+		sortCategorizedRules(packageFuncRules[pkg])
 	}
-	for _, rules := range packageVarRules {
-		sortCategorizedRules(rules)
+	for pkg := range packageVarRules {
+		sortCategorizedRules(packageVarRules[pkg])
 	}
-	for _, rules := range packageConstRules {
-		sortCategorizedRules(rules)
+	for pkg := range packageConstRules {
+		sortCategorizedRules(packageConstRules[pkg])
 	}
 }
 
@@ -574,6 +659,8 @@ func ensurePackageMapInitialized(packageTypeRules, packageFuncRules, packageVarR
 
 // sortCategorizedRules 对分类后的规则进行排序
 func sortCategorizedRules(rules map[string][]interfaces.PriorityRule) {
+	fmt.Println("Sorting categorized rules")
+	fmt.Println("Sorting categorized rules")
 	for name, prules := range rules {
 		sort.Slice(prules, func(i, j int) bool {
 			if prules[i].Priority != prules[j].Priority {
