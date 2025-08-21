@@ -22,4 +22,10 @@ type CompiledConfig struct {
 	Packages      []*CompiledPackage
 	Rules         map[string][]RenameRule   // Compiled rules for generator
 	PriorityRules map[string][]PriorityRule // Priority rules for generator
+	
+	// 按类型分类的规则，提高运行时效率
+	TypeRules     map[string][]PriorityRule
+	FuncRules     map[string][]PriorityRule
+	VarRules      map[string][]PriorityRule
+	ConstRules    map[string][]PriorityRule
 }
