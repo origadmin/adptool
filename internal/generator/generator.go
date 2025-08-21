@@ -6,15 +6,16 @@ import (
 
 // Generator holds the state and configuration for code generation.
 type Generator struct {
-	collector *Collector
-	builder   *Builder
+	collector    *Collector
+	builder      *Builder
+	noEditHeader bool // 控制是否添加"do not edit"头部注释
 }
 
 // NewGenerator creates a new Generator instance.
 func NewGenerator(packageName string, outputFilePath string, replacer interfaces.Replacer) *Generator {
 	return &Generator{
 		collector: NewCollector(replacer),
-		builder:   NewBuilder(packageName, outputFilePath),
+		builder:   NewBuilder(packageName, outputFilePath, true), // 默认添加"do not edit"头部注释
 	}
 }
 
@@ -32,6 +33,13 @@ func (g *Generator) Generate(packages []*PackageInfo) error {
 // WithFormatCode 设置是否在生成代码后自动格式化
 func (g *Generator) WithFormatCode(format bool) *Generator {
 	g.builder.WithFormatCode(format)
+	return g
+}
+
+// WithNoEditHeader 设置是否添加"do not edit"头部注释
+func (g *Generator) WithNoEditHeader(noEditHeader bool) *Generator {
+	g.noEditHeader = noEditHeader
+	g.builder.noEditHeader = noEditHeader
 	return g
 }
 

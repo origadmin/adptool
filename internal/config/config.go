@@ -56,15 +56,15 @@ func NewDefaults() *Defaults {
 
 // Config is the root of the .adptool.yaml configuration file.
 type Config struct {
-	OutputPackageName string        `yaml:"output_package_name,omitempty" mapstructure:"output_package_name,omitempty" json:"output_package_name,omitempty" toml:"output_package_name,omitempty"`
-	Ignores           []string      `yaml:"ignores,omitempty" mapstructure:"ignores,omitempty" json:"ignores,omitempty" toml:"ignores,omitempty"`
-	Defaults          *Defaults     `yaml:"defaults,omitempty" mapstructure:"defaults,omitempty" json:"defaults,omitempty" toml:"defaults,omitempty"`
-	Props             []*PropsEntry `yaml:"props,omitempty" mapstructure:"props,omitempty" json:"props,omitempty" toml:"props,omitempty"`
-	Packages          []*Package    `yaml:"packages,omitempty" mapstructure:"packages,omitempty" json:"packages,omitempty" toml:"packages,omitempty"`
-	Types             []*TypeRule   `yaml:"types,omitempty" mapstructure:"types,omitempty" json:"types,omitempty" toml:"types,omitempty"`
-	Functions         []*FuncRule   `yaml:"functions,omitempty" mapstructure:"functions,omitempty" json:"functions,omitempty" toml:"functions,omitempty"`
-	Variables         []*VarRule    `yaml:"variables,omitempty" mapstructure:"variables,omitempty" json:"variables,omitempty" toml:"variables,omitempty"`
-	Constants         []*ConstRule  `yaml:"constants,omitempty" mapstructure:"constants,omitempty" json:"constants,omitempty" toml:"constants,omitempty"`
+	PackageName string        `yaml:"package_name,omitempty" mapstructure:"package_name,omitempty" json:"package_name,omitempty" toml:"package_name,omitempty"`
+	Ignores     []string      `yaml:"ignores,omitempty" mapstructure:"ignores,omitempty" json:"ignores,omitempty" toml:"ignores,omitempty"`
+	Defaults    *Defaults     `yaml:"defaults,omitempty" mapstructure:"defaults,omitempty" json:"defaults,omitempty" toml:"defaults,omitempty"`
+	Props       []*PropsEntry `yaml:"props,omitempty" mapstructure:"props,omitempty" json:"props,omitempty" toml:"props,omitempty"`
+	Packages    []*Package    `yaml:"packages,omitempty" mapstructure:"packages,omitempty" json:"packages,omitempty" toml:"packages,omitempty"`
+	Types       []*TypeRule   `yaml:"types,omitempty" mapstructure:"types,omitempty" json:"types,omitempty" toml:"types,omitempty"`
+	Functions   []*FuncRule   `yaml:"functions,omitempty" mapstructure:"functions,omitempty" json:"functions,omitempty" toml:"functions,omitempty"`
+	Variables   []*VarRule    `yaml:"variables,omitempty" mapstructure:"variables,omitempty" json:"variables,omitempty" toml:"variables,omitempty"`
+	Constants   []*ConstRule  `yaml:"constants,omitempty" mapstructure:"constants,omitempty" json:"constants,omitempty" toml:"constants,omitempty"`
 }
 
 // PropsEntry defines a single variable entry in the config.
