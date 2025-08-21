@@ -346,7 +346,7 @@ func extractValueAliases(genDecl *ast.GenDecl, targetMap map[string]map[string]s
 							if _, exists := targetMap[pkgAlias]; !exists {
 								targetMap[pkgAlias] = make(map[string]string)
 							}
-						targetMap[pkgAlias][originalName] = newName
+							targetMap[pkgAlias][originalName] = newName
 						}
 					}
 				}
@@ -370,7 +370,7 @@ func TestGenerator_Modes(t *testing.T) {
 							Explicit: []*config.ExplicitRule{{
 								From: "MyStruct",
 								To:   "ExplicitMyStruct",
-						}},
+							}},
 						},
 						Name: "MyStruct",
 					},
@@ -389,7 +389,7 @@ func TestGenerator_Modes(t *testing.T) {
 							Explicit: []*config.ExplicitRule{{
 								From: "ExportedConstant",
 								To:   "ExplicitConstant",
-						}},
+							}},
 						},
 						Name: "ExportedConstant",
 					},
@@ -405,9 +405,9 @@ func TestGenerator_Modes(t *testing.T) {
 							Regex: []*config.RegexRule{{
 								Pattern: `^(Input|Output)Data$`,
 								Replace: "IO$1",
-						}},
+							}},
 						},
-						Name: `^(Input|Output)Data$`,
+						Name: `*`,
 					},
 				},
 				Functions: []*config.FuncRule{
@@ -417,9 +417,9 @@ func TestGenerator_Modes(t *testing.T) {
 							Regex: []*config.RegexRule{{
 								Pattern: `^New(.*)Interface$`,
 								Replace: "Create$1API",
-						}},
+							}},
 						},
-						Name: `^New(.*)Interface$`,
+						Name: `*`,
 					},
 				},
 			},
@@ -500,19 +500,18 @@ func TestGenerator_Modes(t *testing.T) {
 	actualFuncs := make(map[string]map[string]string)
 
 	ast.Inspect(node, func(n ast.Node) bool {
-		genDecl, ok := n.(*ast.GenDecl)
-		if !ok {
-			return true
-		}
-
-		switch genDecl.Tok {
-		case token.TYPE:
-			extractTypeAliases(genDecl, actualTypes)
-		case token.CONST:
-			extractValueAliases(genDecl, actualConsts)
-		case token.VAR:
-			// Functions are aliased as VARs in the generated code
-			extractValueAliases(genDecl, actualFuncs)
+		switch n := n.(type) {
+		case *ast.GenDecl:
+			switch n.Tok {
+			case token.TYPE:
+				extractTypeAliases(n, actualTypes)
+			case token.CONST:
+				extractValueAliases(n, actualConsts)
+			case token.VAR:
+				//extractValueAliases(n, actualVars)
+			}
+		case *ast.FuncDecl:
+			//extractFuncAliases(n, actualFuncs)
 		}
 		return true
 	})

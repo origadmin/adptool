@@ -98,6 +98,8 @@ func (b *Builder) Write() error {
 	}
 	defer outFile.Close()
 
+	log.Printf("Builder: Writing file with package name: %s", b.aliasFile.Name.Name)
+
 	if err := printer.Fprint(outFile, b.fset, b.aliasFile); err != nil {
 		return fmt.Errorf("failed to write generated code: %w", err)
 	}
