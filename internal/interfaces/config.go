@@ -11,8 +11,9 @@ type CompiledPackage struct {
 }
 
 type PriorityRule struct {
-	Rule     RenameRule
-	Priority int
+	Rule        RenameRule
+	PackageName string
+	Priority    int
 }
 
 // CompiledConfig holds all the compiled information needed for generation.

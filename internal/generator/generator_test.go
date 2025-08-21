@@ -111,10 +111,19 @@ func TestGenerate(t *testing.T) {
 			{
 				Import: "github.com/origadmin/adptool/testdata/sourcepkg2",
 				Alias:  "source2",
+				Types: []*config.TypeRule{
+					{
+						Name:     "*",
+						Disabled: false,
+						RuleSet: config.RuleSet{
+							Suffix: "Source",
+						},
+					},
+				},
 			},
 		},
 	}
-	
+
 	// Compile the config using the compiler package
 	compiledCfg, err := compiler.Compile(cfg)
 	if err != nil {

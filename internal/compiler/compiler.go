@@ -67,8 +67,7 @@ func (r *realReplacer) applyIdentRule(ctx interfaces.Context, ident *ast.Ident) 
 		return
 	}
 
-	// Find and apply the highest priority rule
-	if newName, ok := r.findAndApplyRule(ident.Name, ruleType); ok {
+	if newName, ok := r.findAndApplyRule(ident.Name, ruleType, ""); ok {
 		ident.Name = newName
 	}
 }
@@ -76,30 +75,47 @@ func (r *realReplacer) applyIdentRule(ctx interfaces.Context, ident *ast.Ident) 
 func (r *realReplacer) applyGenDeclRule(ctx interfaces.Context, decl *ast.GenDecl) {
 	switch decl.Tok {
 	case token.CONST:
-		ctx = ctx.Push("const")
+		nameCtx := ctx.Push(interfaces.RuleTypeConst)
 		for _, spec := range decl.Specs {
 			if valueSpec, ok := spec.(*ast.ValueSpec); ok {
-				nameCtx := ctx.Push("const_decl").Push("const_decl_name")
 				for _, name := range valueSpec.Names {
 					r.Apply(nameCtx, name)
 				}
 			}
 		}
 	case token.VAR:
-		ctx = ctx.Push("var")
+		nameCtx := ctx.Push(interfaces.RuleTypeVar)
 		for _, spec := range decl.Specs {
 			if valueSpec, ok := spec.(*ast.ValueSpec); ok {
-				nameCtx := ctx.Push("var_decl").Push("var_decl_name")
 				for _, name := range valueSpec.Names {
 					r.Apply(nameCtx, name)
 				}
 			}
 		}
 	case token.TYPE:
-		ctx = ctx.Push("type_decl")
+		nameCtx := ctx.Push(interfaces.RuleTypeType)
 		for _, spec := range decl.Specs {
 			if typeSpec, ok := spec.(*ast.TypeSpec); ok {
-				r.Apply(ctx.Push("type"), typeSpec.Name)
+				pkgImportPath := ""
+				nameToFindRuleFor := typeSpec.Name.Name
+
+				if selExpr, ok := typeSpec.Type.(*ast.SelectorExpr); ok {
+					if pkgIdent, ok := selExpr.X.(*ast.Ident); ok {
+						for _, p := range r.config.Packages {
+							if p.ImportAlias == pkgIdent.Name {
+								pkgImportPath = p.ImportPath
+								break
+							}
+						}
+					}
+					nameToFindRuleFor = selExpr.Sel.Name
+				}
+
+				if newName, ok := r.findAndApplyRule(nameToFindRuleFor, interfaces.RuleTypeType, pkgImportPath); ok {
+					typeSpec.Name.Name = newName
+				} else {
+					r.Apply(nameCtx, typeSpec.Name)
+				}
 			}
 		}
 	case token.IMPORT:
@@ -108,49 +124,28 @@ func (r *realReplacer) applyGenDeclRule(ctx interfaces.Context, decl *ast.GenDec
 }
 
 func (r *realReplacer) applyFuncDeclRule(ctx interfaces.Context, decl *ast.FuncDecl) {
-	r.Apply(ctx.Push("func"), decl.Name)
+	r.Apply(ctx.Push(interfaces.RuleTypeFunc), decl.Name)
 }
 
 func (r *realReplacer) applyTypeSpecRule(ctx interfaces.Context, spec *ast.TypeSpec) {
-	r.Apply(ctx.Push("type"), spec.Name)
+	r.Apply(ctx.Push(interfaces.RuleTypeType), spec.Name)
 }
 
-func (r *realReplacer) findAndApplyRule(name, ruleType string) (string, bool) {
-	// 1. Check for specific priority rules
+func (r *realReplacer) findAndApplyRule(name string, ruleType interfaces.RuleType, pkgName string) (string, bool) {
+	var applicableRules []interfaces.PriorityRule
+
 	if rules, ok := r.config.PriorityRules[name]; ok {
-		if newName, applied := applyFilteredRules(name, rules, ruleType); applied {
-			return newName, true
-		}
+		applicableRules = append(applicableRules, rules...)
 	}
-
-	// 2. Check for wildcard priority rules
 	if rules, ok := r.config.PriorityRules["*"]; ok {
-		if newName, applied := applyFilteredRules(name, rules, ruleType); applied {
-			return newName, true
-		}
+		applicableRules = append(applicableRules, rules...)
 	}
 
-	// 3. Fallback to old rule structure
-	if rules, ok := r.config.Rules[name]; ok {
-		var priorityRules []interfaces.PriorityRule
-		for _, rule := range rules {
-			priorityRules = append(priorityRules, interfaces.PriorityRule{Rule: rule})
-		}
-		if newName, applied := applyFilteredRules(name, priorityRules, ruleType); applied {
-			return newName, true
-		}
-	}
-
-	return "", false
-}
-
-func applyFilteredRules(name string, rules []interfaces.PriorityRule, ruleType string) (string, bool) {
-	filtered := filterRulesByContext(rules, ruleType)
+	filtered := filterRulesByContext(applicableRules, ruleType, pkgName)
 	if len(filtered) == 0 {
 		return "", false
 	}
 
-	// Apply highest priority rule
 	highestPriorityRule := filtered[0].Rule
 	newName, err := rulesPkg.ApplyRules(name, []interfaces.RenameRule{highestPriorityRule})
 	if err != nil {
@@ -159,22 +154,45 @@ func applyFilteredRules(name string, rules []interfaces.PriorityRule, ruleType s
 	return newName, newName != name
 }
 
-func filterRulesByContext(rules []interfaces.PriorityRule, ruleType string) []interfaces.PriorityRule {
+func filterRulesByContext(rules []interfaces.PriorityRule, ruleType interfaces.RuleType, pkgName string) []interfaces.PriorityRule {
 	var filtered []interfaces.PriorityRule
 	for _, r := range rules {
-		if (ruleType == "const_decl_name" && r.Rule.Value == "Const") ||
-			(ruleType == "type" && r.Rule.Value == "Type") ||
-			(ruleType == "var_decl_name" && r.Rule.Value == "Var") ||
-			(ruleType == "func" && r.Rule.Value == "Func") {
-			filtered = append(filtered, r)
+		isCorrectType := (ruleType == interfaces.RuleTypeConst && r.Rule.Value == "Const") ||
+			(ruleType == interfaces.RuleTypeType && r.Rule.Value == "Type") ||
+			(ruleType == interfaces.RuleTypeVar && r.Rule.Value == "Var") ||
+			(ruleType == interfaces.RuleTypeFunc && r.Rule.Value == "Func")
+
+		if !isCorrectType {
+			continue
+		}
+
+		if pkgName != "" {
+			if r.PackageName == pkgName || r.PackageName == "" {
+				filtered = append(filtered, r)
+			}
+		} else {
+			if r.PackageName == "" {
+				filtered = append(filtered, r)
+			}
 		}
 	}
+
+	sort.Slice(filtered, func(i, j int) bool {
+		if filtered[i].Priority != filtered[j].Priority {
+			return filtered[i].Priority > filtered[j].Priority
+		}
+		if filtered[i].PackageName != filtered[j].PackageName {
+			return filtered[i].PackageName != ""
+		}
+		return false
+	})
+
 	return filtered
 }
 
-func isApplicableRuleType(ruleType string) bool {
+func isApplicableRuleType(ruleType interfaces.RuleType) bool {
 	switch ruleType {
-	case "const_decl_name", "type", "var_decl_name", "func":
+	case interfaces.RuleTypeConst, interfaces.RuleTypeType, interfaces.RuleTypeVar, interfaces.RuleTypeFunc:
 		return true
 	default:
 		return false
@@ -185,25 +203,46 @@ func isApplicableRuleType(ruleType string) bool {
 func Compile(cfg *config.Config) (*interfaces.CompiledConfig, error) {
 	priorityRules := make(map[string][]internalPriorityRule)
 
-	// Process global rules (priority 0)
-	processRuleHolders(priorityRules, cfg.GetGlobalRules(), 0, "")
-
-	// Process package-specific rules (priority 1)
-	for _, pkg := range cfg.Packages {
-		processRuleHolders(priorityRules, pkg.GetPackageRules(), 1, pkg.Import)
+	process := func(holder config.RuleHolder, priority int, pkgName string, ruleType interfaces.RuleType) {
+		processRuleHolder(priorityRules, holder, priority, pkgName, ruleType)
 	}
 
-	// Process type-specific rules (priority 2)
+	for _, r := range cfg.Types {
+		process(r, 0, "", interfaces.RuleTypeType)
+	}
+	for _, r := range cfg.Functions {
+		process(r, 0, "", interfaces.RuleTypeFunc)
+	}
+	for _, r := range cfg.Variables {
+		process(r, 0, "", interfaces.RuleTypeVar)
+	}
+	for _, r := range cfg.Constants {
+		process(r, 0, "", interfaces.RuleTypeConst)
+	}
+
 	for _, pkg := range cfg.Packages {
+		for _, r := range pkg.Types {
+			process(r, 1, pkg.Import, interfaces.RuleTypeType)
+		}
+		for _, r := range pkg.Functions {
+			process(r, 1, pkg.Import, interfaces.RuleTypeFunc)
+		}
+		for _, r := range pkg.Variables {
+			process(r, 1, pkg.Import, interfaces.RuleTypeVar)
+		}
+		for _, r := range pkg.Constants {
+			process(r, 1, pkg.Import, interfaces.RuleTypeConst)
+		}
+
 		for _, t := range pkg.Types {
 			if t.Fields != nil {
 				for _, field := range t.Fields {
-					processRuleHolder(priorityRules, field, 2, pkg.Import)
+					process(field, 2, pkg.Import, interfaces.RuleTypeVar)
 				}
 			}
 			if t.Methods != nil {
 				for _, method := range t.Methods {
-					processRuleHolder(priorityRules, method, 2, pkg.Import)
+					process(method, 2, pkg.Import, interfaces.RuleTypeFunc)
 				}
 			}
 		}
@@ -227,8 +266,6 @@ func Compile(cfg *config.Config) (*interfaces.CompiledConfig, error) {
 	return compiledCfg, nil
 }
 
-// --- Helper types and functions for compilation ---
-
 type internalPriorityRule struct {
 	rule        interfaces.RenameRule
 	priority    int
@@ -236,13 +273,7 @@ type internalPriorityRule struct {
 	isWildcard  bool
 }
 
-func processRuleHolders(priorityRules map[string][]internalPriorityRule, holders []config.RuleHolder, priority int, pkgName string) {
-	for _, holder := range holders {
-		processRuleHolder(priorityRules, holder, priority, pkgName)
-	}
-}
-
-func processRuleHolder(priorityRules map[string][]internalPriorityRule, holder config.RuleHolder, priority int, pkgName string) {
+func processRuleHolder(priorityRules map[string][]internalPriorityRule, holder config.RuleHolder, priority int, pkgName string, ruleType interfaces.RuleType) {
 	if holder.IsDisabled() {
 		return
 	}
@@ -255,6 +286,17 @@ func processRuleHolder(priorityRules map[string][]internalPriorityRule, holder c
 	renameRules := rulesPkg.ConvertRuleSetToRenameRules(ruleSet)
 	isWildcard := name == "*"
 	for _, rule := range renameRules {
+		// Convert RuleType to string value for the rule
+		switch ruleType {
+		case interfaces.RuleTypeType:
+			rule.Value = "Type"
+		case interfaces.RuleTypeFunc:
+			rule.Value = "Func"
+		case interfaces.RuleTypeVar:
+			rule.Value = "Var"
+		case interfaces.RuleTypeConst:
+			rule.Value = "Const"
+		}
 		priorityRules[name] = append(priorityRules[name], internalPriorityRule{
 			rule:        rule,
 			priority:    priority,
@@ -272,6 +314,9 @@ func sortPriorityRules(rules map[string][]internalPriorityRule) {
 			}
 			if prules[i].isWildcard != prules[j].isWildcard {
 				return !prules[i].isWildcard
+			}
+			if prules[i].packageName != prules[j].packageName {
+				return prules[i].packageName != ""
 			}
 			return false
 		})
@@ -300,8 +345,9 @@ func convertToExternalPriorityRules(prules map[string][]internalPriorityRule) ma
 		converted := make([]interfaces.PriorityRule, len(rules))
 		for i, rule := range rules {
 			converted[i] = interfaces.PriorityRule{
-				Rule:     rule.rule,
-				Priority: rule.priority,
+				Rule:        rule.rule,
+				Priority:    rule.priority,
+				PackageName: rule.packageName,
 			}
 		}
 		result[name] = converted
