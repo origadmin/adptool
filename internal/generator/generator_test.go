@@ -346,11 +346,178 @@ func extractValueAliases(genDecl *ast.GenDecl, targetMap map[string]map[string]s
 							if _, exists := targetMap[pkgAlias]; !exists {
 								targetMap[pkgAlias] = make(map[string]string)
 							}
-							targetMap[pkgAlias][originalName] = newName
+						targetMap[pkgAlias][originalName] = newName
 						}
 					}
 				}
 			}
 		}
 	}
+}
+
+func TestGenerator_Modes(t *testing.T) {
+	// 1. Create the config for the test
+	cfg := &config.Config{
+		OutputPackageName: "aliaspkg",
+		Packages: []*config.Package{
+			{
+				Import: "github.com/origadmin/adptool/testdata/sourcepkg",
+				Alias:  "source",
+				Types: []*config.TypeRule{
+					{
+						RuleSet: config.RuleSet{
+							ExplicitMode: "override", // Corrected field name
+							Explicit: []*config.ExplicitRule{{
+								From: "MyStruct",
+								To:   "ExplicitMyStruct",
+						}},
+						},
+						Name: "MyStruct",
+					},
+					// This rule should be ignored because the mode is explicit and the name doesn't match.
+					{
+						Name: "ExportedType",
+						RuleSet: config.RuleSet{
+							Prefix: "ShouldNotApply",
+						},
+					},
+				},
+				Constants: []*config.ConstRule{
+					{
+						RuleSet: config.RuleSet{
+							ExplicitMode: "override", // Corrected field name
+							Explicit: []*config.ExplicitRule{{
+								From: "ExportedConstant",
+								To:   "ExplicitConstant",
+						}},
+						},
+						Name: "ExportedConstant",
+					},
+				},
+			},
+			{
+				Import: "github.com/origadmin/adptool/testdata/sourcepkg2",
+				Alias:  "source2",
+				Types: []*config.TypeRule{
+					{
+						RuleSet: config.RuleSet{
+							RegexMode: "override", // Corrected field name
+							Regex: []*config.RegexRule{{
+								Pattern: `^(Input|Output)Data$`,
+								Replace: "IO$1",
+						}},
+						},
+						Name: `^(Input|Output)Data$`,
+					},
+				},
+				Functions: []*config.FuncRule{
+					{
+						RuleSet: config.RuleSet{
+							RegexMode: "override", // Corrected field name
+							Regex: []*config.RegexRule{{
+								Pattern: `^New(.*)Interface$`,
+								Replace: "Create$1API",
+						}},
+						},
+						Name: `^New(.*)Interface$`,
+					},
+				},
+			},
+		},
+	}
+
+	// Compile the config
+	compiledCfg, err := compiler.Compile(cfg)
+	require.NoError(t, err, "Failed to compile config: %v", err)
+
+	var packageInfos []*PackageInfo
+	for _, pkg := range compiledCfg.Packages {
+		packageInfos = append(packageInfos, &PackageInfo{
+			ImportPath:  pkg.ImportPath,
+			ImportAlias: pkg.ImportAlias,
+		})
+	}
+
+	outputFilePath := filepath.Join(t.TempDir(), "test_modes.go")
+
+	// Generate the code
+	generator := NewGenerator(compiledCfg.PackageName, outputFilePath, compiler.NewReplacer(compiledCfg)).WithFormatCode(false)
+	err = generator.Generate(packageInfos)
+	require.NoError(t, err)
+
+	// Verify generated file
+	generatedContent, err := os.ReadFile(outputFilePath)
+	require.NoError(t, err)
+	t.Logf("Generated code content for modes test:\n%s", string(generatedContent))
+
+	err = util.RunGoImports(outputFilePath)
+	require.NoError(t, err, "util.RunGoImports failed for %s", outputFilePath)
+
+	vetCmd := exec.Command("go", "vet", outputFilePath)
+	vetOutput, err := vetCmd.CombinedOutput()
+	require.NoError(t, err, "go vet failed for %s: %s", outputFilePath, string(vetOutput))
+
+	// Verify AST
+	fset := token.NewFileSet()
+	node, err := parser.ParseFile(fset, outputFilePath, nil, parser.ParseComments)
+	require.NoError(t, err, "Failed to parse generated file")
+
+	expectedTypes := map[string]map[string]string{
+		"source": {
+			"MyStruct":          "ExplicitMyStruct",
+			"ExportedType":      "ShouldNotApplyExportedType",
+			"ExportedInterface": "ExportedInterface",
+		},
+		"source2": {
+			"InputData":        "IOInput",
+			"OutputData":       "IOOutput",
+			"ComplexInterface": "ComplexInterface",
+			"Worker":           "Worker",
+		},
+	}
+
+	expectedConsts := map[string]map[string]string{
+		"source": {
+			"ExportedConstant": "ExplicitConstant",
+		},
+		"source2": {
+			"DefaultTimeout": "DefaultTimeout",
+			"Version":        "Version",
+		},
+	}
+
+	expectedFuncs := map[string]map[string]string{
+		"source2": {
+			"NewComplexInterface": "CreateComplexAPI",
+		},
+		"source": {
+			"ExportedFunction": "ExportedFunction",
+		},
+	}
+
+	actualTypes := make(map[string]map[string]string)
+	actualConsts := make(map[string]map[string]string)
+	actualFuncs := make(map[string]map[string]string)
+
+	ast.Inspect(node, func(n ast.Node) bool {
+		genDecl, ok := n.(*ast.GenDecl)
+		if !ok {
+			return true
+		}
+
+		switch genDecl.Tok {
+		case token.TYPE:
+			extractTypeAliases(genDecl, actualTypes)
+		case token.CONST:
+			extractValueAliases(genDecl, actualConsts)
+		case token.VAR:
+			// Functions are aliased as VARs in the generated code
+			extractValueAliases(genDecl, actualFuncs)
+		}
+		return true
+	})
+
+	assert.Equal(t, expectedTypes, actualTypes, "Generated types do not match expected types for modes test")
+	assert.Equal(t, expectedConsts, actualConsts, "Generated consts do not match expected consts for modes test")
+	assert.Equal(t, expectedFuncs, actualFuncs, "Generated funcs do not match expected funcs for modes test")
 }
