@@ -103,6 +103,7 @@ type TypeRuleSet []*TypeRule
 type FuncRule struct {
 	Name     string `yaml:"name" mapstructure:"name" json:"name" toml:"name"`
 	Disabled bool   `yaml:"disabled,omitempty" mapstructure:"disabled,omitempty" json:"disabled,omitempty" toml:"disabled,omitempty"`
+	Pattern  string `yaml:"pattern,omitempty" mapstructure:"pattern,omitempty" json:"pattern,omitempty" toml:"pattern,omitempty"`
 	RuleSet  `yaml:",inline" mapstructure:",squash" json:",inline" toml:",inline"`
 }
 

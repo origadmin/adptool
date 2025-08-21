@@ -1,3 +1,5 @@
+output_package_name: "generated"
+
 defaults:
   mode:
     strategy: "replace"
