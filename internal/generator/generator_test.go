@@ -144,6 +144,14 @@ func TestGenerate(t *testing.T) {
 						},
 					},
 				},
+				Functions: []*config.FuncRule{
+					{
+						Name: "*",
+						RuleSet: config.RuleSet{
+							Suffix: "Function3",
+						},
+					},
+				},
 			},
 		},
 	}

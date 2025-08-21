@@ -1,4 +1,4 @@
-package sourcepkg3
+package pkg3
 
 import (
 	"context"
@@ -118,11 +118,11 @@ func NewWorker(name string, options ...WorkerOption) *Worker {
 		CreatedAt: time.Now(),
 		Config:    &WorkerConfig{},
 	}
-	
+
 	for _, option := range options {
 		option(worker)
 	}
-	
+
 	return worker
 }
 
@@ -213,9 +213,9 @@ const (
 
 // Another set of constants using iota with custom start
 const (
-	PriorityLow Priority = iota + 1 // 1
-	PriorityMedium                  // 2
-	PriorityHigh                    // 3
+	PriorityLow    Priority = iota + 1 // 1
+	PriorityMedium                     // 2
+	PriorityHigh                       // 3
 )
 
 // Priority type represents priority levels
