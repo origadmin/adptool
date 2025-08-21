@@ -42,7 +42,7 @@ func LoadConfigFile(filePath string) (*config.Config, error) {
 	if err := v.Unmarshal(cfg); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
-	slog.Info("Loaded config", "settings", v.AllSettings())
+	slog.Info("Loaded config", "func", "LoadConfig", "settings", v.AllSettings())
 	return cfg, nil
 }
 

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"go/ast"
 	"go/token"
-	"log"
+	"log/slog"
 	"strings"
 
 	"golang.org/x/tools/go/packages"
@@ -180,7 +180,7 @@ func (c *Collector) collectOtherDeclarations(sourcePkg *packages.Package, import
 func (c *Collector) collectFunctionDeclaration(funcDecl *ast.FuncDecl, importAlias string) {
 	if funcDecl.Recv == nil && funcDecl.Name.IsExported() {
 		if hasUnexportedTypes(funcDecl.Type) {
-			log.Printf("Skipping function %s because it uses unexported types", funcDecl.Name.Name)
+			slog.Debug("Skipping function because it uses unexported types", "func", "Collector.collectFunctionDeclaration", "function", funcDecl.Name.Name)
 			return
 		}
 		originalName := funcDecl.Name.Name
@@ -304,7 +304,7 @@ func (c *Collector) applyReplacements() {
 				if replacedSpec, ok := replaced.(*ast.TypeSpec); ok {
 					pkgDecls.typeSpecs[i] = replacedSpec
 					newDefinedTypes[replacedSpec.Name.Name] = true
-					log.Printf("applyReplacements: Applied replacer to type %s", replacedSpec.Name.Name)
+					slog.Debug("Applied replacer to type", "func", "Collector.applyReplacements", "type", replacedSpec.Name.Name)
 				}
 			}
 		}

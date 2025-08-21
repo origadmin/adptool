@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"go/ast"
 	"go/token"
-	"log"
+	"log/slog"
 	"path"
 	"regexp"
 	"sort"
@@ -145,8 +145,13 @@ func (r *realReplacer) findAndApplyRule(name string, ruleType interfaces.RuleTyp
 	// We need to find the highest priority rule that applies to the current name.
 	// For explicit rules, we prioritize exact matches over wildcards.
 	for _, rule := range applicableRules {
-		log.Printf("Considering rule: Type=%s, OriginalName=%s, Pattern=%s, IsWildcard=%t for name=%s",
-			rule.Type, rule.OriginalName, rule.Pattern, rule.IsWildcard, name)
+		slog.Debug("Considering rule",
+			"func", "realReplacer.findAndApplyRule",
+			"type", rule.Type,
+			"originalName", rule.OriginalName,
+			"pattern", rule.Pattern,
+			"isWildcard", rule.IsWildcard,
+			"name", name)
 		if rule.Type == "explicit" {
 			if rule.From == name || rule.From == "*" {
 				// If it's an explicit rule, and it matches, it's the highest priority.
