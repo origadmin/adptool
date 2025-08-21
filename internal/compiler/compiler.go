@@ -54,8 +54,16 @@ func (r *realReplacer) Apply(ctx interfaces.Context, node ast.Node) ast.Node {
 		r.applyFuncDeclRule(ctx, n)
 	case *ast.TypeSpec:
 		r.applyTypeSpecRule(ctx, n)
+	case *ast.ValueSpec:
+		r.applyValueSpecRule(ctx, n)
 	}
 	return node
+}
+
+func (r *realReplacer) applyValueSpecRule(ctx interfaces.Context, spec *ast.ValueSpec) {
+	for _, ident := range spec.Names {
+		r.Apply(ctx, ident)
+	}
 }
 
 func (r *realReplacer) applyIdentRule(ctx interfaces.Context, ident *ast.Ident) {
