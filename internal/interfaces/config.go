@@ -23,9 +23,15 @@ type CompiledConfig struct {
 	Rules         map[string][]RenameRule   // Compiled rules for generator
 	PriorityRules map[string][]PriorityRule // Priority rules for generator
 	
-	// 按类型分类的规则，提高运行时效率
+	// 按类型分类的全局规则，提高运行时效率
 	TypeRules     map[string][]PriorityRule
 	FuncRules     map[string][]PriorityRule
 	VarRules      map[string][]PriorityRule
 	ConstRules    map[string][]PriorityRule
+	
+	// 按包和类型分类的规则，进一步提高运行时效率
+	PackageTypeRules  map[string]map[string][]PriorityRule
+	PackageFuncRules  map[string]map[string][]PriorityRule
+	PackageVarRules   map[string]map[string][]PriorityRule
+	PackageConstRules map[string]map[string][]PriorityRule
 }
