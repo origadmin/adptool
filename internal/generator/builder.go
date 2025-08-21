@@ -19,6 +19,7 @@ type Builder struct {
 	outputFilePath string
 	aliasFile      *ast.File
 	formatCode     bool // 控制是否自动格式化代码
+	usedNames      map[string]bool
 }
 
 // NewBuilder creates a new Builder.
@@ -31,6 +32,7 @@ func NewBuilder(packageName string, outputFilePath string) *Builder {
 			Decls: []ast.Decl{},
 		},
 		formatCode: true, // 默认启用代码格式化
+		usedNames:  make(map[string]bool),
 	}
 }
 
@@ -150,19 +152,54 @@ func (b *Builder) collectAllDeclarations(allPackageDecls map[string]*packageDecl
 		// Extract specs from const declarations
 		for _, decl := range pkgDecls.constDecls {
 			if genDecl, ok := decl.(*ast.GenDecl); ok {
-				allConstSpecs = append(allConstSpecs, genDecl.Specs...)
+				for _, spec := range genDecl.Specs {
+					if valueSpec, ok := spec.(*ast.ValueSpec); ok {
+						for _, ident := range valueSpec.Names {
+							if !b.usedNames[ident.Name] {
+								allConstSpecs = append(allConstSpecs, spec)
+								b.usedNames[ident.Name] = true
+							}
+						}
+					}
+				}
 			}
 		}
 
 		// Extract specs from var declarations
 		for _, decl := range pkgDecls.varDecls {
 			if genDecl, ok := decl.(*ast.GenDecl); ok {
-				allVarSpecs = append(allVarSpecs, genDecl.Specs...)
+				for _, spec := range genDecl.Specs {
+					if valueSpec, ok := spec.(*ast.ValueSpec); ok {
+						for _, ident := range valueSpec.Names {
+							if !b.usedNames[ident.Name] {
+								allVarSpecs = append(allVarSpecs, spec)
+								b.usedNames[ident.Name] = true
+							}
+						}
+					}
+				}
 			}
 		}
 
-		allTypeSpecs = append(allTypeSpecs, pkgDecls.typeSpecs...)
-		allFuncDecls = append(allFuncDecls, pkgDecls.funcDecls...)
+		// Handle Types
+		for _, spec := range pkgDecls.typeSpecs {
+			if typeSpec, ok := spec.(*ast.TypeSpec); ok {
+				if !b.usedNames[typeSpec.Name.Name] {
+					allTypeSpecs = append(allTypeSpecs, spec)
+					b.usedNames[typeSpec.Name.Name] = true
+				}
+			}
+		}
+
+		// Handle Funcs
+		for _, decl := range pkgDecls.funcDecls {
+			if funcDecl, ok := decl.(*ast.FuncDecl); ok {
+				if !b.usedNames[funcDecl.Name.Name] {
+					allFuncDecls = append(allFuncDecls, decl)
+					b.usedNames[funcDecl.Name.Name] = true
+				}
+			}
+		}
 	}
 
 	return allConstSpecs, allVarSpecs, allTypeSpecs, allFuncDecls

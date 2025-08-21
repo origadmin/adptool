@@ -199,6 +199,27 @@ func verifyGeneratedCodeWithAST(t *testing.T, filePath string) {
 			"OutputData":       "OutputDataSource",
 			"Worker":           "Source2Worker",
 		},
+		"sourcepkg3": {
+			"MaxRetries":              "MaxRetriesSource3",
+			"Processors":              "ProcessorsSource3",
+			"ComplexGenericInterface": "ComplexGenericInterfaceSource3",
+			"EmbeddedInterface":       "EmbeddedInterfaceSource3",
+			"InputData":               "InputDataSource3",
+			"OutputData":              "OutputDataSource3",
+			"Worker":                  "WorkerSource3",
+			"WorkerConfig":            "WorkerConfigSource3",
+			"GenericWorker":           "GenericWorkerSource3",
+			"ProcessFunc":             "ProcessFuncSource3",
+			"HandlerFunc":             "HandlerFuncSource3",
+			"ProcessOption":           "ProcessOptionSource3",
+			"ProcessConfig":           "ProcessConfigSource3",
+			"WorkerOption":            "WorkerOptionSource3",
+			"Status":                  "StatusSource3",
+			"Priority":                "PrioritySource3",
+			"TimeAlias":               "TimeAliasSource3",
+			"StatusAlias":             "StatusAliasSource3",
+			"IntAlias":                "IntAliasSource3",
+		},
 	}
 
 	actualTypes := make(map[string]map[string]string)
@@ -207,7 +228,21 @@ func verifyGeneratedCodeWithAST(t *testing.T, filePath string) {
 		if genDecl, ok := n.(*ast.GenDecl); ok && genDecl.Tok == token.TYPE {
 			for _, spec := range genDecl.Specs {
 				if typeSpec, ok := spec.(*ast.TypeSpec); ok {
-					if selExpr, ok := typeSpec.Type.(*ast.SelectorExpr); ok {
+					var selExpr *ast.SelectorExpr
+					switch t := typeSpec.Type.(type) {
+					case *ast.SelectorExpr:
+						selExpr = t
+					case *ast.IndexExpr:
+						if s, ok := t.X.(*ast.SelectorExpr); ok {
+							selExpr = s
+						}
+					case *ast.IndexListExpr:
+						if s, ok := t.X.(*ast.SelectorExpr); ok {
+							selExpr = s
+						}
+					}
+
+					if selExpr != nil {
 						if pkgIdent, ok := selExpr.X.(*ast.Ident); ok {
 							pkgAlias := pkgIdent.Name
 							originalName := selExpr.Sel.Name
