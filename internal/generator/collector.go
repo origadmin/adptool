@@ -109,23 +109,54 @@ func (c *Collector) collectTypeDeclarations(sourcePkg *packages.Package, importA
 }
 
 func (c *Collector) collectTypeDeclaration(typeSpec *ast.TypeSpec, importAlias string) {
-	if typeSpec.Name.IsExported() {
-		originalName := typeSpec.Name.Name
-
-		newSpec := &ast.TypeSpec{
-			Name: typeSpec.Name,
-			Type: &ast.SelectorExpr{
-				X:   ast.NewIdent(importAlias),
-				Sel: ast.NewIdent(originalName),
-			},
-			Assign: 1, // Make it an alias with '='
-		}
-
-		if c.allPackageDecls[importAlias] == nil {
-			c.allPackageDecls[importAlias] = &packageDecls{}
-		}
-		c.allPackageDecls[importAlias].typeSpecs = append(c.allPackageDecls[importAlias].typeSpecs, newSpec)
+	if !typeSpec.Name.IsExported() {
+		return
 	}
+
+	originalName := typeSpec.Name.Name
+	newSpec := &ast.TypeSpec{
+		Name:   typeSpec.Name, // This will be replaced later
+		Assign: 1,             // Make it an alias with '='
+	}
+
+	// Handle generics in type declarations
+	if typeSpec.TypeParams != nil {
+		newSpec.TypeParams = typeSpec.TypeParams
+
+		var indices []ast.Expr
+		for _, list := range typeSpec.TypeParams.List {
+			for _, name := range list.Names {
+				indices = append(indices, ast.NewIdent(name.Name))
+			}
+		}
+
+		baseType := &ast.SelectorExpr{
+			X:   ast.NewIdent(importAlias),
+			Sel: ast.NewIdent(originalName),
+		}
+
+		if len(indices) == 1 {
+			newSpec.Type = &ast.IndexExpr{
+				X:     baseType,
+				Index: indices[0],
+			}
+		} else {
+			newSpec.Type = &ast.IndexListExpr{
+				X:       baseType,
+				Indices: indices,
+			}
+		}
+	} else {
+		newSpec.Type = &ast.SelectorExpr{
+			X:   ast.NewIdent(importAlias),
+			Sel: ast.NewIdent(originalName),
+		}
+	}
+
+	if c.allPackageDecls[importAlias] == nil {
+		c.allPackageDecls[importAlias] = &packageDecls{}
+	}
+	c.allPackageDecls[importAlias].typeSpecs = append(c.allPackageDecls[importAlias].typeSpecs, newSpec)
 }
 
 func (c *Collector) collectOtherDeclarations(sourcePkg *packages.Package, importAlias string) {
@@ -148,6 +179,10 @@ func (c *Collector) collectOtherDeclarations(sourcePkg *packages.Package, import
 
 func (c *Collector) collectFunctionDeclaration(funcDecl *ast.FuncDecl, importAlias string) {
 	if funcDecl.Recv == nil && funcDecl.Name.IsExported() {
+		if hasUnexportedTypes(funcDecl.Type) {
+			log.Printf("Skipping function %s because it uses unexported types", funcDecl.Name.Name)
+			return
+		}
 		originalName := funcDecl.Name.Name
 
 		var args []ast.Expr
@@ -176,7 +211,7 @@ func (c *Collector) collectFunctionDeclaration(funcDecl *ast.FuncDecl, importAli
 
 		newFuncDecl := &ast.FuncDecl{
 			Name: funcDecl.Name,
-			Type: qualifyType(funcDecl.Type, importAlias, c.definedTypes).(*ast.FuncType),
+			Type: qualifyType(funcDecl.Type, importAlias, c.definedTypes, nil).(*ast.FuncType),
 			Body: &ast.BlockStmt{List: results},
 		}
 
@@ -260,7 +295,7 @@ func (c *Collector) applyReplacements() {
 		for i, decl := range pkgDecls.funcDecls {
 			replaced := c.replacer.Apply(pkgCtx, decl)
 			if replacedDecl, ok := replaced.(*ast.FuncDecl); ok {
-				replacedDecl.Type = qualifyType(replacedDecl.Type, alias, c.definedTypes).(*ast.FuncType)
+				replacedDecl.Type = qualifyType(replacedDecl.Type, alias, c.definedTypes, nil).(*ast.FuncType)
 				pkgDecls.funcDecls[i] = replacedDecl
 			}
 		}
