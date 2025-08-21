@@ -147,7 +147,7 @@ func (c *Context) EndContext() error {
 		if currentContainer == nil {
 			// This should ideally not happen, but as a safeguard, we log and continue
 			// as there is no data to finalize anyway.
-			slog.Warn("ending a context with a nil container")
+			slog.Warn("ending a context with a nil container", "func", "Context.End")
 			return nil
 		}
 

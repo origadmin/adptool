@@ -5,7 +5,7 @@ import (
 	"go/ast"
 	"go/printer"
 	"go/token"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sort"
@@ -98,7 +98,7 @@ func (b *Builder) Write() error {
 	}
 	defer outFile.Close()
 
-	log.Printf("Builder: Writing file with package name: %s", b.aliasFile.Name.Name)
+	slog.Info("Writing file with package name", "func", "Builder.Write", "package", b.aliasFile.Name.Name)
 
 	if err := printer.Fprint(outFile, b.fset, b.aliasFile); err != nil {
 		return fmt.Errorf("failed to write generated code: %w", err)
@@ -135,7 +135,7 @@ func (b *Builder) buildImportDeclaration(importSpecs map[string]*ast.ImportSpec)
 }
 
 func (b *Builder) collectAllDeclarations(allPackageDecls map[string]*packageDecls, definedTypes map[string]bool) ([]ast.Spec, []ast.Spec, []ast.Spec, []ast.Decl) {
-	log.Printf("collectAllDeclarations: Current definedTypes: %v", definedTypes)
+	slog.Debug("Current definedTypes", "func", "Builder.collectAllDeclarations", "definedTypes", definedTypes)
 
 	var allConstSpecs []ast.Spec
 	var allVarSpecs []ast.Spec

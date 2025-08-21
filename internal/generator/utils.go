@@ -2,7 +2,7 @@ package generator
 
 import (
 	"go/ast"
-	"log"
+	"log/slog"
 )
 
 // isBuiltinType checks if a type name is a built-in Go type that should not be qualified.
@@ -43,45 +43,45 @@ func qualifyType(expr ast.Expr, pkgAlias string, definedTypes map[string]bool, t
 			return t // It's a generic type parameter, don't qualify.
 		}
 		if definedTypes != nil && definedTypes[t.Name] {
-			log.Printf("qualifyType: Using local type %s", t.Name)
+			slog.Debug("Using local type", "func", "qualifyType", "type", t.Name)
 			return t
 		}
 
 		if isBuiltinType(t.Name) {
-			log.Printf("qualifyType: Using built-in type %s", t.Name)
+			slog.Debug("Using built-in type", "func", "qualifyType", "type", t.Name)
 			return t
 		}
 
-		log.Printf("qualifyType: Qualifying identifier %s with package %s", t.Name, pkgAlias)
+		slog.Debug("Qualifying identifier with package", "func", "qualifyType", "identifier", t.Name, "package", pkgAlias)
 		return &ast.SelectorExpr{
 			X:   ast.NewIdent(pkgAlias),
 			Sel: t,
 		}
 	case *ast.StarExpr:
-		log.Printf("qualifyType: Processing pointer type")
+		slog.Debug("Processing pointer type", "func", "qualifyType")
 		return &ast.StarExpr{
 			X: qualifyType(t.X, pkgAlias, definedTypes, typeParams),
 		}
 	case *ast.ArrayType:
-		log.Printf("qualifyType: Processing array type")
+		slog.Debug("Processing array type", "func", "qualifyType")
 		return &ast.ArrayType{
 			Len: t.Len, // Array length is an expression, should not be qualified in this context
 			Elt: qualifyType(t.Elt, pkgAlias, definedTypes, typeParams),
 		}
 	case *ast.MapType:
-		log.Printf("qualifyType: Processing map type")
+		slog.Debug("Processing map type", "func", "qualifyType")
 		return &ast.MapType{
 			Key:   qualifyType(t.Key, pkgAlias, definedTypes, typeParams),
 			Value: qualifyType(t.Value, pkgAlias, definedTypes, typeParams),
 		}
 	case *ast.ChanType:
-		log.Printf("qualifyType: Processing channel type")
+		slog.Debug("Processing channel type", "func", "qualifyType")
 		return &ast.ChanType{
 			Dir:   t.Dir,
 			Value: qualifyType(t.Value, pkgAlias, definedTypes, typeParams),
 		}
 	case *ast.FuncType:
-		log.Printf("qualifyType: Processing function type")
+		slog.Debug("Processing function type", "func", "qualifyType")
 		newTypeParams := make(map[string]bool)
 		if typeParams != nil {
 			for k, v := range typeParams {
@@ -113,25 +113,25 @@ func qualifyType(expr ast.Expr, pkgAlias string, definedTypes map[string]bool, t
 		}
 		return t
 	case *ast.IndexExpr:
-		log.Printf("qualifyType: Processing index expression")
+		slog.Debug("Processing index expression", "func", "qualifyType")
 		t.X = qualifyType(t.X, pkgAlias, definedTypes, typeParams)
 		t.Index = qualifyType(t.Index, pkgAlias, definedTypes, typeParams)
 		return t
 	case *ast.IndexListExpr:
-		log.Printf("qualifyType: Processing index list expression")
+		slog.Debug("Processing index list expression", "func", "qualifyType")
 		t.X = qualifyType(t.X, pkgAlias, definedTypes, typeParams)
 		for i, index := range t.Indices {
 			t.Indices[i] = qualifyType(index, pkgAlias, definedTypes, typeParams)
 		}
 		return t
 	case *ast.Ellipsis:
-		log.Printf("qualifyType: Processing ellipsis type")
+		slog.Debug("Processing ellipsis type", "func", "qualifyType")
 		t.Elt = qualifyType(t.Elt, pkgAlias, definedTypes, typeParams)
 		return t
 	case *ast.InterfaceType, *ast.StructType, *ast.SelectorExpr:
 		return t // These types (and selectors) are already context-complete.
 	default:
-		log.Printf("qualifyType: Unknown type %T, returning as is", t)
+		slog.Debug("Unknown type, returning as is", "func", "qualifyType", "type", t)
 		return t
 	}
 }

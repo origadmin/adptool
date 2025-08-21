@@ -116,8 +116,11 @@ func ParseDirective(parentCtx *Context, ruleType interfaces.RuleType, directive 
 func (p *parser) parseFile(file *goast.File, fset *gotoken.FileSet) (*config.Config, error) {
 	iterator := NewDirectiveIterator(file, fset)
 	for directive := range iterator {
-		slog.Info("Processing directive", "line", directive.Line, "command", directive.Command, "argument",
-			directive.Argument)
+		slog.Info("Processing directive", 
+			"func", "parser.parseFile",
+			"line", directive.Line, 
+			"command", directive.Command, 
+			"argument", directive.Argument)
 
 		var err error
 		var rt interfaces.RuleType // interfaces.RuleType for the *new* rule being created (if any)

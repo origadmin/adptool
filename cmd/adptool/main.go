@@ -2,7 +2,7 @@ package main
 
 import (
 	"flag"
-	"fmt"
+	"log/slog"
 	"os"
 
 	"github.com/origadmin/adptool/internal/compiler" // Updated import
@@ -18,14 +18,14 @@ func main() {
 	// Load config
 	cfg, err := config.LoadConfig(*configFile)
 	if err != nil {
-		fmt.Printf("Error loading config: %v\n", err)
+		slog.Error("Error loading config", "error", err)
 		os.Exit(1)
 	}
 
 	// Compile the configuration into a compiled config and replacer
 	compiledCfg, err := compiler.Compile(cfg) // Call the compiler
 	if err != nil {
-		fmt.Printf("Error compiling config: %v\n", err)
+		slog.Error("Error compiling config", "error", err)
 		os.Exit(1)
 	}
 	
@@ -47,9 +47,9 @@ func main() {
 	// Initialize and call the generator
 	gen := generator.NewGenerator(compiledCfg.PackageName, outputAliasFilePath, replacer)
 	if err := gen.Generate(packageInfos); err != nil {
-		fmt.Printf("Error generating alias package: %v\n", err)
+		slog.Error("Error generating alias package", "error", err)
 		os.Exit(1)
 	}
 
-	fmt.Printf("Successfully generated alias package to %s\n", outputAliasFilePath)
+	slog.Info("Successfully generated alias package", "output", outputAliasFilePath)
 }
