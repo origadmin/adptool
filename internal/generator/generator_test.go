@@ -49,7 +49,8 @@ func TestGenerator_Generate(t *testing.T) {
 	outputFilePath := filepath.Join(t.TempDir(), "generated_test.go")
 
 	// 4. Create a new Generator instance and call its Generate method
-	generator := NewGenerator(compiledCfg.PackageName, outputFilePath, compiler.NewReplacer(compiledCfg))
+	generator := NewGenerator(compiledCfg.PackageName, outputFilePath, compiler.NewReplacer(compiledCfg)).
+		WithNoEditHeader(true)
 	err = generator.Generate(packageInfos)
 	assert.NoError(t, err, "generator.Generate failed")
 
@@ -71,7 +72,7 @@ func TestGenerator_Generate(t *testing.T) {
 func TestGenerate(t *testing.T) {
 	// 1. Create the config and compiled config for the test
 	var cfg = &config.Config{
-		OutputPackageName: "aliaspkg",
+		PackageName: "aliaspkg",
 		Types: []*config.TypeRule{
 			{
 				Name: "*",
@@ -174,7 +175,9 @@ func TestGenerate(t *testing.T) {
 	outputFilePath := filepath.Join(t.TempDir(), "test_alias.go")
 
 	// 4. Create a new Generator instance and call its Generate method
-	generator := NewGenerator(compiledCfg.PackageName, outputFilePath, compiler.NewReplacer(compiledCfg)).WithFormatCode(false)
+	generator := NewGenerator(compiledCfg.PackageName, outputFilePath, compiler.NewReplacer(compiledCfg)).
+		WithFormatCode(false).
+		WithNoEditHeader(true)
 	err = generator.Generate(packageInfos)
 	require.NoError(t, err)
 
@@ -398,7 +401,7 @@ func TestGenerator_AdvancedModes(t *testing.T) {
 
 	// 1. 准备测试配置
 	cfg := &config.Config{
-		OutputPackageName: "generated",
+		PackageName: "generated",
 		Packages: []*config.Package{
 			{
 				Import: "github.com/origadmin/adptool/testdata/sourcepkg3",
@@ -624,7 +627,7 @@ func TestGenerator_AdvancedModes(t *testing.T) {
 func TestGenerator_Modes(t *testing.T) {
 	// 1. Create the config for the test
 	cfg := &config.Config{
-		OutputPackageName: "aliaspkg",
+		PackageName: "aliaspkg",
 		Packages: []*config.Package{
 			{
 				Import: "github.com/origadmin/adptool/testdata/sourcepkg",
@@ -706,8 +709,8 @@ func TestGenerator_Modes(t *testing.T) {
 
 	outputFilePath := filepath.Join(t.TempDir(), "test_modes.go")
 
-	// Generate the code
-	generator := NewGenerator(compiledCfg.PackageName, outputFilePath, compiler.NewReplacer(compiledCfg)).WithFormatCode(false)
+	// Create a new generator
+	generator := NewGenerator(compiledCfg.PackageName, outputFilePath, compiler.NewReplacer(compiledCfg)).WithNoEditHeader(true).WithFormatCode(false)
 	err = generator.Generate(packageInfos)
 	require.NoError(t, err)
 

@@ -17,7 +17,7 @@ import (
 func TestGenerateVariadic(t *testing.T) {
 	// 1. Create the config and compiled config for the test
 	var cfg = &config.Config{
-		OutputPackageName: "aliaspkg",
+		PackageName: "aliaspkg",
 		Packages: []*config.Package{
 			{
 				Import: "github.com/origadmin/adptool/testdata/sourcepkg3",
@@ -50,7 +50,9 @@ func TestGenerateVariadic(t *testing.T) {
 	outputFilePath := filepath.Join(t.TempDir(), "test_alias.go")
 
 	// 4. Create a new Generator instance and call its Generate method
-	generator := NewGenerator(compiledCfg.PackageName, outputFilePath, compiler.NewReplacer(compiledCfg)).WithFormatCode(false)
+	generator := NewGenerator(compiledCfg.PackageName, outputFilePath, compiler.NewReplacer(compiledCfg)).
+		WithFormatCode(false).
+		WithNoEditHeader(true)
 	err = generator.Generate(packageInfos)
 	require.NoError(t, err)
 

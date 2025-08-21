@@ -114,6 +114,11 @@ func ParseDirective(parentCtx *Context, ruleType interfaces.RuleType, directive 
 
 // parseFile parses a Go source file and returns the built configuration.
 func (p *parser) parseFile(file *goast.File, fset *gotoken.FileSet) (*config.Config, error) {
+	// Set the package name from the Go file's package declaration
+	if file.Name != nil {
+		p.rootConfig.PackageName = file.Name.Name
+	}
+
 	iterator := NewDirectiveIterator(file, fset)
 	for directive := range iterator {
 		slog.Info("Processing directive", 

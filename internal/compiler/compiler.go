@@ -288,7 +288,7 @@ func processRule(holder config.RuleHolder, priority int, pkgName string, ruleTyp
 // Compile takes a configuration and returns a compiled representation of it.
 func Compile(cfg *config.Config) (*interfaces.CompiledConfig, error) {
 	compiledCfg := &interfaces.CompiledConfig{
-		PackageName:           cfg.OutputPackageName,
+		PackageName:           cfg.PackageName,
 		Packages:              compilePackages(cfg.Packages),
 		RulesByPackageAndType: make(map[string]map[interfaces.RuleType][]interfaces.CompiledRenameRule),
 	}
