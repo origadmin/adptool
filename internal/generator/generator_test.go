@@ -1,12 +1,16 @@
 package generator
 
 import (
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/origadmin/adptool/internal/compiler"
 	"github.com/origadmin/adptool/internal/config"
@@ -67,37 +71,17 @@ func TestGenerate(t *testing.T) {
 	// 1. Create the config and compiled config for the test
 	var cfg = &config.Config{
 		OutputPackageName: "aliaspkg",
-		Constants: []*config.ConstRule{
-			{
-				Name:     "*",
-				Disabled: false,
-				RuleSet: config.RuleSet{
-					Prefix: "Const",
-				},
-			},
-		},
 		Types: []*config.TypeRule{
 			{
-				Name:     "*",
-				Disabled: false,
+				Name: "*",
 				RuleSet: config.RuleSet{
 					Prefix: "Type",
 				},
 			},
 		},
-		Variables: []*config.VarRule{
-			{
-				Name:     "*",
-				Disabled: false,
-				RuleSet: config.RuleSet{
-					Prefix: "Var",
-				},
-			},
-		},
 		Functions: []*config.FuncRule{
 			{
-				Name:     "*",
-				Disabled: false,
+				Name: "*",
 				RuleSet: config.RuleSet{
 					Prefix: "Func",
 				},
@@ -113,10 +97,15 @@ func TestGenerate(t *testing.T) {
 				Alias:  "source2",
 				Types: []*config.TypeRule{
 					{
-						Name:     "*",
-						Disabled: false,
+						Name: "*",
 						RuleSet: config.RuleSet{
 							Suffix: "Source",
+						},
+					},
+					{
+						Name: "Worker",
+						RuleSet: config.RuleSet{
+							Prefix: "Source2",
 						},
 					},
 				},
@@ -126,9 +115,7 @@ func TestGenerate(t *testing.T) {
 
 	// Compile the config using the compiler package
 	compiledCfg, err := compiler.Compile(cfg)
-	if err != nil {
-		t.Fatalf("Failed to compile config: %v", err)
-	}
+	require.NoError(t, err, "Failed to compile config: %v", err)
 
 	// Convert CompiledPackage to PackageInfo
 	var packageInfos []*PackageInfo
@@ -143,49 +130,65 @@ func TestGenerate(t *testing.T) {
 	outputFilePath := filepath.Join(t.TempDir(), "test_alias.go")
 
 	// 4. Create a new Generator instance and call its Generate method
-	// 禁用自动格式化，因为测试中会手动调用goimports
 	generator := NewGenerator(compiledCfg.PackageName, outputFilePath, compiler.NewReplacer(compiledCfg)).WithFormatCode(false)
 	err = generator.Generate(packageInfos)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// 5. Run goimports on the generated file first to clean up imports and format
 	err = util.RunGoImports(outputFilePath)
-	assert.NoError(t, err, "util.RunGoImports failed for %s", outputFilePath)
+	require.NoError(t, err, "util.RunGoImports failed for %s", outputFilePath)
 
 	// 6. Then run go vet on the formatted file
 	vetCmd := exec.Command("go", "vet", outputFilePath)
 	vetOutput, err := vetCmd.CombinedOutput()
-	if err != nil {
-		t.Errorf("go vet failed for %s: %s", outputFilePath, string(vetOutput))
+	require.NoError(t, err, "go vet failed for %s: %s", outputFilePath, string(vetOutput))
+
+	// 7. Verify the generated code using AST parsing
+	verifyGeneratedCodeWithAST(t, outputFilePath)
+}
+
+func verifyGeneratedCodeWithAST(t *testing.T, filePath string) {
+	fset := token.NewFileSet()
+	node, err := parser.ParseFile(fset, filePath, nil, parser.ParseComments)
+	require.NoError(t, err, "Failed to parse generated file")
+
+	expectedTypes := map[string]map[string]string{
+		"source": {
+			"MyStruct":          "TypeMyStruct",
+			"ExportedType":      "TypeExportedType",
+			"ExportedInterface": "TypeExportedInterface",
+		},
+		"source2": {
+			"ComplexInterface": "ComplexInterfaceSource",
+			"InputData":        "InputDataSource",
+			"OutputData":       "OutputDataSource",
+			"Worker":           "Source2Worker",
+		},
 	}
 
-	// Read and verify the generated file content
-	generatedContent, err := os.ReadFile(outputFilePath)
-	assert.NoError(t, err)
-	assert.NotEmpty(t, generatedContent, "Generated file content is empty after goimports")
+	actualTypes := make(map[string]map[string]string)
 
-	// 输出生成的代码内容用于调试
-	t.Logf("Generated code content:\n%s", string(generatedContent))
+	ast.Inspect(node, func(n ast.Node) bool {
+		if genDecl, ok := n.(*ast.GenDecl); ok && genDecl.Tok == token.TYPE {
+			for _, spec := range genDecl.Specs {
+				if typeSpec, ok := spec.(*ast.TypeSpec); ok {
+					if selExpr, ok := typeSpec.Type.(*ast.SelectorExpr); ok {
+						if pkgIdent, ok := selExpr.X.(*ast.Ident); ok {
+							pkgAlias := pkgIdent.Name
+							originalName := selExpr.Sel.Name
+							newName := typeSpec.Name.Name
 
-	// Verify basic expected content
-	content := string(generatedContent)
-	assert.Contains(t, content, "package aliaspkg", "Missing package declaration")
-	assert.Contains(t, content, "import (", "Missing imports section")
-	assert.Contains(t, content, `"github.com/origadmin/adptool/testdata/sourcepkg"`, "Missing sourcepkg import")
-	assert.Contains(t, content, `"github.com/origadmin/adptool/testdata/sourcepkg2"`, "Missing sourcepkg2 import")
+							if _, exists := actualTypes[pkgAlias]; !exists {
+								actualTypes[pkgAlias] = make(map[string]string)
+							}
+							actualTypes[pkgAlias][originalName] = newName
+						}
+					}
+				}
+			}
+		}
+		return true
+	})
 
-	// Verify renamed types from source package
-	assert.Contains(t, content, "	TypeMyStruct           = source.MyStruct", "Missing renamed type TypeMyStruct")
-	assert.Contains(t, content, "	TypeExportedType       = source.ExportedType", "Missing renamed type TypeExportedType")
-	assert.Contains(t, content, "	TypeExportedInterface  = source.ExportedInterface", "Missing renamed type TypeExportedInterface")
-
-	// Verify renamed types from source2 package
-	assert.Contains(t, content, "	ComplexInterfaceSource = source2.ComplexInterface", "Missing renamed type ComplexInterfaceSource")
-	assert.Contains(t, content, "	InputDataSource        = source2.InputData", "Missing renamed type InputDataSource")
-	assert.Contains(t, content, "	OutputDataSource       = source2.OutputData", "Missing renamed type OutputDataSource")
-	assert.Contains(t, content, "	WorkerSource           = source2.Worker", "Missing renamed type WorkerSource")
-
-	// Clean up - don't remove the generated file!!!
-	//err = os.Remove(outputFilePath)
-	//assert.NoError(t, err)
+	assert.Equal(t, expectedTypes, actualTypes, "Generated types do not match expected types")
 }
