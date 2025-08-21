@@ -68,68 +68,45 @@ func (r *realReplacer) applyIdentRule(ctx interfaces.Context, ident *ast.Ident) 
 		return
 	}
 
-	if newName, ok := r.findAndApplyRule(ident.Name, ruleType, ""); ok {
+	// Get package path from context
+	pkgPath, _ := ctx.Value(interfaces.PackagePathContextKey).(string)
+
+	if newName, ok := r.findAndApplyRule(ident.Name, ruleType, pkgPath); ok {
 		ident.Name = newName
 	}
 }
 
 func (r *realReplacer) applyGenDeclRule(ctx interfaces.Context, decl *ast.GenDecl) {
+	var ruleType interfaces.RuleType
 	switch decl.Tok {
 	case token.CONST:
-		nameCtx := ctx.Push(interfaces.RuleTypeConst)
-		for _, spec := range decl.Specs {
-			if valueSpec, ok := spec.(*ast.ValueSpec); ok {
-				for _, name := range valueSpec.Names {
-					r.Apply(nameCtx, name)
-				}
-			}
-		}
+		ruleType = interfaces.RuleTypeConst
 	case token.VAR:
-		nameCtx := ctx.Push(interfaces.RuleTypeVar)
-		for _, spec := range decl.Specs {
-			if valueSpec, ok := spec.(*ast.ValueSpec); ok {
-				for _, name := range valueSpec.Names {
-					r.Apply(nameCtx, name)
-				}
-			}
-		}
+		ruleType = interfaces.RuleTypeVar
 	case token.TYPE:
-		//nameCtx := ctx.Push(interfaces.RuleTypeType)
-		for _, spec := range decl.Specs {
-			if typeSpec, ok := spec.(*ast.TypeSpec); ok {
-				pkgImportPath := ""
-				nameToFindRuleFor := ""
-
-				if selExpr, ok := typeSpec.Type.(*ast.SelectorExpr); ok {
-					if pkgIdent, ok := selExpr.X.(*ast.Ident); ok {
-						for _, p := range r.config.Packages {
-							if p.ImportAlias == pkgIdent.Name {
-								pkgImportPath = p.ImportPath
-								break
-							}
-						}
-					}
-					nameToFindRuleFor = selExpr.Sel.Name
-				} else {
-					nameToFindRuleFor = typeSpec.Name.Name
-				}
-
-				if newName, ok := r.findAndApplyRule(nameToFindRuleFor, interfaces.RuleTypeType, pkgImportPath); ok {
-					typeSpec.Name.Name = newName
-				}
-			}
-		}
+		ruleType = interfaces.RuleTypeType
 	case token.IMPORT:
-		// Not handling imports for now
+		return // Not handling imports for now
+	default:
+		return
+	}
+
+	// Create a new context with the appropriate rule type
+	nameCtx := ctx.Push(ruleType)
+	for _, spec := range decl.Specs {
+		// The Apply function will dispatch to the correct handler for the spec type
+		r.Apply(nameCtx, spec)
 	}
 }
 
 func (r *realReplacer) applyFuncDeclRule(ctx interfaces.Context, decl *ast.FuncDecl) {
+	// Apply rules to the function name
 	r.Apply(ctx.Push(interfaces.RuleTypeFunc), decl.Name)
 }
 
 func (r *realReplacer) applyTypeSpecRule(ctx interfaces.Context, spec *ast.TypeSpec) {
-	r.Apply(ctx.Push(interfaces.RuleTypeType), spec.Name)
+	// Apply rules to the type name (Ident)
+	r.Apply(ctx, spec.Name) // The context already has RuleTypeType from applyGenDeclRule
 }
 
 func (r *realReplacer) findAndApplyRule(name string, ruleType interfaces.RuleType, pkgName string) (string, bool) {
@@ -152,22 +129,30 @@ func (r *realReplacer) findAndApplyRule(name string, ruleType interfaces.RuleTyp
 	switch ruleType {
 	case interfaces.RuleTypeType:
 		if pkgName != "" {
-			collect(r.config.PackageTypeRules[pkgName])
+			if pkgRules, ok := r.config.PackageTypeRules[pkgName]; ok {
+				collect(pkgRules)
+			}
 		}
 		collect(r.config.TypeRules)
 	case interfaces.RuleTypeFunc:
 		if pkgName != "" {
-			collect(r.config.PackageFuncRules[pkgName])
+			if pkgRules, ok := r.config.PackageFuncRules[pkgName]; ok {
+				collect(pkgRules)
+			}
 		}
 		collect(r.config.FuncRules)
 	case interfaces.RuleTypeVar:
 		if pkgName != "" {
-			collect(r.config.PackageVarRules[pkgName])
+			if pkgRules, ok := r.config.PackageVarRules[pkgName]; ok {
+				collect(pkgRules)
+			}
 		}
 		collect(r.config.VarRules)
 	case interfaces.RuleTypeConst:
 		if pkgName != "" {
-			collect(r.config.PackageConstRules[pkgName])
+			if pkgRules, ok := r.config.PackageConstRules[pkgName]; ok {
+				collect(pkgRules)
+			}
 		}
 		collect(r.config.ConstRules)
 	}
@@ -450,27 +435,21 @@ func categorizeRules(priorityRules map[string][]internalPriorityRule, typeRules,
 func categorizePackageRules(priorityRules map[string][]internalPriorityRule,
 	packageTypeRules, packageFuncRules, packageVarRules, packageConstRules map[string]map[string][]interfaces.PriorityRule) {
 	fmt.Println("Starting to categorize rules by package and type")
-	// Track processed packages to avoid redundant initialization and sorting
-	processedPackages := make(map[string]bool)
 
 	for name, rules := range priorityRules {
 		for _, rule := range rules {
-			// 只处理包级别的规则，并且确保规则属于当前正在处理的包
 			if rule.packageName == "" {
 				continue
 			}
+
+			// Ensure the map for the package is initialized before using it.
+			ensurePackageMapInitialized(packageTypeRules, packageFuncRules, packageVarRules, packageConstRules, rule.packageName)
 
 			externalRule := interfaces.PriorityRule{
 				Rule:        rule.rule,
 				Priority:    rule.priority,
 				PackageName: rule.packageName,
 				IsWildcard:  rule.isWildcard,
-			}
-
-			// 初始化包的map（仅在首次遇到该包时）
-			if !processedPackages[rule.packageName] {
-				ensurePackageMapInitialized(packageTypeRules, packageFuncRules, packageVarRules, packageConstRules, rule.packageName)
-				processedPackages[rule.packageName] = true
 			}
 
 			switch rule.rule.RuleType {
@@ -486,7 +465,7 @@ func categorizePackageRules(priorityRules map[string][]internalPriorityRule,
 		}
 	}
 
-	// 在添加完规则后，对每种类型的规则进行排序（按包）
+	// Sort the rules for each package and type after all rules have been categorized.
 	for pkg := range packageTypeRules {
 		sortRules(packageTypeRules[pkg])
 	}

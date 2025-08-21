@@ -174,6 +174,17 @@ func TestGenerate(t *testing.T) {
 	assert.Contains(t, content, `"github.com/origadmin/adptool/testdata/sourcepkg"`, "Missing sourcepkg import")
 	assert.Contains(t, content, `"github.com/origadmin/adptool/testdata/sourcepkg2"`, "Missing sourcepkg2 import")
 
+	// Verify renamed types from source package
+	assert.Contains(t, content, "	TypeMyStruct           = source.MyStruct", "Missing renamed type TypeMyStruct")
+	assert.Contains(t, content, "	TypeExportedType       = source.ExportedType", "Missing renamed type TypeExportedType")
+	assert.Contains(t, content, "	TypeExportedInterface  = source.ExportedInterface", "Missing renamed type TypeExportedInterface")
+
+	// Verify renamed types from source2 package
+	assert.Contains(t, content, "	ComplexInterfaceSource = source2.ComplexInterface", "Missing renamed type ComplexInterfaceSource")
+	assert.Contains(t, content, "	InputDataSource        = source2.InputData", "Missing renamed type InputDataSource")
+	assert.Contains(t, content, "	OutputDataSource       = source2.OutputData", "Missing renamed type OutputDataSource")
+	assert.Contains(t, content, "	WorkerSource           = source2.Worker", "Missing renamed type WorkerSource")
+
 	// Clean up - don't remove the generated file!!!
 	//err = os.Remove(outputFilePath)
 	//assert.NoError(t, err)
