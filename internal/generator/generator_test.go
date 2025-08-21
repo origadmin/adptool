@@ -87,6 +87,14 @@ func TestGenerate(t *testing.T) {
 				},
 			},
 		},
+		Constants: []*config.ConstRule{
+			{
+				Name: "*",
+				RuleSet: config.RuleSet{
+					Prefix: "Const",
+				},
+			},
+		},
 		Packages: []*config.Package{
 			{
 				Import: "github.com/origadmin/adptool/testdata/sourcepkg",
@@ -200,8 +208,6 @@ func verifyGeneratedCodeWithAST(t *testing.T, filePath string) {
 			"Worker":           "Source2Worker",
 		},
 		"sourcepkg3": {
-			"MaxRetries":              "MaxRetriesSource3",
-			"Processors":              "ProcessorsSource3",
 			"ComplexGenericInterface": "ComplexGenericInterfaceSource3",
 			"EmbeddedInterface":       "EmbeddedInterfaceSource3",
 			"InputData":               "InputDataSource3",
@@ -222,43 +228,122 @@ func verifyGeneratedCodeWithAST(t *testing.T, filePath string) {
 		},
 	}
 
+	expectedConsts := map[string]map[string]string{
+		"source": {
+			"ExportedConstant": "ConstExportedConstant",
+		},
+		"source2": {
+			"DefaultTimeout": "ConstDefaultTimeout",
+			"Version":        "ConstVersion",
+		},
+		"sourcepkg3": {
+			"StatusUnknown":  "StatusUnknownSource3",
+			"StatusPending":  "StatusPendingSource3",
+			"StatusRunning":  "StatusRunningSource3",
+			"StatusSuccess":  "StatusSuccessSource3",
+			"StatusFailed":   "StatusFailedSource3",
+			"PriorityLow":    "PriorityLowSource3",
+			"PriorityMedium": "PriorityMediumSource3",
+			"PriorityHigh":   "PriorityHighSource3",
+			"DefaultTimeout": "DefaultTimeoutSource3",
+			"Version":        "VersionSource3",
+			"MaxRetries":     "MaxRetriesSource3",
+		},
+	}
+
+	expectedVars := map[string]map[string]string{
+		"source": {
+			"ExportedVariable": "ExportedVariable",
+		},
+		"source2": {
+			"DefaultWorker": "DefaultWorker",
+			"StatsCounter":  "StatsCounter",
+		},
+		"sourcepkg3": {
+			"DefaultWorker": "DefaultWorkerSource3",
+			"StatsCounter":  "StatsCounterSource3",
+			"Processors":    "ProcessorsSource3",
+		},
+	}
+
 	actualTypes := make(map[string]map[string]string)
+	actualConsts := make(map[string]map[string]string)
+	actualVars := make(map[string]map[string]string)
 
 	ast.Inspect(node, func(n ast.Node) bool {
-		if genDecl, ok := n.(*ast.GenDecl); ok && genDecl.Tok == token.TYPE {
-			for _, spec := range genDecl.Specs {
-				if typeSpec, ok := spec.(*ast.TypeSpec); ok {
-					var selExpr *ast.SelectorExpr
-					switch t := typeSpec.Type.(type) {
-					case *ast.SelectorExpr:
-						selExpr = t
-					case *ast.IndexExpr:
-						if s, ok := t.X.(*ast.SelectorExpr); ok {
-							selExpr = s
-						}
-					case *ast.IndexListExpr:
-						if s, ok := t.X.(*ast.SelectorExpr); ok {
-							selExpr = s
-						}
-					}
+		genDecl, ok := n.(*ast.GenDecl)
+		if !ok {
+			return true
+		}
 
-					if selExpr != nil {
-						if pkgIdent, ok := selExpr.X.(*ast.Ident); ok {
-							pkgAlias := pkgIdent.Name
-							originalName := selExpr.Sel.Name
-							newName := typeSpec.Name.Name
-
-							if _, exists := actualTypes[pkgAlias]; !exists {
-								actualTypes[pkgAlias] = make(map[string]string)
-							}
-							actualTypes[pkgAlias][originalName] = newName
-						}
-					}
-				}
-			}
+		switch genDecl.Tok {
+		case token.TYPE:
+			extractTypeAliases(genDecl, actualTypes)
+		case token.CONST:
+			extractValueAliases(genDecl, actualConsts)
+		case token.VAR:
+			extractValueAliases(genDecl, actualVars)
 		}
 		return true
 	})
 
 	assert.Equal(t, expectedTypes, actualTypes, "Generated types do not match expected types")
+	assert.Equal(t, expectedConsts, actualConsts, "Generated consts do not match expected consts")
+	assert.Equal(t, expectedVars, actualVars, "Generated vars do not match expected vars")
+}
+
+func extractTypeAliases(genDecl *ast.GenDecl, targetMap map[string]map[string]string) {
+	for _, spec := range genDecl.Specs {
+		if typeSpec, ok := spec.(*ast.TypeSpec); ok {
+			var selExpr *ast.SelectorExpr
+			switch t := typeSpec.Type.(type) {
+			case *ast.SelectorExpr:
+				selExpr = t
+			case *ast.IndexExpr:
+				if s, ok := t.X.(*ast.SelectorExpr); ok {
+					selExpr = s
+				}
+			case *ast.IndexListExpr:
+				if s, ok := t.X.(*ast.SelectorExpr); ok {
+					selExpr = s
+				}
+			}
+
+			if selExpr != nil {
+				if pkgIdent, ok := selExpr.X.(*ast.Ident); ok {
+					pkgAlias := pkgIdent.Name
+					originalName := selExpr.Sel.Name
+					newName := typeSpec.Name.Name
+
+					if _, exists := targetMap[pkgAlias]; !exists {
+						targetMap[pkgAlias] = make(map[string]string)
+					}
+					targetMap[pkgAlias][originalName] = newName
+				}
+			}
+		}
+	}
+}
+
+func extractValueAliases(genDecl *ast.GenDecl, targetMap map[string]map[string]string) {
+	for _, spec := range genDecl.Specs {
+		if vs, ok := spec.(*ast.ValueSpec); ok {
+			for i, name := range vs.Names {
+				if len(vs.Values) > i {
+					if selExpr, ok := vs.Values[i].(*ast.SelectorExpr); ok {
+						if pkgIdent, ok := selExpr.X.(*ast.Ident); ok {
+							pkgAlias := pkgIdent.Name
+							originalName := selExpr.Sel.Name
+							newName := name.Name
+
+							if _, exists := targetMap[pkgAlias]; !exists {
+								targetMap[pkgAlias] = make(map[string]string)
+							}
+							targetMap[pkgAlias][originalName] = newName
+						}
+					}
+				}
+			}
+		}
+	}
 }
