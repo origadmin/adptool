@@ -124,6 +124,10 @@ func qualifyType(expr ast.Expr, pkgAlias string, definedTypes map[string]bool, t
 			t.Indices[i] = qualifyType(index, pkgAlias, definedTypes, typeParams)
 		}
 		return t
+	case *ast.Ellipsis:
+		log.Printf("qualifyType: Processing ellipsis type")
+		t.Elt = qualifyType(t.Elt, pkgAlias, definedTypes, typeParams)
+		return t
 	case *ast.InterfaceType, *ast.StructType, *ast.SelectorExpr:
 		return t // These types (and selectors) are already context-complete.
 	default:
