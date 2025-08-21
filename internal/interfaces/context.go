@@ -1,5 +1,11 @@
 package interfaces
 
+// ContextKey is the type for context keys.
+type ContextKey string
+
+// PackagePathContextKey is the context key for the package path.
+const PackagePathContextKey = ContextKey("packagePath")
+
 // Context defines the interface for passing context across calls.
 // It allows for carrying metadata in a key-value manner and managing a stack of node types.
 type Context interface {
@@ -8,9 +14,6 @@ type Context interface {
 	Push(nodeType RuleType) Context
 	CurrentNodeType() RuleType
 }
-
-// private type to prevent collisions with other packages
-type contextKey string
 
 // contextImpl is the concrete implementation of the Context interface.
 type contextImpl struct {
