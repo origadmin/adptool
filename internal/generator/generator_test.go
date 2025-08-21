@@ -177,17 +177,16 @@ func TestGenerate(t *testing.T) {
 	err = generator.Generate(packageInfos)
 	require.NoError(t, err)
 
-	// 5. Run goimports on the generated file first to clean up imports and format
-	err = util.RunGoImports(outputFilePath)
-	require.NoError(t, err, "util.RunGoImports failed for %s", outputFilePath)
-
 	// Read and verify the generated file content
 	generatedContent, err := os.ReadFile(outputFilePath)
 	assert.NoError(t, err)
 	assert.NotEmpty(t, generatedContent, "Generated file content is empty after goimports")
-
 	// The output generated code content is used for debugging
 	t.Logf("Generated code content:\n%s", string(generatedContent))
+
+	// 5. Run goimports on the generated file first to clean up imports and format
+	err = util.RunGoImports(outputFilePath)
+	require.NoError(t, err, "util.RunGoImports failed for %s", outputFilePath)
 
 	// 6. Then run go vet on the formatted file
 	vetCmd := exec.Command("go", "vet", outputFilePath)

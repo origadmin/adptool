@@ -194,12 +194,46 @@ func (c *Collector) collectFunctionDeclaration(funcDecl *ast.FuncDecl, importAli
 			}
 		}
 
+		var callFun ast.Expr = &ast.SelectorExpr{
+			X:   ast.NewIdent(importAlias),
+			Sel: ast.NewIdent(originalName),
+		}
+
+		// Handle generic function calls
+		if funcDecl.Type.TypeParams != nil {
+			var typeArgs []ast.Expr
+			for _, param := range funcDecl.Type.TypeParams.List {
+				for _, name := range param.Names {
+					typeArgs = append(typeArgs, ast.NewIdent(name.Name))
+				}
+			}
+			if len(typeArgs) > 0 {
+				if len(typeArgs) == 1 {
+					callFun = &ast.IndexExpr{
+						X:     callFun,
+						Index: typeArgs[0],
+					}
+				} else {
+					callFun = &ast.IndexListExpr{
+						X:       callFun,
+						Indices: typeArgs,
+					}
+				}
+			}
+		}
+
 		callExpr := &ast.CallExpr{
-			Fun: &ast.SelectorExpr{
-				X:   ast.NewIdent(importAlias),
-				Sel: ast.NewIdent(originalName),
-			},
+			Fun:  callFun,
 			Args: args,
+		}
+
+		// Check if the original function is variadic
+		if funcDecl.Type.Params != nil && len(funcDecl.Type.Params.List) > 0 {
+			lastParam := funcDecl.Type.Params.List[len(funcDecl.Type.Params.List)-1]
+			if _, ok := lastParam.Type.(*ast.Ellipsis); ok {
+				// The original function is variadic, so set Ellipsis for the call
+				callExpr.Ellipsis = callExpr.Rparen - 1 // A valid position, just before Rparen
+			}
 		}
 
 		var results []ast.Stmt
