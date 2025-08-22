@@ -6,7 +6,6 @@ import (
 	goparser "go/parser"
 	gotoken "go/token"
 	"log/slog"
-	"path/filepath"
 
 	"github.com/spf13/viper"
 
@@ -21,28 +20,34 @@ var configPaths = []string{
 // LoadConfigFile reads the configuration from a file (or searches for one) and unmarshals it into a Config struct.
 func LoadConfigFile(filePath string) (*config.Config, error) {
 	v := viper.New()
-	v.SetConfigName(".adptool")
+
 	if filePath != "" {
 		// If a specific file path is provided, use it directly.
 		v.SetConfigFile(filePath)
 	} else {
+		// Otherwise, search for a config file named .adptool in standard paths.
+		v.SetConfigName(".adptool")
+		v.SetConfigType("yaml") // Explicitly set type for search
 		for _, path := range configPaths {
 			v.AddConfigPath(path)
 		}
-		ext := filepath.Ext(filePath)[1:]
-		// Otherwise, search for a config file named .adptool in the current directory.
-		v.SetConfigType(ext) // Default to yaml, but viper will detect others like json, toml.
 	}
 
 	if err := v.ReadInConfig(); err != nil {
-		return nil, fmt.Errorf("failed to read config file %s: %w", filePath, err)
+		// If the config file is not found, and no specific file was provided, it's not a fatal error.
+		// We can proceed with a default/empty config.
+		if _, ok := err.(viper.ConfigFileNotFoundError); ok && filePath == "" {
+			slog.Debug("No config file found, using default configuration.")
+			return config.New(), nil
+		}
+		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}
 
 	cfg := config.New() // Initialize with defaults
 	if err := v.Unmarshal(cfg); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
-	slog.Info("Loaded config", "func", "LoadConfig", "settings", v.AllSettings())
+	slog.Info("Loaded config from file", "path", v.ConfigFileUsed())
 	return cfg, nil
 }
 

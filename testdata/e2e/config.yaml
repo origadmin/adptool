@@ -1,0 +1,17 @@
+packageName: e2e_test_output
+
+packages:
+  - import: github.com/origadmin/adptool/testdata/e2e/sourcepkg # This path needs to be resolvable
+    alias: source
+    types:
+      - name: "*"
+        prefix: "My"
+    constants:
+      - name: "*"
+        suffix: "Value"
+    variables:
+      - name: "*"
+        prefix: "Var"
+    functions:
+      - name: "*"
+        prefix: "Func"

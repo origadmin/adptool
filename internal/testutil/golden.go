@@ -2,7 +2,6 @@ package testutil
 
 import (
 	"bytes"
-	"flag"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -13,13 +12,11 @@ import (
 	"github.com/pmezard/go-difflib/difflib"
 )
 
-// Update is a flag to update golden files.
-var Update = flag.Bool("update", false, "update golden files")
-
 // CompareWithGolden compares generated content with a golden file.
 // It handles goimports formatting, diffing, and updating the golden file.
 // testdataDir should be the path to the directory containing the golden files.
-func CompareWithGolden(t *testing.T, testdataDir string, gotBytes []byte) {
+// updateFlag should be the value of the -update command-line flag.
+func CompareWithGolden(t *testing.T, testdataDir string, updateFlag bool, gotBytes []byte) {
 	t.Helper()
 
 	// Create a temporary file to run goimports on.
@@ -51,7 +48,7 @@ func CompareWithGolden(t *testing.T, testdataDir string, gotBytes []byte) {
 	goldenFile := filepath.Join(testdataDir, strings.ReplaceAll(t.Name(), "/", "_")+ ".golden")
 
 	// If the -update flag is set, write the formatted content to the golden file.
-	if *Update {
+	if updateFlag {
 		if err := os.MkdirAll(filepath.Dir(goldenFile), 0755); err != nil {
 			t.Fatalf("failed to create directory for golden file: %v", err)
 		}

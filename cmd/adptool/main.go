@@ -9,87 +9,16 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/origadmin/adptool/internal/compiler"
 	"github.com/origadmin/adptool/internal/config"
-	"github.com/origadmin/adptool/internal/generator"
+	"github.com/origadmin/adptool/internal/engine"
 	"github.com/origadmin/adptool/internal/loader"
 	"github.com/origadmin/adptool/internal/parser"
 )
 
-// processFile processes a single Go file and generates its adapter
+// processFile now acts as a simple wrapper around the core engine.
 func processFile(filePath string, cfg *config.Config) error {
-	// First check if the file has the adapter directive
-	hasAdapter, err := hasAdapterDirective(filePath)
-	if err != nil {
-		return fmt.Errorf("failed to check adapter directive in %s: %w", filePath, err)
-	}
-
-	if !hasAdapter {
-		slog.Debug("Skipping file without //go:adapter directive", "file", filePath)
-		return nil
-	}
-
-	// Parse the Go file to get the AST
-	file, fset, err := loader.LoadGoFile(filePath)
-	if err != nil {
-		return fmt.Errorf("failed to load Go file %s: %w", filePath, err)
-	}
-
-	// Parse file directives using the loaded config
-	pkgConfig, err := parser.ParseFileDirectives(cfg, file, fset)
-	if err != nil {
-		return fmt.Errorf("failed to parse file directives in %s: %w", filePath, err)
-	}
-
-	// Compile the configuration
-	compiledCfg, err := compiler.Compile(pkgConfig)
-	if err != nil {
-		return fmt.Errorf("error compiling config for %s: %w", filePath, err)
-	}
-
-	replacer := compiler.NewReplacer(compiledCfg)
-
-	// Set output file path (same directory as input file with .adapter.go suffix)
-	dir := filepath.Dir(filePath)
-	baseName := filepath.Base(filePath)
-	ext := filepath.Ext(baseName)
-	outputBase := baseName[:len(baseName)-len(ext)] + ".adapter.go"
-	outputFile := filepath.Join(dir, outputBase)
-
-	// Convert PackageConfig to PackageInfo
-	var packageInfos []*generator.PackageInfo
-	for _, pkg := range pkgConfig.Packages {
-		packageInfos = append(packageInfos, &generator.PackageInfo{
-			ImportPath:  pkg.Import,
-			ImportAlias: pkg.Alias,
-		})
-	}
-
-	// Determine the package name
-	packageName := pkgConfig.PackageName
-	if packageName == "" {
-		packageName = filepath.Base(dir)
-	}
-
-	// Generate the adapter file
-	gen := generator.NewGenerator(packageName, outputFile, replacer).
-		WithNoEditHeader(true)
-
-	if err := gen.Generate(packageInfos); err != nil {
-		return fmt.Errorf("error generating adapter file %s: %w", outputFile, err)
-	}
-
-	slog.Info("Generated adapter file", "path", outputFile)
-	return nil
-}
-
-// hasAdapterDirective checks if the file contains //go:adapter directive
-func hasAdapterDirective(filePath string) (bool, error) {
-	content, err := os.ReadFile(filePath)
-	if err != nil {
-		return false, fmt.Errorf("failed to read file %s: %w", filePath, err)
-	}
-	return strings.Contains(string(content), parser.DirectivePrefix), nil
+	e := engine.New()
+	return e.Execute(filePath, cfg)
 }
 
 // findGoFiles finds all .go files in the given directory that contain //go:adapter directive
@@ -118,7 +47,7 @@ func findGoFiles(dir string) ([]string, error) {
 		}
 
 		// Check if file contains //go:adapter directive
-		hasAdapter, err := hasAdapterDirective(path)
+		hasAdapter, err := parser.HasAdapterDirective(path)
 		if err != nil {
 			slog.Warn("Failed to check adapter directive", "file", path, "error", err)
 			return nil
