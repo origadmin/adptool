@@ -384,11 +384,12 @@ func (c *Collector) resolveReplacerConflicts(allNames map[string]int) {
 
 	updateTypeSpecName := func(spec *ast.TypeSpec, newName string) *ast.TypeSpec {
 		newSpec := &ast.TypeSpec{
-			Doc:     spec.Doc,
-			Name:    &ast.Ident{Name: newName},
-			Assign:  spec.Assign,
-			Type:    spec.Type,
-			Comment: spec.Comment,
+			Doc:        spec.Doc,
+			Name:       &ast.Ident{Name: newName},
+			Assign:     spec.Assign,
+			TypeParams: spec.TypeParams, // Preserve type parameters for generic types
+			Type:       spec.Type,
+			Comment:    spec.Comment,
 		}
 		return newSpec
 	}
