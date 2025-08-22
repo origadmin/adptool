@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 
 	"github.com/origadmin/adptool/internal/config"
 )
@@ -103,17 +104,24 @@ func (e *Engine) Execute(ctx context.Context, cfg *Config) (*Result, error) {
 func (e *Engine) ExecuteFile(filePath string, cfg *config.Config) error {
 	e.logger.Info("Processing file", "file", filePath)
 
+	// Get the directory of the input file
+	dir := filepath.Dir(filePath)
+	baseName := filepath.Base(filePath)
+
 	// Create a context
 	ctx := context.Background()
 
 	// 1. Load phase
 	loader := NewLoader(
-		os.DirFS("."),
+		os.DirFS("."), // Use current directory as root
 		NewFileSystemParser(),
 		cfg,
 		e.logger,
 	)
 
+	e.logger.Debug("Loading file", "directory", dir, "file", baseName)
+	
+	// Use the full path for loading on Windows
 	loadCtx, err := loader.Load(ctx, []string{filePath})
 	if err != nil {
 		return fmt.Errorf("failed to load files: %w", err)

@@ -80,9 +80,7 @@ func (p *Planner) Plan(loadCtx *LoadContext) (*ExecutionPlan, error) {
 			Name:        file.Name.Name,
 			ImportPath:  pkgConfig.PackageName, // Use PackageName from config
 			SourceFiles: []string{filePath},
-			Config: &interfaces.CompiledPackage{
-				ImportPath: compiledCfg.PackageName,
-			},
+			Config: compiledCfg,
 		}
 
 		plan.Packages = append(plan.Packages, pkgPlan)
