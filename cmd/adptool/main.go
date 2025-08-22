@@ -139,7 +139,7 @@ func findGoFiles(dir string) ([]string, error) {
 }
 
 func main() {
-	configFile := flag.String("f", "", "Configuration file (YAML/JSON). If specified, it completely replaces adptool.yaml.")
+	configFile := flag.String("c", "", "Configuration file (YAML/JSON). If specified, it completely replaces adptool.yaml.")
 	flag.Parse()
 
 	// Get the input path from command line arguments

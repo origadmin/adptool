@@ -227,8 +227,6 @@ const (
 	DefaultTimeout time.Duration = 10 * time.Second
 	// Version is a string constant.
 	Version = "v1.0.0"
-	// MaxRetries defines maximum retry attempts.
-	MaxRetries = 3
 	// unexportedConstant is a non-exported constant.
 	unexportedConstant = "internal"
 )
