@@ -178,11 +178,22 @@ func (b *Builder) Write() error {
 }
 
 func (b *Builder) buildImportDeclaration(importSpecs map[string]*ast.ImportSpec) ast.Decl {
-	var finalImportSpecs []ast.Spec
-	for _, spec := range importSpecs {
-		finalImportSpecs = append(finalImportSpecs, spec)
+	// First, collect and sort the import paths to ensure deterministic order
+	importPaths := make([]string, 0, len(importSpecs))
+	for path := range importSpecs {
+		importPaths = append(importPaths, path)
+	}
+	sort.Strings(importPaths)
+
+	// Then collect the import specs in the sorted order
+	finalImportSpecs := make([]ast.Spec, 0, len(importSpecs))
+	for _, path := range importPaths {
+		if spec, exists := importSpecs[path]; exists {
+			finalImportSpecs = append(finalImportSpecs, spec)
+		}
 	}
 
+	// Sort the imports by path to maintain consistent ordering
 	sort.Slice(finalImportSpecs, func(i, j int) bool {
 		var iPath, jPath string
 		if imp, ok := finalImportSpecs[i].(*ast.ImportSpec); ok && imp.Path != nil {
@@ -213,6 +224,7 @@ func (b *Builder) collectAllDeclarations(allPackageDecls map[string]*packageDecl
 
 	// Create a map to track name conflicts and assign suffixes
 	nameCounters := make(map[string]int)
+	usedNames := make(map[string]bool)
 
 	// Helper function to generate a unique name with suffix
 	generateUniqueName := func(name string) string {
@@ -252,11 +264,12 @@ func (b *Builder) collectAllDeclarations(allPackageDecls map[string]*packageDecl
 	updateTypeSpecName := func(spec *ast.TypeSpec, newName string) *ast.TypeSpec {
 		// Create a copy of the spec with the new name
 		newSpec := &ast.TypeSpec{
-			Doc:     spec.Doc,
-			Name:    &ast.Ident{Name: newName},
-			Assign:  spec.Assign,
-			Type:    spec.Type,
-			Comment: spec.Comment,
+			Doc:        spec.Doc,
+			Name:       &ast.Ident{Name: newName},
+			Assign:     spec.Assign,
+			TypeParams: spec.TypeParams, // Preserve type parameters for generic types
+			Type:       spec.Type,
+			Comment:    spec.Comment,
 		}
 		return newSpec
 	}
@@ -288,11 +301,17 @@ func (b *Builder) collectAllDeclarations(allPackageDecls map[string]*packageDecl
 								// Name was changed, create a new spec with the updated name
 								newSpec := updateValueSpecName(valueSpec, uniqueName)
 								allConstSpecs = append(allConstSpecs, newSpec)
-								b.usedNames[uniqueName] = true
-							} else if !b.usedNames[ident.Name] {
+								usedNames[uniqueName] = true
+							} else if !usedNames[ident.Name] {
 								// Name is unique, use the original spec
 								allConstSpecs = append(allConstSpecs, spec)
-								b.usedNames[ident.Name] = true
+								usedNames[ident.Name] = true
+							} else {
+								// Name conflict, generate a unique name
+								uniqueName := generateUniqueName(ident.Name)
+								newSpec := updateValueSpecName(valueSpec, uniqueName)
+								allConstSpecs = append(allConstSpecs, newSpec)
+								usedNames[uniqueName] = true
 							}
 						}
 					}
@@ -311,11 +330,17 @@ func (b *Builder) collectAllDeclarations(allPackageDecls map[string]*packageDecl
 								// Name was changed, create a new spec with the updated name
 								newSpec := updateValueSpecName(valueSpec, uniqueName)
 								allVarSpecs = append(allVarSpecs, newSpec)
-								b.usedNames[uniqueName] = true
-							} else if !b.usedNames[ident.Name] {
+								usedNames[uniqueName] = true
+							} else if !usedNames[ident.Name] {
 								// Name is unique, use the original spec
 								allVarSpecs = append(allVarSpecs, spec)
-								b.usedNames[ident.Name] = true
+								usedNames[ident.Name] = true
+							} else {
+								// Name conflict, generate a unique name
+								uniqueName := generateUniqueName(ident.Name)
+								newSpec := updateValueSpecName(valueSpec, uniqueName)
+								allVarSpecs = append(allVarSpecs, newSpec)
+								usedNames[uniqueName] = true
 							}
 						}
 					}
@@ -331,11 +356,17 @@ func (b *Builder) collectAllDeclarations(allPackageDecls map[string]*packageDecl
 					// Name was changed, create a new spec with the updated name
 					newSpec := updateTypeSpecName(typeSpec, uniqueName)
 					allTypeSpecs = append(allTypeSpecs, newSpec)
-					b.usedNames[uniqueName] = true
-				} else if !b.usedNames[typeSpec.Name.Name] {
+					usedNames[uniqueName] = true
+				} else if !usedNames[typeSpec.Name.Name] {
 					// Name is unique, use the original spec
 					allTypeSpecs = append(allTypeSpecs, spec)
-					b.usedNames[typeSpec.Name.Name] = true
+					usedNames[typeSpec.Name.Name] = true
+				} else {
+					// Name conflict, generate a unique name
+					uniqueName := generateUniqueName(typeSpec.Name.Name)
+					newSpec := updateTypeSpecName(typeSpec, uniqueName)
+					allTypeSpecs = append(allTypeSpecs, newSpec)
+					usedNames[uniqueName] = true
 				}
 			}
 		}
@@ -348,11 +379,17 @@ func (b *Builder) collectAllDeclarations(allPackageDecls map[string]*packageDecl
 					// Name was changed, create a new decl with the updated name
 					newDecl := updateFuncDeclName(funcDecl, uniqueName)
 					allFuncDecls = append(allFuncDecls, newDecl)
-					b.usedNames[uniqueName] = true
-				} else if !b.usedNames[funcDecl.Name.Name] {
+					usedNames[uniqueName] = true
+				} else if !usedNames[funcDecl.Name.Name] {
 					// Name is unique, use the original decl
 					allFuncDecls = append(allFuncDecls, decl)
-					b.usedNames[funcDecl.Name.Name] = true
+					usedNames[funcDecl.Name.Name] = true
+				} else {
+					// Name conflict, generate a unique name
+					uniqueName := generateUniqueName(funcDecl.Name.Name)
+					newDecl := updateFuncDeclName(funcDecl, uniqueName)
+					allFuncDecls = append(allFuncDecls, newDecl)
+					usedNames[uniqueName] = true
 				}
 			}
 		}

@@ -207,17 +207,20 @@ func verifyGeneratedCodeWithAST(t *testing.T, filePath string) {
 
 	expectedTypes := map[string]map[string]string{
 		"source": {
-			"MyStruct":          "TypeMyStruct",
-			"ExportedType":      "TypeExportedType",
-			"ExportedInterface": "TypeExportedInterface",
+			"CommonStruct":     "TypeCommonStruct",
+			"MyStruct":         "TypeMyStruct",
+			"ExportedType":     "TypeExportedType",
+			"ExportedInterface":"TypeExportedInterface",
 		},
 		"source2": {
+			"CommonStruct":     "CommonStructSource",
 			"ComplexInterface": "ComplexInterfaceSource",
 			"InputData":        "InputDataSource",
 			"OutputData":       "OutputDataSource",
 			"Worker":           "Source2Worker",
 		},
 		"sourcepkg3": {
+			"CommonStruct":            "CommonStructSource3",
 			"ComplexGenericInterface": "ComplexGenericInterfaceSource3",
 			"EmbeddedInterface":       "EmbeddedInterfaceSource3",
 			"InputData":               "InputDataSource3",
@@ -241,10 +244,12 @@ func verifyGeneratedCodeWithAST(t *testing.T, filePath string) {
 	expectedConsts := map[string]map[string]string{
 		"source": {
 			"ExportedConstant": "ConstExportedConstant",
+			"MaxRetries":      "ConstMaxRetries",
 		},
 		"source2": {
 			"DefaultTimeout": "ConstDefaultTimeout",
-			"Version":        "ConstVersion",
+			"MaxRetries":    "ConstMaxRetries1",
+			"Version":       "ConstVersion",
 		},
 		"sourcepkg3": {
 			"StatusUnknown":  "StatusUnknownSource3",
@@ -263,16 +268,19 @@ func verifyGeneratedCodeWithAST(t *testing.T, filePath string) {
 
 	expectedVars := map[string]map[string]string{
 		"source": {
-			"ExportedVariable": "ExportedVariable",
+			"ConfigValue":     "ConfigValue",
+			"ExportedVariable":"ExportedVariable",
 		},
 		"source2": {
-			"DefaultWorker": "DefaultWorker",
-			"StatsCounter":  "StatsCounter",
+			"ConfigValue":    "ConfigValue1",
+			"DefaultWorker":  "DefaultWorker",
+			"StatsCounter":   "StatsCounter",
 		},
 		"sourcepkg3": {
-			"DefaultWorker": "DefaultWorkerSource3",
-			"StatsCounter":  "StatsCounterSource3",
-			"Processors":    "ProcessorsSource3",
+			"ConfigValue":    "ConfigValueSource3",
+			"DefaultWorker":  "DefaultWorkerSource3",
+			"StatsCounter":   "StatsCounterSource3",
+			"Processors":     "ProcessorsSource3",
 		},
 	}
 
