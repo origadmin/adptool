@@ -2,14 +2,18 @@ package generator
 
 import (
 	"bytes"
+	"flag"
 	"path/filepath"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/origadmin/adptool/internal/compiler"
 	"github.com/origadmin/adptool/internal/config"
 	"github.com/origadmin/adptool/internal/testutil"
-	"github.com/stretchr/testify/require"
 )
+
+var update = flag.Bool("update", false, "update golden files")
 
 // runGoldenTest is a helper function to run a generator test case with a given config.
 func runGoldenTest(t *testing.T, cfg *config.Config) {
@@ -39,7 +43,7 @@ func runGoldenTest(t *testing.T, cfg *config.Config) {
 
 	// Compare the generated code with the golden file
 	testdataPath := filepath.Join("..", "..", "testdata", "generator")
-	testutil.CompareWithGolden(t, testdataPath, outputBuffer.Bytes())
+	testutil.CompareWithGolden(t, testdataPath, *update, outputBuffer.Bytes())
 }
 
 // TestGenerator holds all granular test cases for the generator.

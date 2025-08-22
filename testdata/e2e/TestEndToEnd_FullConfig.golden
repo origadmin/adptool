@@ -1,0 +1,22 @@
+package sourcepkg
+
+import (
+	source "github.com/origadmin/adptool/testdata/e2e/sourcepkg"
+)
+
+const (
+	ExportedConstantValue = source.ExportedConstant
+)
+
+var (
+	VarExportedVariable = source.ExportedVariable
+)
+
+type (
+	MyExportedInterface = source.ExportedInterface
+	MyExportedStruct    = source.ExportedStruct
+)
+
+func FuncExportedFunction(s string) {
+	source.ExportedFunction(s)
+}
