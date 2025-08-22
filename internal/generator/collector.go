@@ -354,22 +354,63 @@ func sanitizePackageName(name string) string {
 		return "pkg"
 	}
 
+	// Handle case where the name is only special characters
+	if strings.TrimFunc(name, func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsDigit(r)
+	}) == "" {
+		return "pkg"
+	}
+
+	// Convert hyphens to camelCase
+	parts := strings.Split(name, "-")
+	for i := 1; i < len(parts); i++ {
+		if len(parts[i]) > 0 {
+			// Capitalize the first letter of each part after the first
+			runes := []rune(parts[i])
+			runes[0] = unicode.ToUpper(runes[0])
+			parts[i] = string(runes)
+		}
+	}
+	name = strings.Join(parts, "")
+
+	// Process each character to build a valid Go identifier
 	var result strings.Builder
-	for i, r := range name {
-		if i == 0 && !unicode.IsLetter(r) {
-			result.WriteRune('p')
+	firstChar := true
+	for _, r := range name {
+		// For the first character, ensure it's a letter or underscore
+		if firstChar {
+			if unicode.IsLetter(r) {
+				result.WriteRune(unicode.ToLower(r))
+			} else if r == '_' {
+				result.WriteRune(r)
+			} else {
+				// If first char is not a letter or underscore, prepend 'p'
+				result.WriteRune('p')
+				if unicode.IsLetter(r) || unicode.IsDigit(r) {
+					result.WriteRune(unicode.ToLower(r))
+				}
+			}
+			firstChar = false
 			continue
 		}
-		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+
+		// For subsequent characters
+		if unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_' {
 			result.WriteRune(r)
-		} else {
-			result.WriteRune('_')
 		}
+		// Skip other special characters
 	}
 
 	cleaned := result.String()
+
+	// Handle empty result
+	if cleaned == "" {
+		return "pkg"
+	}
+
+	// If it's a Go keyword, append "Pkg"
 	if token.Lookup(cleaned).IsKeyword() {
-		return cleaned + "_"
+		return cleaned + "Pkg"
 	}
 
 	return cleaned
