@@ -1,0 +1,31 @@
+output_package_name: conflicttest
+packages:
+  - import: github.com/origadmin/adptool/testdata/sourcepkg
+    alias: source1
+    types:
+      - name: "*"
+        pattern: copy
+    constants:
+      - name: "*"
+        mode: copy
+    variables:
+      - name: "*"
+        mode: copy
+    functions:
+      - name: "*"
+        mode: copy
+
+  - import: github.com/origadmin/adptool/testdata/sourcepkg2
+    alias: source2
+    types:
+      - name: "*"
+        pattern: copy
+    constants:
+      - name: "*"
+        mode: copy
+    variables:
+      - name: "*"
+        mode: copy
+    functions:
+      - name: "*"
+        mode: copy
