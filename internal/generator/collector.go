@@ -5,7 +5,10 @@ import (
 	"go/ast"
 	"go/token"
 	"log/slog"
+	"path"
+	"strconv"
 	"strings"
+	"unicode"
 
 	"golang.org/x/tools/go/packages"
 
@@ -40,34 +43,42 @@ func NewCollector(replacer interfaces.Replacer) *Collector {
 	}
 }
 
-// Collect processes each source package and collects declarations.
-func (c *Collector) Collect(packages []*PackageInfo) error {
-	for _, pkg := range packages {
-		c.aliasToPath[pkg.ImportAlias] = pkg.ImportPath
-		c.importSpecs[pkg.ImportPath] = &ast.ImportSpec{
-			Path: &ast.BasicLit{Kind: token.STRING, Value: fmt.Sprintf("%q", pkg.ImportPath)},
-			Name: &ast.Ident{Name: pkg.ImportAlias},
-		}
-
-		sourcePkg, err := c.loadPackage(pkg.ImportPath)
-		if err != nil {
-			return err
-		}
-		if sourcePkg == nil {
-			continue // Skip if package not found
-		}
-
-		c.collectImports(sourcePkg)
-		c.collectTypeDeclarations(sourcePkg, pkg.ImportAlias)
-		c.collectOtherDeclarations(sourcePkg, pkg.ImportAlias)
-	}
-
-	if c.replacer != nil {
-		c.applyReplacements()
-	}
-
-	return nil
-}
+//// Collect processes each source package and collects declarations.
+//func (c *Collector) Collect(packages []*PackageInfo) error {
+//	for _, pkg := range packages {
+//		// 如果没有指定别名，使用导入路径的最后一部分作为别名
+//		importAlias := pkg.ImportAlias
+//		if importAlias == "" {
+//			pathParts := strings.Split(pkg.ImportPath, "/")
+//			importAlias = pathParts[len(pathParts)-1]
+//		}
+//
+//		c.aliasToPath[importAlias] = pkg.ImportPath
+//		c.importSpecs[pkg.ImportPath] = &ast.ImportSpec{
+//			Path: &ast.BasicLit{Kind: token.STRING, Value: fmt.Sprintf("%q", pkg.ImportPath)},
+//			Name: &ast.Ident{Name: importAlias},
+//		}
+//		pkg.ImportAlias = importAlias // 更新 pkg.ImportAlias 以保持一致性
+//
+//		sourcePkg, err := c.loadPackage(pkg.ImportPath)
+//		if err != nil {
+//			return err
+//		}
+//		if sourcePkg == nil {
+//			continue // Skip if package not found
+//		}
+//
+//		c.collectImports(sourcePkg)
+//		c.collectTypeDeclarations(sourcePkg, pkg.ImportAlias)
+//		c.collectOtherDeclarations(sourcePkg, pkg.ImportAlias)
+//	}
+//
+//	if c.replacer != nil {
+//		c.applyReplacements()
+//	}
+//
+//	return nil
+//}
 
 func (c *Collector) loadPackage(importPath string) (*packages.Package, error) {
 	loadCfg := &packages.Config{
@@ -334,4 +345,104 @@ func (c *Collector) applyReplacements() {
 			}
 		}
 	}
+}
+
+// aliasManager handles package alias generation and deduplication
+type aliasManager struct {
+	usedAliases map[string]string // alias -> importPath
+}
+
+func newAliasManager() *aliasManager {
+	return &aliasManager{
+		usedAliases: make(map[string]string),
+	}
+}
+
+func (m *aliasManager) generateAlias(importPath, preferredAlias string) string {
+	// 1. Use preferred alias if provided and available
+	if preferredAlias != "" {
+		if existingPath, exists := m.usedAliases[preferredAlias]; !exists || existingPath == importPath {
+			m.usedAliases[preferredAlias] = importPath
+			return preferredAlias
+		}
+	}
+
+	// 2. Extract base name from import path
+	baseName := path.Base(importPath)
+
+	// 3. Sanitize the name
+	baseName = sanitizePackageName(baseName)
+
+	// 4. Handle conflicts
+	alias := baseName
+	counter := 1
+	for {
+		if existingPath, exists := m.usedAliases[alias]; !exists || existingPath == importPath {
+			m.usedAliases[alias] = importPath
+			return alias
+		}
+		alias = baseName + strconv.Itoa(counter)
+		counter++
+	}
+}
+
+func sanitizePackageName(name string) string {
+	if name == "" {
+		return "pkg"
+	}
+
+	var result strings.Builder
+	for i, r := range name {
+		if i == 0 && !unicode.IsLetter(r) {
+			result.WriteRune('p')
+			continue
+		}
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			result.WriteRune(r)
+		} else {
+			result.WriteRune('_')
+		}
+	}
+
+	cleaned := result.String()
+	if token.Lookup(cleaned).IsKeyword() {
+		return cleaned + "_"
+	}
+
+	return cleaned
+}
+
+// Update the Collect method to use the new alias manager
+func (c *Collector) Collect(packages []*PackageInfo) error {
+	aliasMgr := newAliasManager()
+
+	for _, pkg := range packages {
+		// Generate or use the specified alias
+		importAlias := aliasMgr.generateAlias(pkg.ImportPath, pkg.ImportAlias)
+
+		c.aliasToPath[importAlias] = pkg.ImportPath
+		c.importSpecs[pkg.ImportPath] = &ast.ImportSpec{
+			Path: &ast.BasicLit{Kind: token.STRING, Value: fmt.Sprintf("%q", pkg.ImportPath)},
+			Name: &ast.Ident{Name: importAlias},
+		}
+		pkg.ImportAlias = importAlias
+
+		sourcePkg, err := c.loadPackage(pkg.ImportPath)
+		if err != nil {
+			return err
+		}
+		if sourcePkg == nil {
+			continue
+		}
+
+		c.collectImports(sourcePkg)
+		c.collectTypeDeclarations(sourcePkg, pkg.ImportAlias)
+		c.collectOtherDeclarations(sourcePkg, pkg.ImportAlias)
+	}
+
+	if c.replacer != nil {
+		c.applyReplacements()
+	}
+
+	return nil
 }
