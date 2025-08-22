@@ -266,6 +266,14 @@ func (c *Collector) collectValueDeclaration(genDecl *ast.GenDecl, importAlias st
 func (c *Collector) applyReplacements() {
 	newDefinedTypes := make(map[string]bool)
 
+	// 创建一个映射来跟踪所有声明的名称，用于检测冲突
+	allNames := make(map[string]int) // name -> count
+
+	// 辅助函数来记录名称
+	recordName := func(name string) {
+		allNames[name]++
+	}
+
 	for alias, pkgDecls := range c.allPackageDecls {
 		importPath := c.aliasToPath[alias]
 		pkgCtx := interfaces.NewContext().WithValue(interfaces.PackagePathContextKey, importPath)
@@ -273,6 +281,9 @@ func (c *Collector) applyReplacements() {
 		// First, process all type declarations and populate the new defined types map.
 		for i, spec := range pkgDecls.typeSpecs {
 			if typeSpec, ok := spec.(*ast.TypeSpec); ok {
+				originalName := typeSpec.Name.Name
+				recordName(originalName)
+
 				typeCtx := pkgCtx.Push(interfaces.RuleTypeType)
 				replaced := c.replacer.Apply(typeCtx, typeSpec)
 				if replacedSpec, ok := replaced.(*ast.TypeSpec); ok {
@@ -287,6 +298,16 @@ func (c *Collector) applyReplacements() {
 
 		// Now, process other declarations using the correct context and definedTypes map.
 		for i, decl := range pkgDecls.constDecls {
+			if genDecl, ok := decl.(*ast.GenDecl); ok {
+				for _, spec := range genDecl.Specs {
+					if valueSpec, ok := spec.(*ast.ValueSpec); ok {
+						for _, name := range valueSpec.Names {
+							recordName(name.Name)
+						}
+					}
+				}
+			}
+
 			replaced := c.replacer.Apply(pkgCtx, decl)
 			if replacedDecl, ok := replaced.(*ast.GenDecl); ok {
 				pkgDecls.constDecls[i] = replacedDecl
@@ -294,6 +315,16 @@ func (c *Collector) applyReplacements() {
 		}
 
 		for i, decl := range pkgDecls.varDecls {
+			if genDecl, ok := decl.(*ast.GenDecl); ok {
+				for _, spec := range genDecl.Specs {
+					if valueSpec, ok := spec.(*ast.ValueSpec); ok {
+						for _, name := range valueSpec.Names {
+							recordName(name.Name)
+						}
+					}
+				}
+			}
+
 			replaced := c.replacer.Apply(pkgCtx, decl)
 			if replacedDecl, ok := replaced.(*ast.GenDecl); ok {
 				pkgDecls.varDecls[i] = replacedDecl
@@ -301,10 +332,143 @@ func (c *Collector) applyReplacements() {
 		}
 
 		for i, decl := range pkgDecls.funcDecls {
+			if funcDecl, ok := decl.(*ast.FuncDecl); ok {
+				recordName(funcDecl.Name.Name)
+			}
+
 			replaced := c.replacer.Apply(pkgCtx, decl)
 			if replacedDecl, ok := replaced.(*ast.FuncDecl); ok {
 				replacedDecl.Type = qualifyType(replacedDecl.Type, alias, c.definedTypes, nil).(*ast.FuncType)
 				pkgDecls.funcDecls[i] = replacedDecl
+			}
+		}
+	}
+
+	// 处理由replacer引起的名称冲突
+	c.resolveReplacerConflicts(allNames)
+}
+
+// resolveReplacerConflicts 处理由replacer引起的名称冲突
+func (c *Collector) resolveReplacerConflicts(allNames map[string]int) {
+	// 创建一个映射来跟踪每个名称的计数
+	nameCounters := make(map[string]int)
+
+	// 辅助函数来生成唯一名称
+	generateUniqueName := func(name string) string {
+		count := nameCounters[name]
+		nameCounters[name]++
+		if count == 0 {
+			return name
+		}
+		return name + strconv.Itoa(count)
+	}
+
+	// 更新名称的辅助函数
+	updateValueSpecName := func(spec *ast.ValueSpec, newName string) *ast.ValueSpec {
+		newSpec := &ast.ValueSpec{
+			Doc:     spec.Doc,
+			Names:   make([]*ast.Ident, len(spec.Names)),
+			Type:    spec.Type,
+			Values:  spec.Values,
+			Comment: spec.Comment,
+		}
+		for i, name := range spec.Names {
+			newSpec.Names[i] = &ast.Ident{
+				NamePos: name.NamePos,
+				Name:    newName,
+				Obj:     name.Obj,
+			}
+		}
+		return newSpec
+	}
+
+	updateTypeSpecName := func(spec *ast.TypeSpec, newName string) *ast.TypeSpec {
+		newSpec := &ast.TypeSpec{
+			Doc:     spec.Doc,
+			Name:    &ast.Ident{Name: newName},
+			Assign:  spec.Assign,
+			Type:    spec.Type,
+			Comment: spec.Comment,
+		}
+		return newSpec
+	}
+
+	updateFuncDeclName := func(decl *ast.FuncDecl, newName string) *ast.FuncDecl {
+		newDecl := &ast.FuncDecl{
+			Doc:  decl.Doc,
+			Recv: decl.Recv,
+			Name: &ast.Ident{Name: newName},
+			Type: decl.Type,
+			Body: decl.Body,
+		}
+		return newDecl
+	}
+
+	// 遍历所有包声明，处理冲突
+	for _, pkgDecls := range c.allPackageDecls {
+		// 处理常量声明
+		for i, decl := range pkgDecls.constDecls {
+			if genDecl, ok := decl.(*ast.GenDecl); ok {
+				var newSpecs []ast.Spec
+				for _, spec := range genDecl.Specs {
+					if valueSpec, ok := spec.(*ast.ValueSpec); ok {
+						for _, ident := range valueSpec.Names {
+							uniqueName := generateUniqueName(ident.Name)
+							if uniqueName != ident.Name {
+								newSpec := updateValueSpecName(valueSpec, uniqueName)
+								newSpecs = append(newSpecs, newSpec)
+							} else {
+								newSpecs = append(newSpecs, spec)
+							}
+						}
+					}
+				}
+				genDecl.Specs = newSpecs
+				pkgDecls.constDecls[i] = genDecl
+			}
+		}
+
+		// 处理变量声明
+		for i, decl := range pkgDecls.varDecls {
+			if genDecl, ok := decl.(*ast.GenDecl); ok {
+				var newSpecs []ast.Spec
+				for _, spec := range genDecl.Specs {
+					if valueSpec, ok := spec.(*ast.ValueSpec); ok {
+						for _, ident := range valueSpec.Names {
+							uniqueName := generateUniqueName(ident.Name)
+							if uniqueName != ident.Name {
+								newSpec := updateValueSpecName(valueSpec, uniqueName)
+								newSpecs = append(newSpecs, newSpec)
+							} else {
+								newSpecs = append(newSpecs, spec)
+							}
+						}
+					}
+				}
+				genDecl.Specs = newSpecs
+				pkgDecls.varDecls[i] = genDecl
+			}
+		}
+
+		// 处理类型声明
+		for i, spec := range pkgDecls.typeSpecs {
+			if typeSpec, ok := spec.(*ast.TypeSpec); ok {
+				uniqueName := generateUniqueName(typeSpec.Name.Name)
+				if uniqueName != typeSpec.Name.Name {
+					newSpec := updateTypeSpecName(typeSpec, uniqueName)
+					pkgDecls.typeSpecs[i] = newSpec
+				}
+			}
+		}
+
+		// 处理函数声明
+		for i, decl := range pkgDecls.funcDecls {
+			if funcDecl, ok := decl.(*ast.FuncDecl); ok {
+				uniqueName := generateUniqueName(funcDecl.Name.Name)
+				if uniqueName != funcDecl.Name.Name {
+					newDecl := updateFuncDeclName(funcDecl, uniqueName)
+					pkgDecls.funcDecls[i] = newDecl
+				}
 			}
 		}
 	}
