@@ -12,6 +12,7 @@ import (
 	"github.com/origadmin/adptool/internal/interfaces"
 )
 
+// DirectivePrefix is the prefix used to identify adapter directives in Go source code comments
 const DirectivePrefix = "//go:adapter:"
 
 // parser orchestrates the parsing of Go directives into a structured configuration.

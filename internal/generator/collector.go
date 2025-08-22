@@ -43,43 +43,6 @@ func NewCollector(replacer interfaces.Replacer) *Collector {
 	}
 }
 
-//// Collect processes each source package and collects declarations.
-//func (c *Collector) Collect(packages []*PackageInfo) error {
-//	for _, pkg := range packages {
-//		// 如果没有指定别名，使用导入路径的最后一部分作为别名
-//		importAlias := pkg.ImportAlias
-//		if importAlias == "" {
-//			pathParts := strings.Split(pkg.ImportPath, "/")
-//			importAlias = pathParts[len(pathParts)-1]
-//		}
-//
-//		c.aliasToPath[importAlias] = pkg.ImportPath
-//		c.importSpecs[pkg.ImportPath] = &ast.ImportSpec{
-//			Path: &ast.BasicLit{Kind: token.STRING, Value: fmt.Sprintf("%q", pkg.ImportPath)},
-//			Name: &ast.Ident{Name: importAlias},
-//		}
-//		pkg.ImportAlias = importAlias // 更新 pkg.ImportAlias 以保持一致性
-//
-//		sourcePkg, err := c.loadPackage(pkg.ImportPath)
-//		if err != nil {
-//			return err
-//		}
-//		if sourcePkg == nil {
-//			continue // Skip if package not found
-//		}
-//
-//		c.collectImports(sourcePkg)
-//		c.collectTypeDeclarations(sourcePkg, pkg.ImportAlias)
-//		c.collectOtherDeclarations(sourcePkg, pkg.ImportAlias)
-//	}
-//
-//	if c.replacer != nil {
-//		c.applyReplacements()
-//	}
-//
-//	return nil
-//}
-
 func (c *Collector) loadPackage(importPath string) (*packages.Package, error) {
 	loadCfg := &packages.Config{
 		Mode: packages.LoadSyntax | packages.LoadTypes,
@@ -97,7 +60,7 @@ func (c *Collector) loadPackage(importPath string) (*packages.Package, error) {
 func (c *Collector) collectImports(sourcePkg *packages.Package) {
 	for _, file := range sourcePkg.Syntax {
 		for _, importSpec := range file.Imports {
-			importPath := strings.Trim(importSpec.Path.Value, "")
+			importPath := strings.Trim(importSpec.Path.Value, "\"")
 			if _, exists := c.importSpecs[importPath]; !exists {
 				c.importSpecs[importPath] = importSpec
 			}

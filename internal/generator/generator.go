@@ -8,14 +8,14 @@ import (
 type Generator struct {
 	collector    *Collector
 	builder      *Builder
-	noEditHeader bool // 控制是否添加"do not edit"头部注释
+	noEditHeader bool // Controls whether to add "do not edit" header comment
 }
 
 // NewGenerator creates a new Generator instance.
 func NewGenerator(packageName string, outputFilePath string, replacer interfaces.Replacer) *Generator {
 	return &Generator{
 		collector: NewCollector(replacer),
-		builder:   NewBuilder(packageName, outputFilePath, true), // 默认添加"do not edit"头部注释
+		builder:   NewBuilder(packageName, outputFilePath, true), // Add "do not edit" header comment by default
 	}
 }
 
@@ -30,13 +30,13 @@ func (g *Generator) Generate(packages []*PackageInfo) error {
 	return g.builder.Write()
 }
 
-// WithFormatCode 设置是否在生成代码后自动格式化
+// WithFormatCode sets whether to automatically format after generating code
 func (g *Generator) WithFormatCode(format bool) *Generator {
 	g.builder.WithFormatCode(format)
 	return g
 }
 
-// WithNoEditHeader 设置是否添加"do not edit"头部注释
+// WithNoEditHeader sets whether to add "do not edit" header comment
 func (g *Generator) WithNoEditHeader(noEditHeader bool) *Generator {
 	g.noEditHeader = noEditHeader
 	g.builder.noEditHeader = noEditHeader
