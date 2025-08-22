@@ -21,8 +21,8 @@ type Builder struct {
 	fset           *token.FileSet
 	outputFilePath string
 	aliasFile      *ast.File
-	formatCode     bool // 控制是否自动格式化代码
-	noEditHeader   bool // 控制是否添加"do not edit"头部注释
+	formatCode     bool // Controls whether to automatically format the code
+	noEditHeader   bool // Controls whether to add "do not edit" header comment
 	usedNames      map[string]bool
 }
 
@@ -35,13 +35,13 @@ func NewBuilder(packageName string, outputFilePath string, noEditHeader bool) *B
 			Name:  ast.NewIdent(packageName),
 			Decls: []ast.Decl{},
 		},
-		formatCode:   true, // 默认启用代码格式化
+		formatCode:   true, // Enable code formatting by default
 		noEditHeader: noEditHeader,
 		usedNames:    make(map[string]bool),
 	}
 }
 
-// WithFormatCode 设置是否在生成代码后自动格式化
+// WithFormatCode sets whether to automatically format after generating code
 func (b *Builder) WithFormatCode(format bool) *Builder {
 	b.formatCode = format
 	return b
@@ -167,7 +167,7 @@ func (b *Builder) Write() error {
 		return fmt.Errorf("failed to rename temporary file: %w", err)
 	}
 
-	// 根据formatCode选项决定是否运行goimports
+	// According to formatCode option, decide whether to run goimports
 	if b.formatCode {
 		if err := util.RunGoImports(b.outputFilePath); err != nil {
 			return fmt.Errorf("failed to format generated code with goimports: %w", err)
