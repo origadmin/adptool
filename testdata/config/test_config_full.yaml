@@ -1,0 +1,90 @@
+output_package_name: "generated"
+
+defaults:
+  mode:
+    strategy: "replace"
+    prefix: "append"
+    explicit: "merge"
+vars:
+  - name: "GlobalVar1"
+    value: "globalValue1"
+  - name: "GlobalVar2"
+    value: "globalValue2"
+
+types:
+  - name: "*"
+    disabled: false
+    kind: "struct"
+    pattern: "alias"
+    explicit:
+      - { from: "GlobalTypeOld", to: "GlobalTypeNew" }
+    ignores: [ "GlobalIgnoredType" ]
+    methods:
+      - name: "*"
+        prefix: "GlobalMethod"
+    fields:
+      - name: "*"
+        suffix: "GlobalField"
+
+  - name: "MyStruct"
+    disabled: false
+    kind: "struct"
+    pattern: "wrap"
+    explicit:
+      - { from: "MyStructOld", to: "MyStructNew" }
+    methods:
+      - name: "DoSomething"
+        disabled: false
+        explicit:
+          - { from: "DoSomethingOld", to: "DoSomethingNew" }
+      - name: "Calculate"
+        prefix: "Calc"
+    fields:
+      - name: "Data"
+        suffix: "Value"
+
+  - name: "MyInterface"
+    disabled: false
+    kind: "interface"
+    explicit:
+      - { from: "MyInterfaceOld", to: "MyInterfaceNew" }
+
+functions:
+  - name: "*"
+    disabled: false
+    explicit:
+      - { from: "GlobalFuncOld", to: "GlobalFuncNew" }
+  - name: "SpecificFunc"
+    disabled: false
+    explicit:
+      - { from: "SpecificFuncOld", to: "SpecificFuncNew" }
+
+variables:
+  - name: "*"
+    disabled: false
+    prefix: "GlobalVar"
+  - name: "SpecificVar"
+    disabled: false
+    suffix: "Specific"
+
+constants:
+  - name: "*"
+    disabled: false
+    ignores: [ "GlobalIgnoredConst" ]
+  - name: "SpecificConst"
+    disabled: true
+
+packages:
+  - import: "github.com/origadmin/adptool/testdata/sourcepkg"
+    alias: "mypkg"
+    vars:
+      - name: "PackageVar1"
+        value: "packageValue1"
+    types:
+      - name: "*"
+        pattern: "copy"
+      - name: "PackageStruct"
+        pattern: "define"
+    functions:
+      - name: "*"
+        prefix: "PackageFunc"
