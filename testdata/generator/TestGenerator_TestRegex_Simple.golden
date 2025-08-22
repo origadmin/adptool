@@ -1,0 +1,32 @@
+package regextest
+
+import (
+	source2 "github.com/origadmin/adptool/testdata/sourcepkg2"
+)
+
+const (
+	MaxRetries     = source2.MaxRetries
+	DefaultTimeout = source2.DefaultTimeout
+	Version        = source2.Version
+)
+
+var (
+	ConfigValue   = source2.ConfigValue
+	DefaultWorker = source2.DefaultWorker
+	StatsCounter  = source2.StatsCounter
+)
+
+type (
+	CommonStruct     = source2.CommonStruct
+	ComplexInterface = source2.ComplexInterface
+	IOInput          = source2.InputData
+	IOOutput         = source2.OutputData
+	Worker           = source2.Worker
+)
+
+func CommonFunction() string {
+	return source2.CommonFunction()
+}
+func NewWorker(name string) *source2.Worker {
+	return source2.NewWorker(name)
+}

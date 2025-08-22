@@ -1,0 +1,63 @@
+package generictest
+
+import (
+	source3 "github.com/origadmin/adptool/testdata/sourcepkg3"
+)
+
+const (
+	MaxRetries     = source3.MaxRetries
+	StatusUnknown  = source3.StatusUnknown
+	StatusPending  = source3.StatusPending
+	StatusRunning  = source3.StatusRunning
+	StatusSuccess  = source3.StatusSuccess
+	StatusFailed   = source3.StatusFailed
+	PriorityLow    = source3.PriorityLow
+	PriorityMedium = source3.PriorityMedium
+	PriorityHigh   = source3.PriorityHigh
+	DefaultTimeout = source3.DefaultTimeout
+	Version        = source3.Version
+)
+
+var (
+	ConfigValue   = source3.ConfigValue
+	DefaultWorker = source3.DefaultWorker
+	StatsCounter  = source3.StatsCounter
+	Processors    = source3.Processors
+)
+
+type (
+	MyCommonStruct                                 = source3.CommonStruct
+	MyComplexGenericInterface[T any, K comparable] = source3.ComplexGenericInterface[T, K]
+	MyEmbeddedInterface                            = source3.EmbeddedInterface
+	MyInputData[T any]                             = source3.InputData[T]
+	MyOutputData                                   = source3.OutputData
+	MyWorker                                       = source3.Worker
+	MyWorkerConfig                                 = source3.WorkerConfig
+	MyGenericWorker[T any]                         = source3.GenericWorker[T]
+	MyProcessFunc                                  = source3.ProcessFunc
+	MyHandlerFunc[T any]                           = source3.HandlerFunc[T]
+	MyProcessOption                                = source3.ProcessOption
+	MyProcessConfig                                = source3.ProcessConfig
+	MyWorkerOption                                 = source3.WorkerOption
+	MyStatus                                       = source3.Status
+	MyPriority                                     = source3.Priority
+	MyTimeAlias                                    = source3.TimeAlias
+	MyStatusAlias                                  = source3.StatusAlias
+	MyIntAlias                                     = source3.IntAlias
+)
+
+func CommonFunction() string {
+	return source3.CommonFunction()
+}
+func NewWorker(name string, options ...source3.WorkerOption) *source3.Worker {
+	return source3.NewWorker(name, options...)
+}
+func NewGenericWorker[T any](name string, data T, processor func(T) error) *source3.GenericWorker[T] {
+	return source3.NewGenericWorker[T](name, data, processor)
+}
+func Map[T, U any](ts []T, fn func(T) U) []U {
+	return source3.Map[T, U](ts, fn)
+}
+func Filter[T any](ts []T, fn func(T) bool) []T {
+	return source3.Filter[T](ts, fn)
+}

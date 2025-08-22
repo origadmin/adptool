@@ -1,0 +1,47 @@
+package conflicttest
+
+import (
+	source1 "github.com/origadmin/adptool/testdata/sourcepkg"
+	source2 "github.com/origadmin/adptool/testdata/sourcepkg2"
+)
+
+const (
+	MaxRetries       = source1.MaxRetries
+	ExportedConstant = source1.ExportedConstant
+	MaxRetries1      = source2.MaxRetries
+	DefaultTimeout   = source2.DefaultTimeout
+	Version          = source2.Version
+)
+
+var (
+	ConfigValue      = source1.ConfigValue
+	ExportedVariable = source1.ExportedVariable
+	ConfigValue1     = source2.ConfigValue
+	DefaultWorker    = source2.DefaultWorker
+	StatsCounter     = source2.StatsCounter
+)
+
+type (
+	CommonStruct      = source1.CommonStruct
+	MyStruct          = source1.MyStruct
+	ExportedType      = source1.ExportedType
+	ExportedInterface = source1.ExportedInterface
+	CommonStruct1     = source2.CommonStruct
+	ComplexInterface  = source2.ComplexInterface
+	InputData         = source2.InputData
+	OutputData        = source2.OutputData
+	Worker            = source2.Worker
+)
+
+func CommonFunction() string {
+	return source1.CommonFunction()
+}
+func ExportedFunction() {
+	source1.ExportedFunction()
+}
+func CommonFunction1() string {
+	return source2.CommonFunction()
+}
+func NewWorker(name string) *source2.Worker {
+	return source2.NewWorker(name)
+}
