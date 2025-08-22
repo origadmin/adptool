@@ -1,0 +1,29 @@
+package explicittest
+
+import (
+	source "github.com/origadmin/adptool/testdata/sourcepkg"
+)
+
+const (
+	MaxRetries       = source.MaxRetries
+	ExportedConstant = source.ExportedConstant
+)
+
+var (
+	ConfigValue      = source.ConfigValue
+	ExportedVariable = source.ExportedVariable
+)
+
+type (
+	CommonStruct      = source.CommonStruct
+	MyCustomStruct    = source.MyStruct
+	ExportedType      = source.ExportedType
+	ExportedInterface = source.ExportedInterface
+)
+
+func CommonFunction() string {
+	return source.CommonFunction()
+}
+func ExportedFunction() {
+	source.ExportedFunction()
+}

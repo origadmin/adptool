@@ -1,0 +1,29 @@
+package prefixtest
+
+import (
+	source "github.com/origadmin/adptool/testdata/sourcepkg"
+)
+
+const (
+	MaxRetries       = source.MaxRetries
+	ExportedConstant = source.ExportedConstant
+)
+
+var (
+	ConfigValue      = source.ConfigValue
+	ExportedVariable = source.ExportedVariable
+)
+
+type (
+	MyCommonStruct      = source.CommonStruct
+	MyMyStruct          = source.MyStruct
+	MyExportedType      = source.ExportedType
+	MyExportedInterface = source.ExportedInterface
+)
+
+func CommonFunction() string {
+	return source.CommonFunction()
+}
+func ExportedFunction() {
+	source.ExportedFunction()
+}
