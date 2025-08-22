@@ -42,10 +42,3 @@ func (g *Generator) WithNoEditHeader(noEditHeader bool) *Generator {
 	g.builder.noEditHeader = noEditHeader
 	return g
 }
-
-// ApplyRules applies a set of rename rules to a given name and returns the result.
-// This is a wrapper around rules.ApplyRules for backward compatibility.
-func ApplyRules(name string, rulesList []interfaces.RenameRule) (string, error) {
-	// Placeholder - actual implementation would depend on the rules package
-	return name, nil
-}

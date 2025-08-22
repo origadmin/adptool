@@ -412,7 +412,7 @@ func sanitizePackageName(name string) string {
 	return cleaned
 }
 
-// Update the Collect method to use the new alias manager
+// Collect method to use the new alias manager
 func (c *Collector) Collect(packages []*PackageInfo) error {
 	aliasMgr := newAliasManager()
 
