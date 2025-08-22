@@ -97,39 +97,39 @@ func (b *Builder) Write() error {
 		return fmt.Errorf("failed to create output directory: %w", err)
 	}
 
-	//// If no package name is set, try to determine it from the directory
-	//if b.aliasFile.Name == nil || b.aliasFile.Name.Name == "" {
-	//	// Look for Go files in the directory to determine the package name
-	//	files, err := filepath.Glob(filepath.Join(outputDir, "*.go"))
-	//	if err != nil {
-	//		return fmt.Errorf("failed to list Go files in directory: %w", err)
-	//	}
-	//
-	//	// If no Go files exist, use the directory name as the package name
-	//	if len(files) == 0 {
-	//		dirName := filepath.Base(outputDir)
-	//		// Ensure the directory name is a valid Go identifier
-	//		if dirName != "" {
-	//			// If the directory name starts with a number, prefix it with "pkg"
-	//			if len(dirName) > 0 && dirName[0] >= '0' && dirName[0] <= '9' {
-	//				dirName = "pkg" + dirName
-	//			}
-	//			// Remove any remaining invalid characters
-	//			var validName []rune
-	//			for i, r := range dirName {
-	//				if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || r == '_' || (i > 0 && r >= '0' && r <= '9') {
-	//					validName = append(validName, r)
-	//				}
-	//			}
-	//			if len(validName) > 0 {
-	//				b.aliasFile.Name = ast.NewIdent(string(validName))
-	//			} else {
-	//				// Fallback to a default package name if no valid characters found
-	//				b.aliasFile.Name = ast.NewIdent("generated")
-	//			}
-	//		}
-	//	}
-	//}
+	// If no package name is set, try to determine it from the directory
+	if b.aliasFile.Name == nil || b.aliasFile.Name.Name == "" {
+		// Look for Go files in the directory to determine the package name
+		files, err := filepath.Glob(filepath.Join(outputDir, "*.go"))
+		if err != nil {
+			return fmt.Errorf("failed to list Go files in directory: %w", err)
+		}
+
+		// If no Go files exist, use the directory name as the package name
+		if len(files) == 0 {
+			dirName := filepath.Base(outputDir)
+			// Ensure the directory name is a valid Go identifier
+			if dirName != "" {
+				// If the directory name starts with a number, prefix it with "pkg"
+				if len(dirName) > 0 && dirName[0] >= '0' && dirName[0] <= '9' {
+					dirName = "pkg" + dirName
+				}
+				// Remove any remaining invalid characters
+				var validName []rune
+				for i, r := range dirName {
+					if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || r == '_' || (i > 0 && r >= '0' && r <= '9') {
+						validName = append(validName, r)
+					}
+				}
+				if len(validName) > 0 {
+					b.aliasFile.Name = ast.NewIdent(string(validName))
+				} else {
+					// Fallback to a default package name if no valid characters found
+					b.aliasFile.Name = ast.NewIdent("generated")
+				}
+			}
+		}
+	}
 
 	// Create a temporary file first to avoid partial writes
 	tempFile, err := os.CreateTemp(outputDir, "temp-*.go")

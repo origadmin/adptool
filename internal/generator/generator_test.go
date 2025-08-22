@@ -15,6 +15,7 @@ import (
 
 	"github.com/origadmin/adptool/internal/compiler"
 	"github.com/origadmin/adptool/internal/config"
+	"github.com/origadmin/adptool/internal/loader"
 	"github.com/origadmin/adptool/internal/util"
 )
 
@@ -29,8 +30,8 @@ func TestGenerator_Generate(t *testing.T) {
 		}
 	}
 
-	cfg, err := config.LoadConfig(configPath)
-	assert.NoError(t, err, "config.LoadConfig failed")
+	cfg, err := loader.LoadConfigFile(configPath)
+	assert.NoError(t, err, "loader.LoadConfigFile failed")
 
 	// 2. Compile the configuration
 	compiledCfg, err := compiler.Compile(cfg)
@@ -49,8 +50,7 @@ func TestGenerator_Generate(t *testing.T) {
 	outputFilePath := filepath.Join(t.TempDir(), "generated_test.go")
 
 	// 4. Create a new Generator instance and call its Generate method
-	generator := NewGenerator(compiledCfg.PackageName, outputFilePath, compiler.NewReplacer(compiledCfg)).
-		WithNoEditHeader(true)
+	generator := NewGenerator(compiledCfg.PackageName, outputFilePath, compiler.NewReplacer(compiledCfg))
 	err = generator.Generate(packageInfos)
 	assert.NoError(t, err, "generator.Generate failed")
 
@@ -176,8 +176,7 @@ func TestGenerate(t *testing.T) {
 
 	// 4. Create a new Generator instance and call its Generate method
 	generator := NewGenerator(compiledCfg.PackageName, outputFilePath, compiler.NewReplacer(compiledCfg)).
-		WithFormatCode(false).
-		WithNoEditHeader(true)
+		WithFormatCode(false)
 	err = generator.Generate(packageInfos)
 	require.NoError(t, err)
 
