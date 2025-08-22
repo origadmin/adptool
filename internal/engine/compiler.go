@@ -1,6 +1,10 @@
 package engine
 
 import (
+	"fmt"
+	"path"
+
+	"github.com/origadmin/adptool/internal/compiler"
 	"github.com/origadmin/adptool/internal/config"
 	"github.com/origadmin/adptool/internal/interfaces"
 )
@@ -15,13 +19,20 @@ func NewRealCompiler() *RealCompiler {
 
 // Compile compiles package configurations
 func (r *RealCompiler) Compile(pkgConfig *config.Config) (*interfaces.CompiledConfig, error) {
-	// For now, we'll create a minimal implementation
-	// In a full implementation, this would do actual compilation work
-	compiledCfg := &interfaces.CompiledConfig{
-		PackageName: pkgConfig.PackageName,
-		Packages:    make([]*interfaces.CompiledPackage, 0),
-		RulesByPackageAndType: make(map[string]map[interfaces.RuleType][]interfaces.CompiledRenameRule),
+	if pkgConfig == nil {
+		return nil, fmt.Errorf("package config cannot be nil")
 	}
-	
+
+	// Compile the configuration using the real compiler
+	compiledCfg, err := compiler.Compile(pkgConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to compile configuration: %w", err)
+	}
+
+	// Ensure we have a valid package name
+	if compiledCfg.PackageName == "" {
+		compiledCfg.PackageName = path.Base(pkgConfig.PackageName)
+	}
+
 	return compiledCfg, nil
 }

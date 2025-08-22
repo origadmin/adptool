@@ -207,5 +207,16 @@ func NewFileSystemParser() *FileSystemParser {
 
 // ParseFile parses a Go source file.
 func (p *FileSystemParser) ParseFile(filePath string) (*ast.File, *token.FileSet, error) {
-	return loader.LoadGoFile(filePath)
+	// On Windows, we need to ensure the path is in the correct format
+	if filepath.VolumeName(filePath) != "" {
+		// This is an absolute path, use it as is
+		return loader.LoadGoFile(filePath)
+	}
+	
+	// For relative paths, convert to an absolute path
+	absPath, err := filepath.Abs(filePath)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get absolute path for %s: %w", filePath, err)
+	}
+	return loader.LoadGoFile(absPath)
 }

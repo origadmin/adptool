@@ -15,5 +15,5 @@ type PackagePlan struct {
 	ImportPath  string
 	SourceFiles []string
 	TargetFiles []string
-	Config      *interfaces.CompiledPackage
+	Config      *interfaces.CompiledConfig
 }
