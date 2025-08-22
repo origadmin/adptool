@@ -4,4 +4,8 @@ import (
 	_ "github.com/origadmin/adptool/testdata/sourcepkg3"
 )
 
-//go:adapter:package github.com/origadmin/adptool/testdata/sourcepkg3 sourcepkg3
+//go:adapter:package github.com/origadmin/adptool/testdata/sourcepkg3 custompkg
+//go:adapter:package github.com/origadmin/adptool/testdata/source-pkg4
+//go:adapter:package github.com/origadmin/adptool/testdata/duplicate/pkg1
+//go:adapter:package github.com/origadmin/adptool/testdata/duplicate/pkg2
+//go:adapter:package github.com/origadmin/adptool/testdata/duplicate/pkg3
