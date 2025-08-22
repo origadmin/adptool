@@ -10,19 +10,18 @@ method proxies based on a clear and powerful configuration system.
 - **Eliminate Boilerplate**: Automate the generation of repetitive adapter code.
 - **Improve Maintainability**: Adapt to upstream changes by modifying configuration, not manual code.
 
-## Core Concept: Configuration-Driven Generation
-
-`adptool` operates on a simple yet powerful principle: **Your configuration drives the code generation.** You define
-*what* to adapt and *how* to adapt it in a single, well-structured YAML file. The tool then parses your Go source code
-to apply these rules, generating the necessary adapter code automatically.
 
 ## Installation
 
-Ensure you have Go 1.23 or higher installed.
+### Using Go install
 
-```sh
+```bash
 go install github.com/origadmin/adptool/cmd/adptool@latest
 ```
+
+### Download pre-compiled binaries
+
+Visit the [releases page](https://github.com/origadmin/adptool/releases) to download pre-compiled binaries for your platform.
 
 ## Usage
 
@@ -164,13 +163,13 @@ Execute `adptool` from your project root. It will find your directives and confi
 ```sh
 # Generate code, scanning all .go files in the current directory.
 # Output will be in `adapter_generated.go` by default.
-adptool generate .
+adptool .
 
 # Specify input files/directories and an output file.
-adptool generate -o ./my_adapters.go ./path/to/directives/
+adptool -o ./my_adapters.go ./path/to/directives/
 
 # Use a specific config file instead of the default .adptool.yaml
-adptool generate -f ./configs/custom.yaml -o ./out.go .
+adptool -f ./configs/custom.yaml -o ./out.go .
 ```
 
 ## Contributing
