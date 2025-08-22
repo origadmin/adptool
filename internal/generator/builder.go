@@ -211,6 +211,69 @@ func (b *Builder) collectAllDeclarations(allPackageDecls map[string]*packageDecl
 	}
 	sort.Strings(sortedPackageAliases)
 
+	// Create a map to track name conflicts and assign suffixes
+	nameCounters := make(map[string]int)
+
+	// Helper function to generate a unique name with suffix
+	generateUniqueName := func(name string) string {
+		if count, exists := nameCounters[name]; exists {
+			// Increment the counter and append it to the name
+			count++
+			nameCounters[name] = count
+			return fmt.Sprintf("%s%d", name, count)
+		}
+		// First time seeing this name
+		nameCounters[name] = 0
+		return name
+	}
+
+	// Helper function to update the name in a ValueSpec
+	updateValueSpecName := func(spec *ast.ValueSpec, newName string) *ast.ValueSpec {
+		// Create a copy of the spec with the new name
+		newSpec := &ast.ValueSpec{
+			Doc:     spec.Doc,
+			Names:   make([]*ast.Ident, len(spec.Names)),
+			Type:    spec.Type,
+			Values:  spec.Values,
+			Comment: spec.Comment,
+		}
+		// Copy names but update the first one
+		for i, name := range spec.Names {
+			newSpec.Names[i] = &ast.Ident{
+				NamePos: name.NamePos,
+				Name:    newName,
+				Obj:     name.Obj,
+			}
+		}
+		return newSpec
+	}
+
+	// Helper function to update the name in a TypeSpec
+	updateTypeSpecName := func(spec *ast.TypeSpec, newName string) *ast.TypeSpec {
+		// Create a copy of the spec with the new name
+		newSpec := &ast.TypeSpec{
+			Doc:     spec.Doc,
+			Name:    &ast.Ident{Name: newName},
+			Assign:  spec.Assign,
+			Type:    spec.Type,
+			Comment: spec.Comment,
+		}
+		return newSpec
+	}
+
+	// Helper function to update the name in a FuncDecl
+	updateFuncDeclName := func(decl *ast.FuncDecl, newName string) *ast.FuncDecl {
+		// Create a copy of the decl with the new name
+		newDecl := &ast.FuncDecl{
+			Doc:  decl.Doc,
+			Recv: decl.Recv,
+			Name: &ast.Ident{Name: newName},
+			Type: decl.Type,
+			Body: decl.Body,
+		}
+		return newDecl
+	}
+
 	for _, alias := range sortedPackageAliases {
 		pkgDecls := allPackageDecls[alias]
 
@@ -220,7 +283,14 @@ func (b *Builder) collectAllDeclarations(allPackageDecls map[string]*packageDecl
 				for _, spec := range genDecl.Specs {
 					if valueSpec, ok := spec.(*ast.ValueSpec); ok {
 						for _, ident := range valueSpec.Names {
-							if !b.usedNames[ident.Name] {
+							uniqueName := generateUniqueName(ident.Name)
+							if uniqueName != ident.Name {
+								// Name was changed, create a new spec with the updated name
+								newSpec := updateValueSpecName(valueSpec, uniqueName)
+								allConstSpecs = append(allConstSpecs, newSpec)
+								b.usedNames[uniqueName] = true
+							} else if !b.usedNames[ident.Name] {
+								// Name is unique, use the original spec
 								allConstSpecs = append(allConstSpecs, spec)
 								b.usedNames[ident.Name] = true
 							}
@@ -236,7 +306,14 @@ func (b *Builder) collectAllDeclarations(allPackageDecls map[string]*packageDecl
 				for _, spec := range genDecl.Specs {
 					if valueSpec, ok := spec.(*ast.ValueSpec); ok {
 						for _, ident := range valueSpec.Names {
-							if !b.usedNames[ident.Name] {
+							uniqueName := generateUniqueName(ident.Name)
+							if uniqueName != ident.Name {
+								// Name was changed, create a new spec with the updated name
+								newSpec := updateValueSpecName(valueSpec, uniqueName)
+								allVarSpecs = append(allVarSpecs, newSpec)
+								b.usedNames[uniqueName] = true
+							} else if !b.usedNames[ident.Name] {
+								// Name is unique, use the original spec
 								allVarSpecs = append(allVarSpecs, spec)
 								b.usedNames[ident.Name] = true
 							}
@@ -249,7 +326,14 @@ func (b *Builder) collectAllDeclarations(allPackageDecls map[string]*packageDecl
 		// Handle Types
 		for _, spec := range pkgDecls.typeSpecs {
 			if typeSpec, ok := spec.(*ast.TypeSpec); ok {
-				if !b.usedNames[typeSpec.Name.Name] {
+				uniqueName := generateUniqueName(typeSpec.Name.Name)
+				if uniqueName != typeSpec.Name.Name {
+					// Name was changed, create a new spec with the updated name
+					newSpec := updateTypeSpecName(typeSpec, uniqueName)
+					allTypeSpecs = append(allTypeSpecs, newSpec)
+					b.usedNames[uniqueName] = true
+				} else if !b.usedNames[typeSpec.Name.Name] {
+					// Name is unique, use the original spec
 					allTypeSpecs = append(allTypeSpecs, spec)
 					b.usedNames[typeSpec.Name.Name] = true
 				}
@@ -259,7 +343,14 @@ func (b *Builder) collectAllDeclarations(allPackageDecls map[string]*packageDecl
 		// Handle Funcs
 		for _, decl := range pkgDecls.funcDecls {
 			if funcDecl, ok := decl.(*ast.FuncDecl); ok {
-				if !b.usedNames[funcDecl.Name.Name] {
+				uniqueName := generateUniqueName(funcDecl.Name.Name)
+				if uniqueName != funcDecl.Name.Name {
+					// Name was changed, create a new decl with the updated name
+					newDecl := updateFuncDeclName(funcDecl, uniqueName)
+					allFuncDecls = append(allFuncDecls, newDecl)
+					b.usedNames[uniqueName] = true
+				} else if !b.usedNames[funcDecl.Name.Name] {
+					// Name is unique, use the original decl
 					allFuncDecls = append(allFuncDecls, decl)
 					b.usedNames[funcDecl.Name.Name] = true
 				}

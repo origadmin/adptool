@@ -2,21 +2,15 @@ package generator
 
 import (
 	"go/ast"
-	"go/parser"
-	"go/token"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"regexp"
+	"strings"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/origadmin/adptool/internal/compiler"
 	"github.com/origadmin/adptool/internal/config"
 	"github.com/origadmin/adptool/internal/loader"
-	"github.com/origadmin/adptool/internal/util"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestGenerator_Generate(t *testing.T) {
@@ -775,4 +769,106 @@ func TestGenerator_Modes(t *testing.T) {
 	fset := token.NewFileSet()
 	_, err = parser.ParseFile(fset, outputFilePath, nil, parser.ParseComments)
 	require.NoError(t, err, "Generated file is not valid Go code")
+}
+
+func TestGenerator_NameConflict(t *testing.T) {
+	// Create a temporary directory for our test
+	tempDir, err := os.MkdirTemp("", "generator_test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create test config with conflicting names
+	cfg := &config.PackageConfig{
+		PackageName: "conflicttest",
+		Packages: []*config.Package{
+			{
+				Import: "github.com/origadmin/adptool/testdata/sourcepkg",
+				Alias:  "source1",
+				Types: []*config.Type{
+					{Name: "*", Pattern: "copy"},
+				},
+				Constants: []*config.Constant{
+					{Name: "*", Mode: "copy"},
+				},
+				Variables: []*config.Variable{
+					{Name: "*", Mode: "copy"},
+				},
+				Functions: []*config.Function{
+					{Name: "*", Mode: "copy"},
+				},
+			},
+			{
+				Import: "github.com/origadmin/adptool/testdata/sourcepkg2",
+				Alias:  "source2",
+				Types: []*config.Type{
+					{Name: "*", Pattern: "copy"},
+				},
+				Constants: []*config.Constant{
+					{Name: "*", Mode: "copy"},
+				},
+				Variables: []*config.Variable{
+					{Name: "*", Mode: "copy"},
+				},
+				Functions: []*config.Function{
+					{Name: "*", Mode: "copy"},
+				},
+			},
+		},
+	}
+
+	// Create replacer
+	replacer := compiler.NewReplacer(cfg)
+
+	// Set up output file path
+	outputFile := filepath.Join(tempDir, "conflict.go")
+
+	// Create generator
+	gen := NewGenerator(cfg.PackageName, outputFile, replacer).
+		WithNoEditHeader(true)
+
+	// Package info
+	packageInfos := []*PackageInfo{
+		{ImportPath: "github.com/origadmin/adptool/testdata/sourcepkg"},
+		{ImportPath: "github.com/origadmin/adptool/testdata/sourcepkg2"},
+	}
+
+	// Generate
+	err = gen.Generate(packageInfos)
+	if err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+
+	// Read the generated file
+	content, err := os.ReadFile(outputFile)
+	if err != nil {
+		t.Fatalf("Failed to read generated file: %v", err)
+	}
+
+	t.Logf("Generated code content:\n%s", content)
+
+	// Check that conflicting names are handled correctly
+	// Both packages have MaxRetries constant, so one should be renamed
+	generatedCode := string(content)
+	
+	// Check that both MaxRetries constants are present
+	if !strings.Contains(generatedCode, "MaxRetries") {
+		t.Error("Expected to find MaxRetries constant in generated code")
+	}
+	
+	// Check that both ConfigValue variables are present
+	if !strings.Contains(generatedCode, "ConfigValue") {
+		t.Error("Expected to find ConfigValue variable in generated code")
+	}
+	
+	// Check that both CommonStruct types are present
+	if !strings.Contains(generatedCode, "CommonStruct") {
+		t.Error("Expected to find CommonStruct type in generated code")
+	}
+	
+	// Check that both CommonFunction functions are present
+	if !strings.Contains(generatedCode, "CommonFunction") {
+		t.Error("Expected to find CommonFunction function in generated code")
+	}
 }
