@@ -71,11 +71,11 @@ func (m *MockContainer) Finalize(parent Container) error {
 }
 
 func decodeTestDirective(directiveString string) Directive {
-	if !strings.HasPrefix(directiveString, directivePrefix) {
+	if !strings.HasPrefix(directiveString, DirectivePrefix) {
 		return Directive{}
 	}
 
-	rawDirective := strings.TrimPrefix(directiveString, directivePrefix)
+	rawDirective := strings.TrimPrefix(directiveString, DirectivePrefix)
 	commentStart := strings.Index(rawDirective, "//")
 	if commentStart != -1 {
 		rawDirective = strings.TrimSpace(rawDirective[:commentStart])

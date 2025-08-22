@@ -1,12 +1,5 @@
 package config
 
-import (
-	"fmt"
-	"os"
-
-	"gopkg.in/yaml.v3"
-)
-
 // RuleHolder defines the interface for any rule-holding configuration element.
 type RuleHolder interface {
 	IsDisabled() bool
@@ -25,26 +18,6 @@ func New() *Config {
 		Variables: make([]*VarRule, 0),
 		Constants: make([]*ConstRule, 0),
 	}
-}
-
-// LoadConfig loads the configuration from the specified file path.
-// It supports YAML and JSON formats.
-func LoadConfig(filePath string) (*Config, error) {
-	if filePath == "" {
-		return New(), nil // Return a new default config if no file is specified
-	}
-
-	data, err := os.ReadFile(filePath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read config file %s: %w", filePath, err)
-	}
-
-	cfg := New() // Start with a default config
-	if err := yaml.Unmarshal(data, cfg); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal config file %s: %w", filePath, err)
-	}
-
-	return cfg, nil
 }
 
 // NewDefaults creates a new, fully initialized Defaults object.

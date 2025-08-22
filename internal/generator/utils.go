@@ -52,6 +52,11 @@ func qualifyType(expr ast.Expr, pkgAlias string, definedTypes map[string]bool, t
 			return t
 		}
 
+		// Skip empty package aliases (like for local package)
+		//if pkgAlias == "" {
+		//	return t
+		//}
+
 		slog.Debug("Qualifying identifier with package", "func", "qualifyType", "identifier", t.Name, "package", pkgAlias)
 		return &ast.SelectorExpr{
 			X:   ast.NewIdent(pkgAlias),
