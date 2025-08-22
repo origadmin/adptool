@@ -40,11 +40,11 @@ func (de *directiveIterator) Seq() DirectiveIterator {
 
 			line := de.fset.Position(comment.Pos()).Line
 
-			if !strings.HasPrefix(comment.Text, directivePrefix) {
+			if !strings.HasPrefix(comment.Text, DirectivePrefix) {
 				continue
 			}
 
-			rawDirective := strings.TrimPrefix(comment.Text, directivePrefix)
+			rawDirective := strings.TrimPrefix(comment.Text, DirectivePrefix)
 			commentStart := strings.Index(rawDirective, "//")
 			if commentStart != -1 {
 				rawDirective = strings.TrimSpace(rawDirective[:commentStart])

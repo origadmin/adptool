@@ -12,7 +12,7 @@ import (
 	"github.com/origadmin/adptool/internal/interfaces"
 )
 
-const directivePrefix = "//go:adapter:"
+const DirectivePrefix = "//go:adapter:"
 
 // parser orchestrates the parsing of Go directives into a structured configuration.
 type parser struct {
@@ -121,10 +121,10 @@ func (p *parser) parseFile(file *goast.File, fset *gotoken.FileSet) (*config.Con
 
 	iterator := NewDirectiveIterator(file, fset)
 	for directive := range iterator {
-		slog.Info("Processing directive", 
+		slog.Info("Processing directive",
 			"func", "parser.parseFile",
-			"line", directive.Line, 
-			"command", directive.Command, 
+			"line", directive.Line,
+			"command", directive.Command,
 			"argument", directive.Argument)
 
 		var err error
