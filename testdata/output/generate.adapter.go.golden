@@ -6,7 +6,11 @@
 package aliaspkg
 
 import (
+	"context"
+	"io"
+	"log"
 	slog "log/slog"
+	"time"
 
 	pkg1 "github.com/origadmin/adptool/testdata/duplicate/pkg1"
 	pkg2 "github.com/origadmin/adptool/testdata/duplicate/pkg2"
@@ -148,12 +152,24 @@ func CommonFunction1() string {
 	return sourcepkg2.CommonFunction()
 }
 
+func Execute(ctx context.Context, api sourcepkg2.ComplexInterface, input *sourcepkg2.InputData) (*sourcepkg2.OutputData, error) {
+	return sourcepkg2.Execute(ctx, api, input)
+}
+
 func NewWorker(name string) *sourcepkg2.Worker {
 	return sourcepkg2.NewWorker(name)
 }
 
 func CommonFunction2() string {
 	return custompkg.CommonFunction()
+}
+
+func Execute1(ctx context.Context, api custompkg.ComplexGenericInterface[string, int], input *custompkg.InputData[string], timeout time.Duration) (*custompkg.OutputData, error) {
+	return custompkg.Execute(ctx, api, input, timeout)
+}
+
+func ExecuteParallel(ctx context.Context, apis []custompkg.ComplexGenericInterface[string, int], input *custompkg.InputData[string]) ([]*custompkg.OutputData, error) {
+	return custompkg.ExecuteParallel(ctx, apis, input)
 }
 
 func Filter[T any](ts []T, fn func(T) bool) []T {
@@ -192,12 +208,28 @@ func Debug(msg string, args ...any) {
 	slog.Debug(msg, args...)
 }
 
+func DebugContext(ctx context.Context, msg string, args ...any) {
+	slog.DebugContext(ctx, msg, args...)
+}
+
 func Default() *slog.Logger {
 	return slog.Default()
 }
 
+func Duration(key string, v time.Duration) slog.Attr {
+	return slog.Duration(key, v)
+}
+
+func DurationValue(v time.Duration) slog.Value {
+	return slog.DurationValue(v)
+}
+
 func Error(msg string, args ...any) {
 	slog.Error(msg, args...)
+}
+
+func ErrorContext(ctx context.Context, msg string, args ...any) {
+	slog.ErrorContext(ctx, msg, args...)
 }
 
 func Float64(key string, v float64) slog.Attr {
@@ -220,6 +252,10 @@ func Info(msg string, args ...any) {
 	slog.Info(msg, args...)
 }
 
+func InfoContext(ctx context.Context, msg string, args ...any) {
+	slog.InfoContext(ctx, msg, args...)
+}
+
 func Int(key string, value int) slog.Attr {
 	return slog.Int(key, value)
 }
@@ -236,8 +272,32 @@ func IntValue(v int) slog.Value {
 	return slog.IntValue(v)
 }
 
+func Log(ctx context.Context, level slog.Level, msg string, args ...any) {
+	slog.Log(ctx, level, msg, args...)
+}
+
+func LogAttrs(ctx context.Context, level slog.Level, msg string, attrs ...slog.Attr) {
+	slog.LogAttrs(ctx, level, msg, attrs...)
+}
+
 func New(h slog.Handler) *slog.Logger {
 	return slog.New(h)
+}
+
+func NewJSONHandler(w io.Writer, opts *slog.HandlerOptions) *slog.JSONHandler {
+	return slog.NewJSONHandler(w, opts)
+}
+
+func NewLogLogger(h slog.Handler, level slog.Level) *log.Logger {
+	return slog.NewLogLogger(h, level)
+}
+
+func NewRecord(t time.Time, level slog.Level, msg string, pc uintptr) slog.Record {
+	return slog.NewRecord(t, level, msg, pc)
+}
+
+func NewTextHandler(w io.Writer, opts *slog.HandlerOptions) *slog.TextHandler {
+	return slog.NewTextHandler(w, opts)
 }
 
 func SetDefault(l *slog.Logger) {
@@ -256,6 +316,14 @@ func StringValue(value string) slog.Value {
 	return slog.StringValue(value)
 }
 
+func Time(key string, v time.Time) slog.Attr {
+	return slog.Time(key, v)
+}
+
+func TimeValue(v time.Time) slog.Value {
+	return slog.TimeValue(v)
+}
+
 func Uint64(key string, v uint64) slog.Attr {
 	return slog.Uint64(key, v)
 }
@@ -266,6 +334,10 @@ func Uint64Value(v uint64) slog.Value {
 
 func Warn(msg string, args ...any) {
 	slog.Warn(msg, args...)
+}
+
+func WarnContext(ctx context.Context, msg string, args ...any) {
+	slog.WarnContext(ctx, msg, args...)
 }
 
 func With(args ...any) *slog.Logger {
