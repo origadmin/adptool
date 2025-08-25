@@ -72,8 +72,12 @@ func processFile(filePath string, cfg *config.Config) error {
 	}
 
 	// Generate the adapter file
-	gen := generator.NewGenerator(packageName, outputFile, replacer).
-		WithNoEditHeader(true)
+	gen := generator.NewGenerator(packageName, outputFile, replacer)
+
+	// Render the header using the source file's name
+	if err := gen.RenderHeader(baseName); err != nil {
+		return fmt.Errorf("failed to render header for %s: %w", filePath, err)
+	}
 
 	if err := gen.Generate(packageInfos); err != nil {
 		return fmt.Errorf("error generating adapter file %s: %w", outputFile, err)
