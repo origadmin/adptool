@@ -170,13 +170,25 @@ func hasUnexportedTypes(f *ast.FuncType) bool {
 func containsUnexported(expr ast.Expr) bool {
 	var unexported bool
 	ast.Inspect(expr, func(n ast.Node) bool {
-		if id, ok := n.(*ast.Ident); ok {
-			if !isBuiltinType(id.Name) && !ast.IsExported(id.Name) {
+		switch v := n.(type) {
+		// Case 1: A selector like `pkg.Type`. We only care if `Type` is exported.
+		// The package name `pkg` can be lowercase.
+		case *ast.SelectorExpr:
+			if !ast.IsExported(v.Sel.Name) {
 				unexported = true
-				return false
 			}
+			// We've handled this selector, don't inspect its children (the `pkg` and `Type` idents).
+			return false
+
+		// Case 2: A simple identifier. This refers to a type in the same package.
+		// It must be exported unless it's a built-in.
+		case *ast.Ident:
+			if !isBuiltinType(v.Name) && !ast.IsExported(v.Name) {
+				unexported = true
+			}
+			return true // Continue, as this ident might be part of a larger expression
 		}
-		return true
+		return true // Continue inspection for other nodes
 	})
 	return unexported
 }
