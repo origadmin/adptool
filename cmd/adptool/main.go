@@ -17,7 +17,7 @@ import (
 )
 
 // processFile processes a single Go file and generates its adapter
-func processFile(filePath string, cfg *config.Config) error {
+func processFile(filePath string, cfg *config.Config, copyrightHolder string) error {
 	// First check if the file has the adapter directive
 	hasAdapter, err := hasAdapterDirective(filePath)
 	if err != nil {
@@ -72,7 +72,7 @@ func processFile(filePath string, cfg *config.Config) error {
 	}
 
 	// Generate the adapter file
-	gen := generator.NewGenerator(packageName, outputFile, replacer)
+	gen := generator.NewGenerator(packageName, outputFile, replacer, copyrightHolder)
 
 	// Render the header using the source file's name
 	if err := gen.RenderHeader(baseName); err != nil {
@@ -144,6 +144,7 @@ func findGoFiles(dir string) ([]string, error) {
 
 func main() {
 	configFile := flag.String("c", "", "Configuration file (YAML/JSON). If specified, it completely replaces adptool.yaml.")
+	copyrightHolder := flag.String("copyright-holder", "", "Copyright holder for the generated file header.")
 	flag.Parse()
 
 	// Get the input path from command line arguments
@@ -211,7 +212,7 @@ func main() {
 	// Process each file
 	var hasErrors bool
 	for _, file := range filesToProcess {
-		if err := processFile(file, cfg); err != nil {
+		if err := processFile(file, cfg, *copyrightHolder); err != nil {
 			slog.Error("Error processing file", "file", file, "error", err)
 			hasErrors = true
 		}

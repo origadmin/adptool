@@ -11,10 +11,10 @@ type Generator struct {
 }
 
 // NewGenerator creates a new Generator instance.
-func NewGenerator(packageName string, outputFilePath string, replacer interfaces.Replacer) *Generator {
+func NewGenerator(packageName string, outputFilePath string, replacer interfaces.Replacer, copyrightHolder string) *Generator {
 	return &Generator{
 		collector: NewCollector(replacer),
-		builder:   NewBuilder(packageName, outputFilePath),
+		builder:   NewBuilder(packageName, outputFilePath, copyrightHolder),
 	}
 }
 
