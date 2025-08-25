@@ -7,6 +7,7 @@ import (
 	"go/printer"
 	"go/token"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sort"
@@ -431,9 +432,8 @@ func (b *Builder) collectAndResolveNames(allPackageDecls map[string]*packageDecl
 	// Pass 1, Step C: Generate unique names using the grouping strategy.
 	nameMap := make(map[*ast.Ident]string)
 	usedNames := make(map[string]bool)
-	for name := range definedTypes {
-		usedNames[name] = true
-	}
+
+	slog.Info("--- Debugging Name Generation ---")
 
 	// Group symbols by their original name.
 	groupedSymbols := make(map[string][]*pendingSymbol)
@@ -464,21 +464,25 @@ func (b *Builder) collectAndResolveNames(allPackageDecls map[string]*packageDecl
 				finalName = originalName + strconv.Itoa(i)
 			}
 
-			// If the desired name is already taken (by a defined type or a symbol from another group),
-			// find the next available numeric suffix.
+			// Check if the proposed finalName conflicts with any name already in `usedNames`.
+			// This `usedNames` now correctly contains only names from `definedTypes` and names assigned from *other* groups.
 			if usedNames[finalName] {
-				nextSuffix := i + 1
-				if i == 0 {
-					// If the base name itself was taken, start searching from suffix 1.
-					nextSuffix = 1
+				// Conflict detected with a name from `definedTypes` or a previously processed *different* group.
+				// We need to find a new unique name for the current symbol.
+				startSuffix := 1
+				if i > 0 {
+					// If this is not the first symbol in its group, and its proposed name (with suffix i) is taken,
+					// then we continue searching from i+1.
+					startSuffix = i + 1
 				}
-				for {
-					newName := originalName + strconv.Itoa(nextSuffix)
+
+				for k := startSuffix; ; k++ {
+					newName := originalName + strconv.Itoa(k)
 					if !usedNames[newName] {
+						slog.Info("Conflict resolved", "original_name", originalName, "proposed_name", finalName, "new_name", newName, "import_path", symbol.originalImportPath)
 						finalName = newName
 						break
 					}
-					nextSuffix++
 				}
 			}
 
@@ -486,6 +490,7 @@ func (b *Builder) collectAndResolveNames(allPackageDecls map[string]*packageDecl
 			nameMap[symbol.ident] = finalName
 		}
 	}
+	slog.Info("--- End Debugging Name Generation ---")
 
 	return nameMap
 }

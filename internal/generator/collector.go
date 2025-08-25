@@ -27,7 +27,6 @@ type packageDecls struct {
 type Collector struct {
 	// allPackageDecls is keyed by import path
 	allPackageDecls map[string]*packageDecls
-	definedTypes    map[string]bool
 	importSpecs     map[string]*ast.ImportSpec
 	replacer        interfaces.Replacer
 	// pathToAlias maps import path to its generated alias
@@ -38,7 +37,6 @@ type Collector struct {
 func NewCollector(replacer interfaces.Replacer) *Collector {
 	return &Collector{
 		allPackageDecls: make(map[string]*packageDecls),
-		definedTypes:    make(map[string]bool),
 		importSpecs:     make(map[string]*ast.ImportSpec),
 		replacer:        replacer,
 		pathToAlias:     make(map[string]string),
@@ -221,7 +219,7 @@ func (c *Collector) collectFunctionDeclaration(funcDecl *ast.FuncDecl, importPat
 
 		newFuncDecl := &ast.FuncDecl{
 			Name: funcDecl.Name,
-			Type: qualifyType(funcDecl.Type, importAlias, c.definedTypes, nil).(*ast.FuncType),
+			Type: qualifyType(funcDecl.Type, importAlias, nil, nil).(*ast.FuncType),
 			Body: &ast.BlockStmt{List: results},
 		}
 
@@ -266,28 +264,23 @@ func (c *Collector) collectValueDeclaration(genDecl *ast.GenDecl, importPath, im
 }
 
 func (c *Collector) applyReplacements() {
-	newDefinedTypes := make(map[string]bool)
-
 	for importPath, pkgDecls := range c.allPackageDecls {
 		alias := c.pathToAlias[importPath]
 		pkgCtx := interfaces.NewContext().WithValue(interfaces.PackagePathContextKey, importPath)
 
-		// First, process all type declarations and populate the new defined types map.
+		// First, process all type declarations.
 		for i, spec := range pkgDecls.typeSpecs {
 			if typeSpec, ok := spec.(*ast.TypeSpec); ok {
 				typeCtx := pkgCtx.Push(interfaces.RuleTypeType)
 				replaced := c.replacer.Apply(typeCtx, typeSpec)
 				if replacedSpec, ok := replaced.(*ast.TypeSpec); ok {
 					pkgDecls.typeSpecs[i] = replacedSpec
-					newDefinedTypes[replacedSpec.Name.Name] = true
 					slog.Debug("Applied replacer to type", "func", "Collector.applyReplacements", "type", replacedSpec.Name.Name)
 				}
 			}
 		}
 
-		c.definedTypes = newDefinedTypes
-
-		// Now, process other declarations using the correct context and definedTypes map.
+		// Now, process other declarations.
 		for i, decl := range pkgDecls.constDecls {
 			replaced := c.replacer.Apply(pkgCtx, decl)
 			if replacedDecl, ok := replaced.(*ast.GenDecl); ok {
@@ -305,7 +298,7 @@ func (c *Collector) applyReplacements() {
 		for i, decl := range pkgDecls.funcDecls {
 			replaced := c.replacer.Apply(pkgCtx, decl)
 			if replacedDecl, ok := replaced.(*ast.FuncDecl); ok {
-				replacedDecl.Type = qualifyType(replacedDecl.Type, alias, c.definedTypes, nil).(*ast.FuncType)
+				replacedDecl.Type = qualifyType(replacedDecl.Type, alias, nil, nil).(*ast.FuncType)
 				pkgDecls.funcDecls[i] = replacedDecl
 			}
 		}
@@ -434,7 +427,7 @@ func (c *Collector) Collect(packages []*PackageInfo) error {
 
 		c.pathToAlias[pkg.ImportPath] = importAlias
 		c.importSpecs[pkg.ImportPath] = &ast.ImportSpec{
-			Path: &ast.BasicLit{Kind: token.STRING, Value: fmt.Sprintf("%q", pkg.ImportPath)},
+			Path: &ast.BasicLit{Kind: token.STRING, Value: fmt.Sprintf("\"%s\"", pkg.ImportPath)},
 			Name: &ast.Ident{Name: importAlias},
 		}
 		pkg.ImportAlias = importAlias
