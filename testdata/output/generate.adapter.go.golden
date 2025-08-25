@@ -19,11 +19,12 @@ import (
 )
 
 const (
-	DefaultTimeout   = sourcepkg2.DefaultTimeout
-	DefaultTimeout1  = custompkg.DefaultTimeout
 	ExportedConstant = sourcepkg.ExportedConstant
 	MaxRetries       = sourcepkg.MaxRetries
+	DefaultTimeout   = sourcepkg2.DefaultTimeout
 	MaxRetries1      = sourcepkg2.MaxRetries
+	Version          = sourcepkg2.Version
+	DefaultTimeout1  = custompkg.DefaultTimeout
 	MaxRetries2      = custompkg.MaxRetries
 	PriorityHigh     = custompkg.PriorityHigh
 	PriorityLow      = custompkg.PriorityLow
@@ -33,69 +34,68 @@ const (
 	StatusRunning    = custompkg.StatusRunning
 	StatusSuccess    = custompkg.StatusSuccess
 	StatusUnknown    = custompkg.StatusUnknown
-	Version          = sourcepkg2.Version
 	Version1         = custompkg.Version
 )
 
 var (
 	ConfigValue      = sourcepkg.ConfigValue
-	ConfigValue1     = sourcepkg2.ConfigValue
-	ConfigValue2     = custompkg.ConfigValue
-	DefaultWorker    = sourcepkg2.DefaultWorker
-	DefaultWorker1   = custompkg.DefaultWorker
 	ExportedVariable = sourcepkg.ExportedVariable
-	Processors       = custompkg.Processors
+	ConfigValue1     = sourcepkg2.ConfigValue
+	DefaultWorker    = sourcepkg2.DefaultWorker
 	StatsCounter     = sourcepkg2.StatsCounter
+	ConfigValue2     = custompkg.ConfigValue
+	DefaultWorker1   = custompkg.DefaultWorker
+	Processors       = custompkg.Processors
 	StatsCounter1    = custompkg.StatsCounter
 )
 
 type (
+	Product1                                      = pkg1.Product
+	ProductService1                               = pkg1.ProductService
+	User1                                         = pkg1.User
+	UserService1                                  = pkg1.UserService
+	User2                                         = pkg2.User
+	UserService2                                  = pkg2.UserService
+	Product2                                      = pkg3.Product
+	ProductService2                               = pkg3.ProductService
+	Product3                                      = sourcepkg1.Product
+	ProductService3                               = sourcepkg1.ProductService
+	User3                                         = sourcepkg1.User
+	UserService3                                  = sourcepkg1.UserService
+	User4                                         = sourcepkg21.User
+	UserService4                                  = sourcepkg21.UserService
 	CommonService1                                = sourcepkg3.CommonService
-	CommonStruct1                                 = sourcepkg.CommonStruct
-	CommonStruct2                                 = sourcepkg2.CommonStruct
-	CommonStruct3                                 = custompkg.CommonStruct
-	ComplexGenericInterface1[T any, K comparable] = custompkg.ComplexGenericInterface[T, K]
-	ComplexInterface1                             = sourcepkg2.ComplexInterface
+	Product4                                      = sourcepkg3.Product
+	User5                                         = sourcepkg3.User
 	Data1                                         = sourcePkg4.Data
-	EmbeddedInterface1                            = custompkg.EmbeddedInterface
+	GenericHandler1[T any]                        = sourcePkg4.GenericHandler[T]
+	Handler1                                      = sourcePkg4.Handler
+	Model1                                        = sourcePkg4.Model
+	Service1                                      = sourcePkg4.Service
+	CommonStruct1                                 = sourcepkg.CommonStruct
 	ExportedInterface1                            = sourcepkg.ExportedInterface
 	ExportedType1                                 = sourcepkg.ExportedType
-	GenericHandler1[T any]                        = sourcePkg4.GenericHandler[T]
-	GenericWorker1[T any]                         = custompkg.GenericWorker[T]
-	Handler1                                      = sourcePkg4.Handler
-	HandlerFunc1[T any]                           = custompkg.HandlerFunc[T]
+	MyStruct1                                     = sourcepkg.MyStruct
+	CommonStruct2                                 = sourcepkg2.CommonStruct
+	ComplexInterface1                             = sourcepkg2.ComplexInterface
 	InputData1                                    = sourcepkg2.InputData
+	OutputData1                                   = sourcepkg2.OutputData
+	Worker1                                       = sourcepkg2.Worker
+	CommonStruct3                                 = custompkg.CommonStruct
+	ComplexGenericInterface1[T any, K comparable] = custompkg.ComplexGenericInterface[T, K]
+	EmbeddedInterface1                            = custompkg.EmbeddedInterface
+	GenericWorker1[T any]                         = custompkg.GenericWorker[T]
+	HandlerFunc1[T any]                           = custompkg.HandlerFunc[T]
 	InputData2[T any]                             = custompkg.InputData[T]
 	IntAlias1                                     = custompkg.IntAlias
-	Model1                                        = sourcePkg4.Model
-	MyStruct1                                     = sourcepkg.MyStruct
-	OutputData1                                   = sourcepkg2.OutputData
 	OutputData2                                   = custompkg.OutputData
 	Priority1                                     = custompkg.Priority
 	ProcessConfig1                                = custompkg.ProcessConfig
 	ProcessFunc1                                  = custompkg.ProcessFunc
 	ProcessOption1                                = custompkg.ProcessOption
-	Product1                                      = pkg1.Product
-	Product2                                      = pkg3.Product
-	Product3                                      = sourcepkg1.Product
-	Product4                                      = sourcepkg3.Product
-	ProductService1                               = pkg1.ProductService
-	ProductService2                               = pkg3.ProductService
-	ProductService3                               = sourcepkg1.ProductService
-	Service1                                      = sourcePkg4.Service
 	Status1                                       = custompkg.Status
 	StatusAlias1                                  = custompkg.StatusAlias
 	TimeAlias1                                    = custompkg.TimeAlias
-	User1                                         = pkg1.User
-	User2                                         = pkg2.User
-	User3                                         = sourcepkg1.User
-	User4                                         = sourcepkg21.User
-	User5                                         = sourcepkg3.User
-	UserService1                                  = pkg1.UserService
-	UserService2                                  = pkg2.UserService
-	UserService3                                  = sourcepkg1.UserService
-	UserService4                                  = sourcepkg21.UserService
-	Worker1                                       = sourcepkg2.Worker
 	Worker2                                       = custompkg.Worker
 	WorkerConfig1                                 = custompkg.WorkerConfig
 	WorkerOption1                                 = custompkg.WorkerOption
@@ -105,16 +105,20 @@ func CommonFunction() string {
 	return sourcepkg.CommonFunction()
 }
 
+func ExportedFunction() {
+	sourcepkg.ExportedFunction()
+}
+
 func CommonFunction1() string {
 	return sourcepkg2.CommonFunction()
 }
 
-func CommonFunction2() string {
-	return custompkg.CommonFunction()
+func NewWorker(name string) *sourcepkg2.Worker {
+	return sourcepkg2.NewWorker(name)
 }
 
-func ExportedFunction() {
-	sourcepkg.ExportedFunction()
+func CommonFunction2() string {
+	return custompkg.CommonFunction()
 }
 
 func Filter[T any](ts []T, fn func(T) bool) []T {
@@ -127,10 +131,6 @@ func Map[T, U any](ts []T, fn func(T) U) []U {
 
 func NewGenericWorker[T any](name string, data T, processor func(T) error) *custompkg.GenericWorker[T] {
 	return custompkg.NewGenericWorker[T](name, data, processor)
-}
-
-func NewWorker(name string) *sourcepkg2.Worker {
-	return sourcepkg2.NewWorker(name)
 }
 
 func NewWorker1(name string, options ...custompkg.WorkerOption) *custompkg.Worker {
