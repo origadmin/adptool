@@ -25,11 +25,13 @@ type packageDecls struct {
 
 // Collector is responsible for collecting declarations from source packages.
 type Collector struct {
+	// allPackageDecls is keyed by import path
 	allPackageDecls map[string]*packageDecls
 	definedTypes    map[string]bool
 	importSpecs     map[string]*ast.ImportSpec
 	replacer        interfaces.Replacer
-	aliasToPath     map[string]string // Map from import alias to import path
+	// pathToAlias maps import path to its generated alias
+	pathToAlias map[string]string
 }
 
 // NewCollector creates a new Collector.
@@ -39,7 +41,7 @@ func NewCollector(replacer interfaces.Replacer) *Collector {
 		definedTypes:    make(map[string]bool),
 		importSpecs:     make(map[string]*ast.ImportSpec),
 		replacer:        replacer,
-		aliasToPath:     make(map[string]string),
+		pathToAlias:     make(map[string]string),
 	}
 }
 
@@ -68,13 +70,13 @@ func (c *Collector) collectImports(sourcePkg *packages.Package) {
 	}
 }
 
-func (c *Collector) collectTypeDeclarations(sourcePkg *packages.Package, importAlias string) {
+func (c *Collector) collectTypeDeclarations(sourcePkg *packages.Package, importPath, importAlias string) {
 	for _, file := range sourcePkg.Syntax {
 		for _, decl := range file.Decls {
 			if genDecl, ok := decl.(*ast.GenDecl); ok && genDecl.Tok == token.TYPE {
 				for _, spec := range genDecl.Specs {
 					if typeSpec, ok := spec.(*ast.TypeSpec); ok && typeSpec.Name.IsExported() {
-						c.collectTypeDeclaration(typeSpec, importAlias)
+						c.collectTypeDeclaration(typeSpec, importPath, importAlias)
 					}
 				}
 			}
@@ -82,7 +84,7 @@ func (c *Collector) collectTypeDeclarations(sourcePkg *packages.Package, importA
 	}
 }
 
-func (c *Collector) collectTypeDeclaration(typeSpec *ast.TypeSpec, importAlias string) {
+func (c *Collector) collectTypeDeclaration(typeSpec *ast.TypeSpec, importPath, importAlias string) {
 	if !typeSpec.Name.IsExported() {
 		return
 	}
@@ -127,31 +129,31 @@ func (c *Collector) collectTypeDeclaration(typeSpec *ast.TypeSpec, importAlias s
 		}
 	}
 
-	if c.allPackageDecls[importAlias] == nil {
-		c.allPackageDecls[importAlias] = &packageDecls{}
+	if c.allPackageDecls[importPath] == nil {
+		c.allPackageDecls[importPath] = &packageDecls{}
 	}
-	c.allPackageDecls[importAlias].typeSpecs = append(c.allPackageDecls[importAlias].typeSpecs, newSpec)
+	c.allPackageDecls[importPath].typeSpecs = append(c.allPackageDecls[importPath].typeSpecs, newSpec)
 }
 
-func (c *Collector) collectOtherDeclarations(sourcePkg *packages.Package, importAlias string) {
+func (c *Collector) collectOtherDeclarations(sourcePkg *packages.Package, importPath, importAlias string) {
 	for _, file := range sourcePkg.Syntax {
 		for _, decl := range file.Decls {
 			switch d := decl.(type) {
 			case *ast.FuncDecl:
-				c.collectFunctionDeclaration(d, importAlias)
+				c.collectFunctionDeclaration(d, importPath, importAlias)
 			case *ast.GenDecl:
 				switch d.Tok {
 				case token.CONST:
-					c.collectValueDeclaration(d, importAlias, token.CONST)
+					c.collectValueDeclaration(d, importPath, importAlias, token.CONST)
 				case token.VAR:
-					c.collectValueDeclaration(d, importAlias, token.VAR)
+					c.collectValueDeclaration(d, importPath, importAlias, token.VAR)
 				}
 			}
 		}
 	}
 }
 
-func (c *Collector) collectFunctionDeclaration(funcDecl *ast.FuncDecl, importAlias string) {
+func (c *Collector) collectFunctionDeclaration(funcDecl *ast.FuncDecl, importPath, importAlias string) {
 	if funcDecl.Recv == nil && funcDecl.Name.IsExported() {
 		if hasUnexportedTypes(funcDecl.Type) {
 			slog.Debug("Skipping function because it uses unexported types", "func", "Collector.collectFunctionDeclaration", "function", funcDecl.Name.Name)
@@ -223,14 +225,14 @@ func (c *Collector) collectFunctionDeclaration(funcDecl *ast.FuncDecl, importAli
 			Body: &ast.BlockStmt{List: results},
 		}
 
-		if c.allPackageDecls[importAlias] == nil {
-			c.allPackageDecls[importAlias] = &packageDecls{}
+		if c.allPackageDecls[importPath] == nil {
+			c.allPackageDecls[importPath] = &packageDecls{}
 		}
-		c.allPackageDecls[importAlias].funcDecls = append(c.allPackageDecls[importAlias].funcDecls, newFuncDecl)
+		c.allPackageDecls[importPath].funcDecls = append(c.allPackageDecls[importPath].funcDecls, newFuncDecl)
 	}
 }
 
-func (c *Collector) collectValueDeclaration(genDecl *ast.GenDecl, importAlias string, tok token.Token) {
+func (c *Collector) collectValueDeclaration(genDecl *ast.GenDecl, importPath, importAlias string, tok token.Token) {
 	for _, spec := range genDecl.Specs {
 		if valueSpec, ok := spec.(*ast.ValueSpec); ok {
 			for _, name := range valueSpec.Names {
@@ -248,14 +250,14 @@ func (c *Collector) collectValueDeclaration(genDecl *ast.GenDecl, importAlias st
 					}
 					newDecl := &ast.GenDecl{Tok: tok, Specs: []ast.Spec{newSpec}}
 
-					if c.allPackageDecls[importAlias] == nil {
-						c.allPackageDecls[importAlias] = &packageDecls{}
+					if c.allPackageDecls[importPath] == nil {
+						c.allPackageDecls[importPath] = &packageDecls{}
 					}
 
 					if tok == token.VAR {
-						c.allPackageDecls[importAlias].varDecls = append(c.allPackageDecls[importAlias].varDecls, newDecl)
+						c.allPackageDecls[importPath].varDecls = append(c.allPackageDecls[importPath].varDecls, newDecl)
 					} else if tok == token.CONST {
-						c.allPackageDecls[importAlias].constDecls = append(c.allPackageDecls[importAlias].constDecls, newDecl)
+						c.allPackageDecls[importPath].constDecls = append(c.allPackageDecls[importPath].constDecls, newDecl)
 					}
 				}
 			}
@@ -266,24 +268,13 @@ func (c *Collector) collectValueDeclaration(genDecl *ast.GenDecl, importAlias st
 func (c *Collector) applyReplacements() {
 	newDefinedTypes := make(map[string]bool)
 
-	// 创建一个映射来跟踪所有声明的名称，用于检测冲突
-	allNames := make(map[string]int) // name -> count
-
-	// 辅助函数来记录名称
-	recordName := func(name string) {
-		allNames[name]++
-	}
-
-	for alias, pkgDecls := range c.allPackageDecls {
-		importPath := c.aliasToPath[alias]
+	for importPath, pkgDecls := range c.allPackageDecls {
+		alias := c.pathToAlias[importPath]
 		pkgCtx := interfaces.NewContext().WithValue(interfaces.PackagePathContextKey, importPath)
 
 		// First, process all type declarations and populate the new defined types map.
 		for i, spec := range pkgDecls.typeSpecs {
 			if typeSpec, ok := spec.(*ast.TypeSpec); ok {
-				originalName := typeSpec.Name.Name
-				recordName(originalName)
-
 				typeCtx := pkgCtx.Push(interfaces.RuleTypeType)
 				replaced := c.replacer.Apply(typeCtx, typeSpec)
 				if replacedSpec, ok := replaced.(*ast.TypeSpec); ok {
@@ -298,16 +289,6 @@ func (c *Collector) applyReplacements() {
 
 		// Now, process other declarations using the correct context and definedTypes map.
 		for i, decl := range pkgDecls.constDecls {
-			if genDecl, ok := decl.(*ast.GenDecl); ok {
-				for _, spec := range genDecl.Specs {
-					if valueSpec, ok := spec.(*ast.ValueSpec); ok {
-						for _, name := range valueSpec.Names {
-							recordName(name.Name)
-						}
-					}
-				}
-			}
-
 			replaced := c.replacer.Apply(pkgCtx, decl)
 			if replacedDecl, ok := replaced.(*ast.GenDecl); ok {
 				pkgDecls.constDecls[i] = replacedDecl
@@ -315,16 +296,6 @@ func (c *Collector) applyReplacements() {
 		}
 
 		for i, decl := range pkgDecls.varDecls {
-			if genDecl, ok := decl.(*ast.GenDecl); ok {
-				for _, spec := range genDecl.Specs {
-					if valueSpec, ok := spec.(*ast.ValueSpec); ok {
-						for _, name := range valueSpec.Names {
-							recordName(name.Name)
-						}
-					}
-				}
-			}
-
 			replaced := c.replacer.Apply(pkgCtx, decl)
 			if replacedDecl, ok := replaced.(*ast.GenDecl); ok {
 				pkgDecls.varDecls[i] = replacedDecl
@@ -332,144 +303,10 @@ func (c *Collector) applyReplacements() {
 		}
 
 		for i, decl := range pkgDecls.funcDecls {
-			if funcDecl, ok := decl.(*ast.FuncDecl); ok {
-				recordName(funcDecl.Name.Name)
-			}
-
 			replaced := c.replacer.Apply(pkgCtx, decl)
 			if replacedDecl, ok := replaced.(*ast.FuncDecl); ok {
 				replacedDecl.Type = qualifyType(replacedDecl.Type, alias, c.definedTypes, nil).(*ast.FuncType)
 				pkgDecls.funcDecls[i] = replacedDecl
-			}
-		}
-	}
-
-	// 处理由replacer引起的名称冲突
-	c.resolveReplacerConflicts(allNames)
-}
-
-// resolveReplacerConflicts 处理由replacer引起的名称冲突
-func (c *Collector) resolveReplacerConflicts(allNames map[string]int) {
-	// 创建一个映射来跟踪每个名称的计数
-	nameCounters := make(map[string]int)
-
-	// 辅助函数来生成唯一名称
-	generateUniqueName := func(name string) string {
-		count := nameCounters[name]
-		nameCounters[name]++
-		if count == 0 {
-			return name
-		}
-		return name + strconv.Itoa(count)
-	}
-
-	// 更新名称的辅助函数
-	updateValueSpecName := func(spec *ast.ValueSpec, newName string) *ast.ValueSpec {
-		newSpec := &ast.ValueSpec{
-			Doc:     spec.Doc,
-			Names:   make([]*ast.Ident, len(spec.Names)),
-			Type:    spec.Type,
-			Values:  spec.Values,
-			Comment: spec.Comment,
-		}
-		for i, name := range spec.Names {
-			newSpec.Names[i] = &ast.Ident{
-				NamePos: name.NamePos,
-				Name:    newName,
-				Obj:     name.Obj,
-			}
-		}
-		return newSpec
-	}
-
-	updateTypeSpecName := func(spec *ast.TypeSpec, newName string) *ast.TypeSpec {
-		newSpec := &ast.TypeSpec{
-			Doc:        spec.Doc,
-			Name:       &ast.Ident{Name: newName},
-			Assign:     spec.Assign,
-			TypeParams: spec.TypeParams, // Preserve type parameters for generic types
-			Type:       spec.Type,
-			Comment:    spec.Comment,
-		}
-		return newSpec
-	}
-
-	updateFuncDeclName := func(decl *ast.FuncDecl, newName string) *ast.FuncDecl {
-		newDecl := &ast.FuncDecl{
-			Doc:  decl.Doc,
-			Recv: decl.Recv,
-			Name: &ast.Ident{Name: newName},
-			Type: decl.Type,
-			Body: decl.Body,
-		}
-		return newDecl
-	}
-
-	// 遍历所有包声明，处理冲突
-	for _, pkgDecls := range c.allPackageDecls {
-		// 处理常量声明
-		for i, decl := range pkgDecls.constDecls {
-			if genDecl, ok := decl.(*ast.GenDecl); ok {
-				var newSpecs []ast.Spec
-				for _, spec := range genDecl.Specs {
-					if valueSpec, ok := spec.(*ast.ValueSpec); ok {
-						for _, ident := range valueSpec.Names {
-							uniqueName := generateUniqueName(ident.Name)
-							if uniqueName != ident.Name {
-								newSpec := updateValueSpecName(valueSpec, uniqueName)
-								newSpecs = append(newSpecs, newSpec)
-							} else {
-								newSpecs = append(newSpecs, spec)
-							}
-						}
-					}
-				}
-				genDecl.Specs = newSpecs
-				pkgDecls.constDecls[i] = genDecl
-			}
-		}
-
-		// 处理变量声明
-		for i, decl := range pkgDecls.varDecls {
-			if genDecl, ok := decl.(*ast.GenDecl); ok {
-				var newSpecs []ast.Spec
-				for _, spec := range genDecl.Specs {
-					if valueSpec, ok := spec.(*ast.ValueSpec); ok {
-						for _, ident := range valueSpec.Names {
-							uniqueName := generateUniqueName(ident.Name)
-							if uniqueName != ident.Name {
-								newSpec := updateValueSpecName(valueSpec, uniqueName)
-								newSpecs = append(newSpecs, newSpec)
-							} else {
-								newSpecs = append(newSpecs, spec)
-							}
-						}
-					}
-				}
-				genDecl.Specs = newSpecs
-				pkgDecls.varDecls[i] = genDecl
-			}
-		}
-
-		// 处理类型声明
-		for i, spec := range pkgDecls.typeSpecs {
-			if typeSpec, ok := spec.(*ast.TypeSpec); ok {
-				uniqueName := generateUniqueName(typeSpec.Name.Name)
-				if uniqueName != typeSpec.Name.Name {
-					newSpec := updateTypeSpecName(typeSpec, uniqueName)
-					pkgDecls.typeSpecs[i] = newSpec
-				}
-			}
-		}
-
-		// 处理函数声明
-		for i, decl := range pkgDecls.funcDecls {
-			if funcDecl, ok := decl.(*ast.FuncDecl); ok {
-				uniqueName := generateUniqueName(funcDecl.Name.Name)
-				if uniqueName != funcDecl.Name.Name {
-					newDecl := updateFuncDeclName(funcDecl, uniqueName)
-					pkgDecls.funcDecls[i] = newDecl
-				}
 			}
 		}
 	}
@@ -595,7 +432,7 @@ func (c *Collector) Collect(packages []*PackageInfo) error {
 		// Generate or use the specified alias
 		importAlias := aliasMgr.generateAlias(pkg.ImportPath, pkg.ImportAlias)
 
-		c.aliasToPath[importAlias] = pkg.ImportPath
+		c.pathToAlias[pkg.ImportPath] = importAlias
 		c.importSpecs[pkg.ImportPath] = &ast.ImportSpec{
 			Path: &ast.BasicLit{Kind: token.STRING, Value: fmt.Sprintf("%q", pkg.ImportPath)},
 			Name: &ast.Ident{Name: importAlias},
@@ -614,8 +451,8 @@ func (c *Collector) Collect(packages []*PackageInfo) error {
 		processedPaths[pkg.ImportPath] = true
 
 		c.collectImports(sourcePkg)
-		c.collectTypeDeclarations(sourcePkg, pkg.ImportAlias)
-		c.collectOtherDeclarations(sourcePkg, pkg.ImportAlias)
+		c.collectTypeDeclarations(sourcePkg, pkg.ImportPath, importAlias)
+		c.collectOtherDeclarations(sourcePkg, pkg.ImportPath, importAlias)
 	}
 
 	if c.replacer != nil {
