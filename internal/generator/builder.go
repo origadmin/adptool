@@ -93,8 +93,21 @@ func (b *Builder) RenderHeader(sourceFile string) error {
 	return nil
 }
 
+// sortedSpec is a helper struct to sort specs by import path and then by name.
+type sortedSpec struct {
+	spec       ast.Spec
+	importPath string
+	name       string
+}
+
+// sortedDecl is a helper struct to sort decls by import path and then by name.
+type sortedDecl struct {
+	decl       ast.Decl
+	importPath string
+	name       string
+}
+
 // Build builds the output file structure from the collected data.
-// It now accepts pathToAlias to correctly resolve package aliases.
 func (b *Builder) Build(importSpecs map[string]*ast.ImportSpec, allPackageDecls map[string]*packageDecls, definedTypes map[string]bool, pathToAlias map[string]string) {
 	var orderedDecls []ast.Decl
 
@@ -113,35 +126,121 @@ func (b *Builder) Build(importSpecs map[string]*ast.ImportSpec, allPackageDecls 
 		orderedDecls = append(orderedDecls, importDecl)
 	}
 
-	allConstSpecs, allVarSpecs, allTypeSpecs, allFuncDecls := b.collectAllDeclarations(allPackageDecls, definedTypes, pathToAlias)
+	// Generate the map of original identifiers to their new, unique names.
+	nameMap := b.collectAndResolveNames(allPackageDecls, definedTypes)
 
+	// Create intermediate lists to hold declarations with their metadata for sorting.
+	var constsToSort []sortedSpec
+	var varsToSort []sortedSpec
+	var typesToSort []sortedSpec
+	var funcsToSort []sortedDecl
+
+	// Iterate through all packages to populate the intermediate lists.
+	for importPath, pkgDecls := range allPackageDecls {
+		// Populate consts
+		for _, decl := range pkgDecls.constDecls {
+			if genDecl, ok := decl.(*ast.GenDecl); ok {
+				for _, spec := range genDecl.Specs {
+					if valSpec, ok := spec.(*ast.ValueSpec); ok {
+						for _, name := range valSpec.Names {
+							newName := nameMap[name]
+							newSpec := *valSpec // copy
+							newSpec.Names = []*ast.Ident{ast.NewIdent(newName)}
+							constsToSort = append(constsToSort, sortedSpec{spec: &newSpec, importPath: importPath, name: newName})
+						}
+					}
+				}
+			}
+		}
+		// Populate vars
+		for _, decl := range pkgDecls.varDecls {
+			if genDecl, ok := decl.(*ast.GenDecl); ok {
+				for _, spec := range genDecl.Specs {
+					if valSpec, ok := spec.(*ast.ValueSpec); ok {
+						for _, name := range valSpec.Names {
+							newName := nameMap[name]
+							newSpec := *valSpec // copy
+							newSpec.Names = []*ast.Ident{ast.NewIdent(newName)}
+							varsToSort = append(varsToSort, sortedSpec{spec: &newSpec, importPath: importPath, name: newName})
+						}
+					}
+				}
+			}
+		}
+		// Populate types
+		for _, spec := range pkgDecls.typeSpecs {
+			if typeSpec, ok := spec.(*ast.TypeSpec); ok {
+				newName := nameMap[typeSpec.Name]
+				newSpec := *typeSpec // copy
+				newSpec.Name = ast.NewIdent(newName)
+				typesToSort = append(typesToSort, sortedSpec{spec: &newSpec, importPath: importPath, name: newName})
+			}
+		}
+		// Populate funcs
+		for _, decl := range pkgDecls.funcDecls {
+			if funcDecl, ok := decl.(*ast.FuncDecl); ok {
+				newName := nameMap[funcDecl.Name]
+				newDecl := *funcDecl // copy
+				newDecl.Name = ast.NewIdent(newName)
+				funcsToSort = append(funcsToSort, sortedDecl{decl: &newDecl, importPath: importPath, name: newName})
+			}
+		}
+	}
+
+	// Sort each list by import path, then by name.
+	sort.Slice(constsToSort, func(i, j int) bool {
+		if constsToSort[i].importPath != constsToSort[j].importPath {
+			return constsToSort[i].importPath < constsToSort[j].importPath
+		}
+		return constsToSort[i].name < constsToSort[j].name
+	})
+	sort.Slice(varsToSort, func(i, j int) bool {
+		if varsToSort[i].importPath != varsToSort[j].importPath {
+			return varsToSort[i].importPath < varsToSort[j].importPath
+		}
+		return varsToSort[i].name < varsToSort[j].name
+	})
+	sort.Slice(typesToSort, func(i, j int) bool {
+		if typesToSort[i].importPath != typesToSort[j].importPath {
+			return typesToSort[i].importPath < typesToSort[j].importPath
+		}
+		return typesToSort[i].name < typesToSort[j].name
+	})
+	sort.Slice(funcsToSort, func(i, j int) bool {
+		if funcsToSort[i].importPath != funcsToSort[j].importPath {
+			return funcsToSort[i].importPath < funcsToSort[j].importPath
+		}
+		return funcsToSort[i].name < funcsToSort[j].name
+	})
+
+	// Extract the sorted specs and decls into the final lists.
+	var allConstSpecs []ast.Spec
+	for _, s := range constsToSort {
+		allConstSpecs = append(allConstSpecs, s.spec)
+	}
+	var allVarSpecs []ast.Spec
+	for _, s := range varsToSort {
+		allVarSpecs = append(allVarSpecs, s.spec)
+	}
+	var allTypeSpecs []ast.Spec
+	for _, s := range typesToSort {
+		allTypeSpecs = append(allTypeSpecs, s.spec)
+	}
+	var allFuncDecls []ast.Decl
+	for _, s := range funcsToSort {
+		allFuncDecls = append(allFuncDecls, s.decl)
+	}
+
+	// Build the final orderedDecls list.
 	if len(allConstSpecs) > 0 {
-		constDecl := &ast.GenDecl{
-			Tok:    token.CONST,
-			Lparen: token.Pos(1), // Use Lparen to indicate a grouped declaration
-			Specs:  allConstSpecs,
-		}
-		orderedDecls = append(orderedDecls, constDecl)
+		orderedDecls = append(orderedDecls, &ast.GenDecl{Tok: token.CONST, Specs: allConstSpecs})
 	}
-
 	if len(allVarSpecs) > 0 {
-		varDecl := &ast.GenDecl{
-			Tok:    token.VAR,
-			Lparen: token.Pos(1), // Use Lparen to indicate a grouped declaration
-			Specs:  allVarSpecs,
-		}
-		orderedDecls = append(orderedDecls, varDecl)
+		orderedDecls = append(orderedDecls, &ast.GenDecl{Tok: token.VAR, Specs: allVarSpecs})
 	}
-
 	if len(allTypeSpecs) > 0 {
-		typeDecl := &ast.GenDecl{
-			Tok:    token.TYPE,
-			Lparen: token.Pos(1), // Use Lparen to indicate a grouped declaration
-			Specs:  allTypeSpecs,
-		}
-		orderedDecls = append(orderedDecls, typeDecl)
+		orderedDecls = append(orderedDecls, &ast.GenDecl{Tok: token.TYPE, Specs: allTypeSpecs})
 	}
-
 	orderedDecls = append(orderedDecls, allFuncDecls...)
 
 	b.aliasFile.Decls = orderedDecls
@@ -280,21 +379,13 @@ type pendingSymbol struct {
 	ident *ast.Ident
 }
 
-// collectAllDeclarations generates declarations in a fully deterministic way.
-func (b *Builder) collectAllDeclarations(allPackageDecls map[string]*packageDecls, definedTypes map[string]bool, pathToAlias map[string]string) ([]ast.Spec, []ast.Spec, []ast.Spec, []ast.Decl) {
+// collectAndResolveNames is the core of the deterministic name generation.
+// It collects all symbols, sorts them, and resolves any naming conflicts.
+func (b *Builder) collectAndResolveNames(allPackageDecls map[string]*packageDecls, definedTypes map[string]bool) map[*ast.Ident]string {
 	var symbols []pendingSymbol
 
-	// Sort package import paths to ensure a deterministic starting point
-	var sortedImportPaths []string
-	for importPath := range allPackageDecls {
-		sortedImportPaths = append(sortedImportPaths, importPath)
-	}
-	sort.Strings(sortedImportPaths)
-
-	// Pass 1, Step A: Collect all symbols
-	for _, importPath := range sortedImportPaths {
-		pkgDecls := allPackageDecls[importPath]
-
+	// Pass 1, Step A: Collect all symbols from all packages.
+	for importPath, pkgDecls := range allPackageDecls {
 		for _, decl := range pkgDecls.constDecls {
 			if genDecl, ok := decl.(*ast.GenDecl); ok {
 				for _, spec := range genDecl.Specs {
@@ -396,114 +487,5 @@ func (b *Builder) collectAllDeclarations(allPackageDecls map[string]*packageDecl
 		}
 	}
 
-	// Pass 2: Build new declarations using the deterministic name map
-	var allConstSpecs, allVarSpecs, allTypeSpecs []ast.Spec
-	var allFuncDecls []ast.Decl
-	processedSpecs := make(map[ast.Spec]bool)
-
-	// This approach is simpler and correct: iterate through the sorted symbols and create the final lists.
-	for _, s := range symbols {
-		newName := nameMap[s.ident]
-		found := false
-
-		// This is inefficient, but guarantees order. A better way would be to map ident back to its original decl.
-		// For now, let's find which declaration this symbol belongs to.
-		pkgDecls := allPackageDecls[s.originalImportPath]
-
-		// Find in consts
-		for _, decl := range pkgDecls.constDecls {
-			if genDecl, ok := decl.(*ast.GenDecl); ok {
-				for _, spec := range genDecl.Specs {
-					if valSpec, ok := spec.(*ast.ValueSpec); ok {
-						for _, name := range valSpec.Names {
-							if name == s.ident {
-								if !processedSpecs[spec] {
-									newSpec := *valSpec
-									newSpec.Names = []*ast.Ident{ast.NewIdent(newName)}
-									allConstSpecs = append(allConstSpecs, &newSpec)
-									processedSpecs[spec] = true
-								}
-								found = true
-								break
-							}
-						}
-					}
-					if found {
-						break
-					}
-				}
-			}
-			if found {
-				break
-			}
-		}
-		if found {
-			continue
-		}
-
-		// Find in vars
-		for _, decl := range pkgDecls.varDecls {
-			if genDecl, ok := decl.(*ast.GenDecl); ok {
-				for _, spec := range genDecl.Specs {
-					if valSpec, ok := spec.(*ast.ValueSpec); ok {
-						for _, name := range valSpec.Names {
-							if name == s.ident {
-								if !processedSpecs[spec] {
-									newSpec := *valSpec
-									newSpec.Names = []*ast.Ident{ast.NewIdent(newName)}
-									allVarSpecs = append(allVarSpecs, &newSpec)
-									processedSpecs[spec] = true
-								}
-								found = true
-								break
-							}
-						}
-					}
-					if found {
-						break
-					}
-				}
-			}
-			if found {
-				break
-			}
-		}
-		if found {
-			continue
-		}
-
-		// Find in types
-		for _, spec := range pkgDecls.typeSpecs {
-			if typeSpec, ok := spec.(*ast.TypeSpec); ok {
-				if typeSpec.Name == s.ident {
-					if !processedSpecs[spec] {
-						newSpec := *typeSpec
-						newSpec.Name = ast.NewIdent(newName)
-						allTypeSpecs = append(allTypeSpecs, &newSpec)
-						processedSpecs[spec] = true
-					}
-					found = true
-					break
-				}
-			}
-		}
-		if found {
-			continue
-		}
-
-		// Find in funcs
-		for _, decl := range pkgDecls.funcDecls {
-			if funcDecl, ok := decl.(*ast.FuncDecl); ok {
-				if funcDecl.Name == s.ident {
-					newDecl := *funcDecl
-					newDecl.Name = ast.NewIdent(newName)
-					allFuncDecls = append(allFuncDecls, &newDecl)
-					found = true
-					break
-				}
-			}
-		}
-	}
-
-	return allConstSpecs, allVarSpecs, allTypeSpecs, allFuncDecls
+	return nameMap
 }
