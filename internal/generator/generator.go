@@ -6,17 +6,21 @@ import (
 
 // Generator holds the state and configuration for code generation.
 type Generator struct {
-	collector    *Collector
-	builder      *Builder
-	noEditHeader bool // Controls whether to add "do not edit" header comment
+	collector *Collector
+	builder   *Builder
 }
 
 // NewGenerator creates a new Generator instance.
 func NewGenerator(packageName string, outputFilePath string, replacer interfaces.Replacer) *Generator {
 	return &Generator{
 		collector: NewCollector(replacer),
-		builder:   NewBuilder(packageName, outputFilePath, true), // Add "do not edit" header comment by default
+		builder:   NewBuilder(packageName, outputFilePath),
 	}
+}
+
+// RenderHeader renders the header for the generated file.
+func (g *Generator) RenderHeader(sourceFile string) error {
+	return g.builder.RenderHeader(sourceFile)
 }
 
 // Generate generates the output code.
@@ -33,12 +37,5 @@ func (g *Generator) Generate(packages []*PackageInfo) error {
 // WithFormatCode sets whether to automatically format after generating code
 func (g *Generator) WithFormatCode(format bool) *Generator {
 	g.builder.WithFormatCode(format)
-	return g
-}
-
-// WithNoEditHeader sets whether to add "do not edit" header comment
-func (g *Generator) WithNoEditHeader(noEditHeader bool) *Generator {
-	g.noEditHeader = noEditHeader
-	g.builder.noEditHeader = noEditHeader
 	return g
 }
