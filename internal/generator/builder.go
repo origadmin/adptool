@@ -109,7 +109,7 @@ type sortedDecl struct {
 }
 
 // Build builds the output file structure from the collected data.
-func (b *Builder) Build(importSpecs map[string]*ast.ImportSpec, allPackageDecls map[string]*packageDecls, definedTypes map[string]bool, pathToAlias map[string]string) {
+func (b *Builder) Build(c *Collector) {
 	var orderedDecls []ast.Decl
 
 	// Set package comment on the AST file
@@ -122,13 +122,13 @@ func (b *Builder) Build(importSpecs map[string]*ast.ImportSpec, allPackageDecls 
 		}
 	}
 
-	importDecl := b.buildImportDeclaration(importSpecs)
+	importDecl := b.buildImportDeclaration(c.importSpecs)
 	if len(importDecl.(*ast.GenDecl).Specs) > 0 {
 		orderedDecls = append(orderedDecls, importDecl)
 	}
 
 	// Generate the map of original identifiers to their new, unique names.
-	nameMap := b.collectAndResolveNames(allPackageDecls, definedTypes)
+	nameMap := b.collectAndResolveNames(c.allPackageDecls)
 
 	// Create intermediate lists to hold declarations with their metadata for sorting.
 	var constsToSort []sortedSpec
@@ -137,7 +137,7 @@ func (b *Builder) Build(importSpecs map[string]*ast.ImportSpec, allPackageDecls 
 	var funcsToSort []sortedDecl
 
 	// Iterate through all packages to populate the intermediate lists.
-	for importPath, pkgDecls := range allPackageDecls {
+	for importPath, pkgDecls := range c.allPackageDecls {
 		// Populate consts
 		for _, decl := range pkgDecls.constDecls {
 			if genDecl, ok := decl.(*ast.GenDecl); ok {
@@ -382,7 +382,7 @@ type pendingSymbol struct {
 
 // collectAndResolveNames is the core of the deterministic name generation.
 // It collects all symbols, sorts them, and resolves any naming conflicts.
-func (b *Builder) collectAndResolveNames(allPackageDecls map[string]*packageDecls, definedTypes map[string]bool) map[*ast.Ident]string {
+func (b *Builder) collectAndResolveNames(allPackageDecls map[string]*packageDecls) map[*ast.Ident]string {
 	var symbols []pendingSymbol
 
 	// Pass 1, Step A: Collect all symbols from all packages.
@@ -432,8 +432,6 @@ func (b *Builder) collectAndResolveNames(allPackageDecls map[string]*packageDecl
 	// Pass 1, Step C: Generate unique names using the grouping strategy.
 	nameMap := make(map[*ast.Ident]string)
 	usedNames := make(map[string]bool)
-
-	slog.Info("--- Debugging Name Generation ---")
 
 	// Group symbols by their original name.
 	groupedSymbols := make(map[string][]*pendingSymbol)
@@ -490,7 +488,6 @@ func (b *Builder) collectAndResolveNames(allPackageDecls map[string]*packageDecl
 			nameMap[symbol.ident] = finalName
 		}
 	}
-	slog.Info("--- End Debugging Name Generation ---")
 
 	return nameMap
 }

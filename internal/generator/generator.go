@@ -29,8 +29,8 @@ func (g *Generator) Generate(packages []*PackageInfo) error {
 		return err
 	}
 
-	// Pass the pathToAlias map from the collector to the builder.
-	g.builder.Build(g.collector.importSpecs, g.collector.allPackageDecls, nil, g.collector.pathToAlias)
+	// Pass the collector to the builder.
+	g.builder.Build(g.collector)
 
 	return g.builder.Write()
 }

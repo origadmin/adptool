@@ -6,6 +6,8 @@
 package aliaspkg
 
 import (
+	slog "log/slog"
+
 	pkg1 "github.com/origadmin/adptool/testdata/duplicate/pkg1"
 	pkg2 "github.com/origadmin/adptool/testdata/duplicate/pkg2"
 	pkg3 "github.com/origadmin/adptool/testdata/duplicate/pkg3"
@@ -35,6 +37,24 @@ const (
 	StatusSuccess    = custompkg.StatusSuccess
 	StatusUnknown    = custompkg.StatusUnknown
 	Version1         = custompkg.Version
+	KindAny          = slog.KindAny
+	KindBool         = slog.KindBool
+	KindDuration     = slog.KindDuration
+	KindFloat64      = slog.KindFloat64
+	KindGroup        = slog.KindGroup
+	KindInt64        = slog.KindInt64
+	KindLogValuer    = slog.KindLogValuer
+	KindString       = slog.KindString
+	KindTime         = slog.KindTime
+	KindUint64       = slog.KindUint64
+	LevelDebug       = slog.LevelDebug
+	LevelError       = slog.LevelError
+	LevelInfo        = slog.LevelInfo
+	LevelKey         = slog.LevelKey
+	LevelWarn        = slog.LevelWarn
+	MessageKey       = slog.MessageKey
+	SourceKey        = slog.SourceKey
+	TimeKey          = slog.TimeKey
 )
 
 var (
@@ -47,58 +67,73 @@ var (
 	DefaultWorker1   = custompkg.DefaultWorker
 	Processors       = custompkg.Processors
 	StatsCounter1    = custompkg.StatsCounter
+	DiscardHandler   = slog.DiscardHandler
 )
 
 type (
-	Product1                                      = pkg1.Product
-	ProductService1                               = pkg1.ProductService
-	User1                                         = pkg1.User
-	UserService1                                  = pkg1.UserService
-	User2                                         = pkg2.User
-	UserService2                                  = pkg2.UserService
-	Product2                                      = pkg3.Product
-	ProductService2                               = pkg3.ProductService
-	Product3                                      = sourcepkg1.Product
-	ProductService3                               = sourcepkg1.ProductService
-	User3                                         = sourcepkg1.User
-	UserService3                                  = sourcepkg1.UserService
-	User4                                         = sourcepkg21.User
-	UserService4                                  = sourcepkg21.UserService
-	CommonService1                                = sourcepkg3.CommonService
-	Product4                                      = sourcepkg3.Product
-	User5                                         = sourcepkg3.User
-	Data1                                         = sourcePkg4.Data
-	GenericHandler1[T any]                        = sourcePkg4.GenericHandler[T]
-	Handler1                                      = sourcePkg4.Handler
-	Model1                                        = sourcePkg4.Model
-	Service1                                      = sourcePkg4.Service
-	CommonStruct1                                 = sourcepkg.CommonStruct
-	ExportedInterface1                            = sourcepkg.ExportedInterface
-	ExportedType1                                 = sourcepkg.ExportedType
-	MyStruct1                                     = sourcepkg.MyStruct
-	CommonStruct2                                 = sourcepkg2.CommonStruct
-	ComplexInterface1                             = sourcepkg2.ComplexInterface
-	InputData1                                    = sourcepkg2.InputData
-	OutputData1                                   = sourcepkg2.OutputData
-	Worker1                                       = sourcepkg2.Worker
-	CommonStruct3                                 = custompkg.CommonStruct
-	ComplexGenericInterface1[T any, K comparable] = custompkg.ComplexGenericInterface[T, K]
-	EmbeddedInterface1                            = custompkg.EmbeddedInterface
-	GenericWorker1[T any]                         = custompkg.GenericWorker[T]
-	HandlerFunc1[T any]                           = custompkg.HandlerFunc[T]
-	InputData2[T any]                             = custompkg.InputData[T]
-	IntAlias1                                     = custompkg.IntAlias
-	OutputData2                                   = custompkg.OutputData
-	Priority1                                     = custompkg.Priority
-	ProcessConfig1                                = custompkg.ProcessConfig
-	ProcessFunc1                                  = custompkg.ProcessFunc
-	ProcessOption1                                = custompkg.ProcessOption
-	Status1                                       = custompkg.Status
-	StatusAlias1                                  = custompkg.StatusAlias
-	TimeAlias1                                    = custompkg.TimeAlias
-	Worker2                                       = custompkg.Worker
-	WorkerConfig1                                 = custompkg.WorkerConfig
-	WorkerOption1                                 = custompkg.WorkerOption
+	Product                                      = pkg1.Product
+	ProductService                               = pkg1.ProductService
+	User                                         = pkg1.User
+	UserService                                  = pkg1.UserService
+	User1                                        = pkg2.User
+	UserService1                                 = pkg2.UserService
+	Product1                                     = pkg3.Product
+	ProductService1                              = pkg3.ProductService
+	Product2                                     = sourcepkg1.Product
+	ProductService2                              = sourcepkg1.ProductService
+	User2                                        = sourcepkg1.User
+	UserService2                                 = sourcepkg1.UserService
+	User3                                        = sourcepkg21.User
+	UserService3                                 = sourcepkg21.UserService
+	CommonService                                = sourcepkg3.CommonService
+	Product3                                     = sourcepkg3.Product
+	User4                                        = sourcepkg3.User
+	Data                                         = sourcePkg4.Data
+	GenericHandler[T any]                        = sourcePkg4.GenericHandler[T]
+	Handler                                      = sourcePkg4.Handler
+	Model                                        = sourcePkg4.Model
+	Service                                      = sourcePkg4.Service
+	CommonStruct                                 = sourcepkg.CommonStruct
+	ExportedInterface                            = sourcepkg.ExportedInterface
+	ExportedType                                 = sourcepkg.ExportedType
+	MyStruct                                     = sourcepkg.MyStruct
+	CommonStruct1                                = sourcepkg2.CommonStruct
+	ComplexInterface                             = sourcepkg2.ComplexInterface
+	InputData                                    = sourcepkg2.InputData
+	OutputData                                   = sourcepkg2.OutputData
+	Worker                                       = sourcepkg2.Worker
+	CommonStruct2                                = custompkg.CommonStruct
+	ComplexGenericInterface[T any, K comparable] = custompkg.ComplexGenericInterface[T, K]
+	EmbeddedInterface                            = custompkg.EmbeddedInterface
+	GenericWorker[T any]                         = custompkg.GenericWorker[T]
+	HandlerFunc[T any]                           = custompkg.HandlerFunc[T]
+	InputData1[T any]                            = custompkg.InputData[T]
+	IntAlias                                     = custompkg.IntAlias
+	OutputData1                                  = custompkg.OutputData
+	Priority                                     = custompkg.Priority
+	ProcessConfig                                = custompkg.ProcessConfig
+	ProcessFunc                                  = custompkg.ProcessFunc
+	ProcessOption                                = custompkg.ProcessOption
+	Status                                       = custompkg.Status
+	StatusAlias                                  = custompkg.StatusAlias
+	TimeAlias                                    = custompkg.TimeAlias
+	Worker1                                      = custompkg.Worker
+	WorkerConfig                                 = custompkg.WorkerConfig
+	WorkerOption                                 = custompkg.WorkerOption
+	Attr                                         = slog.Attr
+	Handler1                                     = slog.Handler
+	HandlerOptions                               = slog.HandlerOptions
+	JSONHandler                                  = slog.JSONHandler
+	Kind                                         = slog.Kind
+	Level                                        = slog.Level
+	LevelVar                                     = slog.LevelVar
+	Leveler                                      = slog.Leveler
+	LogValuer                                    = slog.LogValuer
+	Logger                                       = slog.Logger
+	Record                                       = slog.Record
+	Source                                       = slog.Source
+	TextHandler                                  = slog.TextHandler
+	Value                                        = slog.Value
 )
 
 func CommonFunction() string {
@@ -135,4 +170,104 @@ func NewGenericWorker[T any](name string, data T, processor func(T) error) *cust
 
 func NewWorker1(name string, options ...custompkg.WorkerOption) *custompkg.Worker {
 	return custompkg.NewWorker(name, options...)
+}
+
+func Any(key string, value any) slog.Attr {
+	return slog.Any(key, value)
+}
+
+func AnyValue(v any) slog.Value {
+	return slog.AnyValue(v)
+}
+
+func Bool(key string, v bool) slog.Attr {
+	return slog.Bool(key, v)
+}
+
+func BoolValue(v bool) slog.Value {
+	return slog.BoolValue(v)
+}
+
+func Debug(msg string, args ...any) {
+	slog.Debug(msg, args...)
+}
+
+func Default() *slog.Logger {
+	return slog.Default()
+}
+
+func Error(msg string, args ...any) {
+	slog.Error(msg, args...)
+}
+
+func Float64(key string, v float64) slog.Attr {
+	return slog.Float64(key, v)
+}
+
+func Float64Value(v float64) slog.Value {
+	return slog.Float64Value(v)
+}
+
+func Group(key string, args ...any) slog.Attr {
+	return slog.Group(key, args...)
+}
+
+func GroupValue(as ...slog.Attr) slog.Value {
+	return slog.GroupValue(as...)
+}
+
+func Info(msg string, args ...any) {
+	slog.Info(msg, args...)
+}
+
+func Int(key string, value int) slog.Attr {
+	return slog.Int(key, value)
+}
+
+func Int64(key string, value int64) slog.Attr {
+	return slog.Int64(key, value)
+}
+
+func Int64Value(v int64) slog.Value {
+	return slog.Int64Value(v)
+}
+
+func IntValue(v int) slog.Value {
+	return slog.IntValue(v)
+}
+
+func New(h slog.Handler) *slog.Logger {
+	return slog.New(h)
+}
+
+func SetDefault(l *slog.Logger) {
+	slog.SetDefault(l)
+}
+
+func SetLogLoggerLevel(level slog.Level) (oldLevel slog.Level) {
+	return slog.SetLogLoggerLevel(level)
+}
+
+func String(key, value string) slog.Attr {
+	return slog.String(key, value)
+}
+
+func StringValue(value string) slog.Value {
+	return slog.StringValue(value)
+}
+
+func Uint64(key string, v uint64) slog.Attr {
+	return slog.Uint64(key, v)
+}
+
+func Uint64Value(v uint64) slog.Value {
+	return slog.Uint64Value(v)
+}
+
+func Warn(msg string, args ...any) {
+	slog.Warn(msg, args...)
+}
+
+func With(args ...any) *slog.Logger {
+	return slog.With(args...)
 }
