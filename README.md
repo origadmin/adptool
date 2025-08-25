@@ -5,26 +5,34 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/origadmin/adptool)](https://goreportcard.com/report/github.com/origadmin/adptool)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-`adptool` is a powerful and highly configurable Go code generator that automates the creation of adapter code. It helps you seamlessly integrate third-party libraries and internal modules by generating type aliases, function wrappers, and method proxies based on a clear and powerful configuration system.
+`adptool` is a powerful and highly configurable Go code generator that automates the creation of adapter code. It helps
+you seamlessly integrate third-party libraries and internal modules by generating type aliases, function wrappers, and
+method proxies based on a clear and powerful configuration system.
 
 ## Core Features
 
 - **Automated Adapter Generation**: Eliminates boilerplate code by automatically generating type-safe adapters.
 - **Flexible Configuration**: Use YAML, JSON, or TOML to define your code generation rules.
 - **Hierarchical Rule System**: Apply rules globally, per-package, or for specific types, functions, and members.
-- **Granular Renaming Control**: Precisely control naming with prefixes, suffixes, regular expressions, and explicit from/to mappings.
-- **Simple Source-Code Directives**: Use simple `//go:adapter` comments to mark packages for adaptation without cluttering your code.
-- **Dependency Decoupling**: Isolate your core logic from specific third-party implementations, making upgrades and replacements easier.
+- **Granular Renaming Control**: Precisely control naming with prefixes, suffixes, regular expressions, and explicit
+  from/to mappings.
+- **Simple Source-Code Directives**: Use simple `//go:adapter` comments to mark packages for adaptation without
+  cluttering your code.
+- **Dependency Decoupling**: Isolate your core logic from specific third-party implementations, making upgrades and
+  replacements easier.
 
 ## Installation
 
 #### From Source
+
 ```bash
 go install github.com/origadmin/adptool/cmd/adptool@latest
 ```
 
 #### Pre-compiled Binaries
-Visit the [**Releases Page**](https://github.com/origadmin/adptool/releases) to download a pre-compiled binary for your platform.
+
+Visit the [**Releases Page**](https://github.com/origadmin/adptool/releases) to download a pre-compiled binary for your
+platform.
 
 ---
 
@@ -38,6 +46,7 @@ Create a file (e.g., `adapters/directives.go`) to tell `adptool` which package y
 
 ```go
 // adapters/directives.go
+
 package myapp
 
 //go:adapter:package github.com/foo/bar
@@ -103,29 +112,32 @@ adptool [flags] [arguments...]
 
 **Arguments**
 
-- `[arguments...]` (required): One or more Go source files or directories to scan for directives. Supports `...` wildcard syntax (e.g., `./...`).
+- `[arguments...]` (required): One or more Go source files or directories to scan for directives. Supports `...`
+  wildcard syntax (e.g., `./...`).
 
 **Flags**
 
 - `-c, --config <file_path>`
-  - Specifies the path to a configuration file (YAML, JSON, or TOML). If not provided, `adptool` automatically searches for `.adptool.yaml` (or `.json`, `.toml`) in the current directory and a `./configs` subdirectory.
+    - Specifies the path to a configuration file (YAML, JSON, or TOML). If not provided, `adptool` automatically
+      searches for `.adptool.yaml` (or `.json`, `.toml`) in the current directory and a `./configs` subdirectory.
 
 - `--copyright-holder <string>`
-  - Injects a copyright notice into the generated file's header.
+    - Injects a copyright notice into the generated file's header.
 
 - `-o, --output <file_path>` (Planned)
-  - Specifies a single file path for all generated output code. Currently, output files are generated automatically alongside their source directive files.
+    - Specifies a single file path for all generated output code. Currently, output files are generated automatically
+      alongside their source directive files.
 
 - `-v, --verbose` (Planned)
-  - Enables verbose logging for debugging.
+    - Enables verbose logging for debugging.
 
 ### Directives
 
 Directives are comments in your Go source code that `adptool` uses as entry points.
 
 - `//go:adapter:package <import_path> [alias]`
-  - This is the primary directive. It tells `adptool` to adapt the package specified by `<import_path>`.
-  - You can optionally provide a custom `[alias]` for the package in the generated code.
+    - This is the primary directive. It tells `adptool` to adapt the package specified by `<import_path>`.
+    - You can optionally provide a custom `[alias]` for the package in the generated code.
 
   ```go
   // Adapt the package, letting the generator create an alias.
@@ -137,7 +149,8 @@ Directives are comments in your Go source code that `adptool` uses as entry poin
 
 ## Configuration
 
-`adptool` is controlled by a configuration file (e.g., `.adptool.yaml`). For fully-commented examples, see the [**`./examples`**](./examples) directory.
+`adptool` is controlled by a configuration file (e.g., `.adptool.yaml`). For fully-commented examples, see the [*
+*`./examples`**](./examples) directory.
 
 Here is a high-level overview of the main configuration sections:
 
@@ -146,16 +159,17 @@ Here is a high-level overview of the main configuration sections:
 - `defaults`: Sets the default behavior for how rules are applied (e.g., `prepend` or `replace` for prefixes).
 - `props`: A list of key-value pairs that can be used as variables in other parts of the configuration.
 - `packages`: A list of package-specific rules that override the global rules.
-- `types`, `functions`, `variables`, `constants`: These sections contain the core renaming rules for different kinds of Go declarations.
+- `types`, `functions`, `variables`, `constants`: These sections contain the core renaming rules for different kinds of
+  Go declarations.
 
 ### Rule Priority
 
 For any given symbol, rules are resolved and applied in the following order:
 
-1.  **Ignore**: If a symbol matches an `ignores` rule, it is skipped entirely.
-2.  **Explicit**: If an `explicit` rule (`from`/`to`) matches the symbol, it is renamed, and **no further rules apply**.
-3.  **Prefix & Suffix**: If no explicit rule matches, the resolved `prefix` and `suffix` are applied.
-4.  **Regex**: The resolved `regex` rules are applied to the result of the previous step.
+1. **Ignore**: If a symbol matches an `ignores` rule, it is skipped entirely.
+2. **Explicit**: If an `explicit` rule (`from`/`to`) matches the symbol, it is renamed, and **no further rules apply**.
+3. **Prefix & Suffix**: If no explicit rule matches, the resolved `prefix` and `suffix` are applied.
+4. **Regex**: The resolved `regex` rules are applied to the result of the previous step.
 
 ## Contributing
 
