@@ -1,0 +1,92 @@
+{
+  "package_name": "adapter",
+  "ignores": [
+    "DeprecatedSymbol",
+    "internal*"
+  ],
+  "defaults": {
+    "mode": {
+      "strategy": "apply",
+      "prefix": "prepend",
+      "explicit": "merge"
+    }
+  },
+  "props": [
+    {
+      "name": "Version",
+      "value": "1.2.3"
+    },
+    {
+      "name": "Author",
+      "value": "OrigAdmin"
+    }
+  ],
+  "packages": [
+    {
+      "import": "github.com/example/lib",
+      "alias": "exlib",
+      "types": [
+        {
+          "name": "Client",
+          "prefix": "Ex"
+        }
+      ],
+      "functions": [
+        {
+          "name": "New",
+          "explicit": [
+            {
+              "from": "New",
+              "to": "NewClient"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "types": [
+    {
+      "name": "User",
+      "prefix": "My",
+      "methods": [
+        {
+          "name": "GetID",
+          "suffix": "Value"
+        }
+      ],
+      "fields": [
+        {
+          "name": "Name",
+          "explicit": [
+            {
+              "from": "Name",
+              "to": "FullName"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "functions": [
+    {
+      "pattern": "^Get(.*)",
+      "regex": [
+        {
+          "pattern": "^Get(.*)",
+          "replace": "Fetch$1"
+        }
+      ]
+    }
+  ],
+  "constants": [
+    {
+      "name": "DefaultTimeout",
+      "explicit": [
+        {
+          "from": "DefaultTimeout",
+          "to": "DefaultConnectionTimeout"
+        }
+      ]
+    }
+  ]
+}

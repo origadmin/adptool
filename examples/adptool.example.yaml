@@ -1,0 +1,74 @@
+# ------------------------------------------------------------------------------
+# adptool Example Configuration (YAML)
+#
+# This file demonstrates the core features of the adptool configuration.
+# ------------------------------------------------------------------------------
+
+# The package name for the generated adapter file.
+package_name: "adapter"
+
+# A global list of symbols to ignore during generation. Wildcards are supported.
+ignores:
+  - "DeprecatedSymbol"
+  - "internal*"
+
+# Global default settings that control how rules are applied if not specified
+# at a more granular level (e.g., within a specific package or type rule).
+defaults:
+  mode:
+    # Default evaluation strategy for all rules. Can be "apply" or "ignore".
+    strategy: "apply"
+    # Default mode for how prefixes are applied. Can be "prepend" or "replace".
+    prefix: "prepend"
+    # Default mode for how explicit rules are merged. Can be "merge" or "override".
+    explicit: "merge"
+
+# Global properties (variables) that can be used in transformation templates.
+props:
+  - name: "Version"
+    value: "1.2.3"
+  - name: "Author"
+    value: "OrigAdmin"
+
+# Rules that are applied only to specific imported packages.
+packages:
+  - import: "github.com/example/lib"
+    alias: "exlib"
+    # These rules will only apply to symbols from "github.com/example/lib".
+    types:
+      - name: "Client"
+        prefix: "Ex" # Renames "Client" to "ExClient".
+    functions:
+      - name: "New"
+        explicit:
+          - from: "New"
+            to: "NewClient" # Renames "New" to "NewClient".
+
+# Global rules for types, applied to any type not specifically handled
+# by a package rule.
+types:
+  - name: "User"
+    prefix: "My" # Renames "User" to "MyUser".
+    # Rules for members of the "User" type.
+    methods:
+      - name: "GetID"
+        suffix: "Value" # Renames "GetID" to "GetIDValue".
+    fields:
+      - name: "Name"
+        explicit:
+          - from: "Name"
+            to: "FullName" # Renames "Name" to "FullName".
+
+# Global rules for functions.
+functions:
+  - pattern: "^Get(.*)" # Matches all functions starting with "Get".
+    regex:
+      - pattern: "^Get(.*)"
+        replace: "Fetch$1" # e.g., "GetDetails" becomes "FetchDetails".
+
+# Global rules for constants.
+constants:
+  - name: "DefaultTimeout"
+    explicit:
+      - from: "DefaultTimeout"
+        to: "DefaultConnectionTimeout"
