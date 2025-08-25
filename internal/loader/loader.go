@@ -27,7 +27,6 @@ func LoadConfigFile(filePath string) (*config.Config, error) {
 	} else {
 		// Otherwise, search for a config file named .adptool in standard paths.
 		v.SetConfigName(".adptool")
-		v.SetConfigType("yaml") // Explicitly set type for search
 		for _, path := range configPaths {
 			v.AddConfigPath(path)
 		}
