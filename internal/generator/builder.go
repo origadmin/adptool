@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 
 	"github.com/origadmin/adptool/internal/util"
 )
@@ -63,7 +64,7 @@ func (b *Builder) Build(importSpecs map[string]*ast.ImportSpec, allPackageDecls 
 	if len(allConstSpecs) > 0 {
 		constDecl := &ast.GenDecl{
 			Tok:    token.CONST,
-			Lparen: token.Pos(1),
+			Lparen: token.Pos(1), // Use Lparen to indicate a grouped declaration
 			Specs:  allConstSpecs,
 		}
 		orderedDecls = append(orderedDecls, constDecl)
@@ -72,7 +73,7 @@ func (b *Builder) Build(importSpecs map[string]*ast.ImportSpec, allPackageDecls 
 	if len(allVarSpecs) > 0 {
 		varDecl := &ast.GenDecl{
 			Tok:    token.VAR,
-			Lparen: token.Pos(1),
+			Lparen: token.Pos(1), // Use Lparen to indicate a grouped declaration
 			Specs:  allVarSpecs,
 		}
 		orderedDecls = append(orderedDecls, varDecl)
@@ -81,7 +82,7 @@ func (b *Builder) Build(importSpecs map[string]*ast.ImportSpec, allPackageDecls 
 	if len(allTypeSpecs) > 0 {
 		typeDecl := &ast.GenDecl{
 			Tok:    token.TYPE,
-			Lparen: token.Pos(1),
+			Lparen: token.Pos(1), // Use Lparen to indicate a grouped declaration
 			Specs:  allTypeSpecs,
 		}
 		orderedDecls = append(orderedDecls, typeDecl)
@@ -210,189 +211,171 @@ func (b *Builder) buildImportDeclaration(importSpecs map[string]*ast.ImportSpec)
 	return &ast.GenDecl{Tok: token.IMPORT, Specs: finalImportSpecs}
 }
 
+// pendingSymbol holds information about a symbol that needs to be generated.
+// It's used to create a deterministic processing order for name generation.
+type pendingSymbol struct {
+	originalName  string
+	originalAlias string
+	// A pointer to the original identifier in the AST.
+	// This provides a unique identity for each symbol.
+	ident *ast.Ident
+}
+
+// collectAllDeclarations generates declarations in a fully deterministic way.
+// It performs two passes:
+// 1. Collect all symbols, sort them canonically (by name, then package alias),
+//    and generate a unique name for each one. This creates a deterministic mapping
+//    from original symbol to new unique name.
+// 2. Re-iterate the original declarations and build new ones using the generated unique names.
 func (b *Builder) collectAllDeclarations(allPackageDecls map[string]*packageDecls, definedTypes map[string]bool) ([]ast.Spec, []ast.Spec, []ast.Spec, []ast.Decl) {
-	slog.Debug("Current definedTypes", "func", "Builder.collectAllDeclarations", "definedTypes", definedTypes)
+	var symbols []pendingSymbol
 
-	var allConstSpecs []ast.Spec
-	var allVarSpecs []ast.Spec
-	var allTypeSpecs []ast.Spec
-	var allFuncDecls []ast.Decl
-
+	// Sort package aliases to ensure a deterministic starting point
 	var sortedPackageAliases []string
 	for alias := range allPackageDecls {
 		sortedPackageAliases = append(sortedPackageAliases, alias)
 	}
 	sort.Strings(sortedPackageAliases)
 
-	// Create a map to track name conflicts and assign suffixes
-	nameCounters := make(map[string]int)
-	usedNames := make(map[string]bool)
+	// Pass 1, Step A: Collect all symbols
+	for _, alias := range sortedPackageAliases {
+		pkgDecls := allPackageDecls[alias]
 
-	// Helper function to generate a unique name with suffix
-	generateUniqueName := func(name string) string {
-		if count, exists := nameCounters[name]; exists {
-			// Increment the counter and append it to the name
-			count++
-			nameCounters[name] = count
-			return fmt.Sprintf("%s%d", name, count)
-		}
-		// First time seeing this name
-		nameCounters[name] = 0
-		return name
-	}
-
-	// Helper function to update the name in a ValueSpec
-	updateValueSpecName := func(spec *ast.ValueSpec, newName string) *ast.ValueSpec {
-		// Create a copy of the spec with the new name
-		newSpec := &ast.ValueSpec{
-			Doc:     spec.Doc,
-			Names:   make([]*ast.Ident, len(spec.Names)),
-			Type:    spec.Type,
-			Values:  spec.Values,
-			Comment: spec.Comment,
-		}
-		// Copy names but update the first one
-		for i, name := range spec.Names {
-			newSpec.Names[i] = &ast.Ident{
-				NamePos: name.NamePos,
-				Name:    newName,
-				Obj:     name.Obj,
+		for _, decl := range pkgDecls.constDecls {
+			if genDecl, ok := decl.(*ast.GenDecl); ok {
+				for _, spec := range genDecl.Specs {
+					if valSpec, ok := spec.(*ast.ValueSpec); ok {
+						for _, name := range valSpec.Names {
+							symbols = append(symbols, pendingSymbol{originalName: name.Name, originalAlias: alias, ident: name})
+						}
+					}
+				}
 			}
 		}
-		return newSpec
+		for _, decl := range pkgDecls.varDecls {
+			if genDecl, ok := decl.(*ast.GenDecl); ok {
+				for _, spec := range genDecl.Specs {
+					if valSpec, ok := spec.(*ast.ValueSpec); ok {
+						for _, name := range valSpec.Names {
+							symbols = append(symbols, pendingSymbol{originalName: name.Name, originalAlias: alias, ident: name})
+						}
+					}
+				}
+			}
+		}
+		for _, spec := range pkgDecls.typeSpecs {
+			if typeSpec, ok := spec.(*ast.TypeSpec); ok {
+				symbols = append(symbols, pendingSymbol{originalName: typeSpec.Name.Name, originalAlias: alias, ident: typeSpec.Name})
+			}
+		}
+		for _, decl := range pkgDecls.funcDecls {
+			if funcDecl, ok := decl.(*ast.FuncDecl); ok {
+				symbols = append(symbols, pendingSymbol{originalName: funcDecl.Name.Name, originalAlias: alias, ident: funcDecl.Name})
+			}
+		}
 	}
 
-	// Helper function to update the name in a TypeSpec
-	updateTypeSpecName := func(spec *ast.TypeSpec, newName string) *ast.TypeSpec {
-		// Create a copy of the spec with the new name
-		newSpec := &ast.TypeSpec{
-			Doc:        spec.Doc,
-			Name:       &ast.Ident{Name: newName},
-			Assign:     spec.Assign,
-			TypeParams: spec.TypeParams, // Preserve type parameters for generic types
-			Type:       spec.Type,
-			Comment:    spec.Comment,
+	// Pass 1, Step B: Sort symbols for deterministic processing
+	sort.Slice(symbols, func(i, j int) bool {
+		if symbols[i].originalName != symbols[j].originalName {
+			return symbols[i].originalName < symbols[j].originalName
 		}
-		return newSpec
+		return symbols[i].originalAlias < symbols[j].originalAlias
+	})
+
+	// Pass 1, Step C: Generate unique names and create the mapping
+	nameMap := make(map[*ast.Ident]string)
+	usedNames := make(map[string]bool)
+	for name := range definedTypes {
+		usedNames[name] = true
 	}
 
-	// Helper function to update the name in a FuncDecl
-	updateFuncDeclName := func(decl *ast.FuncDecl, newName string) *ast.FuncDecl {
-		// Create a copy of the decl with the new name
-		newDecl := &ast.FuncDecl{
-			Doc:  decl.Doc,
-			Recv: decl.Recv,
-			Name: &ast.Ident{Name: newName},
-			Type: decl.Type,
-			Body: decl.Body,
+	generateUniqueName := func(originalName, originalAlias string) string {
+		// If the original name is not yet used, we can use it.
+		if _, exists := usedNames[originalName]; !exists {
+			usedNames[originalName] = true
+			return originalName
 		}
-		return newDecl
+
+		// If we are here, the original name is already taken. This is a conflict.
+		// We must find a new name for the current symbol.
+		for i := 1; ; i++ {
+			newName := originalName + strconv.Itoa(i)
+			if _, exists := usedNames[newName]; !exists {
+				// Found an available new name. Log the conflict and resolution.
+				slog.Warn(
+					"Name conflict detected and resolved",
+					"original_name", originalName,
+					"from_package_alias", originalAlias,
+					"new_name", newName,
+				)
+				usedNames[newName] = true
+				return newName
+			}
+		}
 	}
+
+	for _, s := range symbols {
+		nameMap[s.ident] = generateUniqueName(s.originalName, s.originalAlias)
+	}
+
+	// Pass 2: Build new declarations using the deterministic name map
+	var allConstSpecs, allVarSpecs, allTypeSpecs []ast.Spec
+	var allFuncDecls []ast.Decl
+	processedSpecs := make(map[ast.Spec]bool)
 
 	for _, alias := range sortedPackageAliases {
 		pkgDecls := allPackageDecls[alias]
 
-		// Extract specs from const declarations
 		for _, decl := range pkgDecls.constDecls {
 			if genDecl, ok := decl.(*ast.GenDecl); ok {
 				for _, spec := range genDecl.Specs {
-					if valueSpec, ok := spec.(*ast.ValueSpec); ok {
-						for _, ident := range valueSpec.Names {
-							uniqueName := generateUniqueName(ident.Name)
-							if uniqueName != ident.Name {
-								// Name was changed, create a new spec with the updated name
-								newSpec := updateValueSpecName(valueSpec, uniqueName)
-								allConstSpecs = append(allConstSpecs, newSpec)
-								usedNames[uniqueName] = true
-							} else if !usedNames[ident.Name] {
-								// Name is unique, use the original spec
-								allConstSpecs = append(allConstSpecs, spec)
-								usedNames[ident.Name] = true
-							} else {
-								// Name conflict, generate a unique name
-								uniqueName := generateUniqueName(ident.Name)
-								newSpec := updateValueSpecName(valueSpec, uniqueName)
-								allConstSpecs = append(allConstSpecs, newSpec)
-								usedNames[uniqueName] = true
-							}
-						}
+					if processedSpecs[spec] {
+						continue
 					}
+					valSpec := spec.(*ast.ValueSpec)
+					newSpec := *valSpec
+					newSpec.Names = make([]*ast.Ident, len(valSpec.Names))
+					for i, name := range valSpec.Names {
+						newSpec.Names[i] = ast.NewIdent(nameMap[name])
+					}
+					allConstSpecs = append(allConstSpecs, &newSpec)
+					processedSpecs[spec] = true
 				}
 			}
 		}
-
-		// Extract specs from var declarations
 		for _, decl := range pkgDecls.varDecls {
 			if genDecl, ok := decl.(*ast.GenDecl); ok {
 				for _, spec := range genDecl.Specs {
-					if valueSpec, ok := spec.(*ast.ValueSpec); ok {
-						for _, ident := range valueSpec.Names {
-							uniqueName := generateUniqueName(ident.Name)
-							if uniqueName != ident.Name {
-								// Name was changed, create a new spec with the updated name
-								newSpec := updateValueSpecName(valueSpec, uniqueName)
-								allVarSpecs = append(allVarSpecs, newSpec)
-								usedNames[uniqueName] = true
-							} else if !usedNames[ident.Name] {
-								// Name is unique, use the original spec
-								allVarSpecs = append(allVarSpecs, spec)
-								usedNames[ident.Name] = true
-							} else {
-								// Name conflict, generate a unique name
-								uniqueName := generateUniqueName(ident.Name)
-								newSpec := updateValueSpecName(valueSpec, uniqueName)
-								allVarSpecs = append(allVarSpecs, newSpec)
-								usedNames[uniqueName] = true
-							}
-						}
+					if processedSpecs[spec] {
+						continue
 					}
+					valSpec := spec.(*ast.ValueSpec)
+					newSpec := *valSpec
+					newSpec.Names = make([]*ast.Ident, len(valSpec.Names))
+					for i, name := range valSpec.Names {
+						newSpec.Names[i] = ast.NewIdent(nameMap[name])
+					}
+					allVarSpecs = append(allVarSpecs, &newSpec)
+					processedSpecs[spec] = true
 				}
 			}
 		}
-
-		// Handle Types
 		for _, spec := range pkgDecls.typeSpecs {
-			if typeSpec, ok := spec.(*ast.TypeSpec); ok {
-				uniqueName := generateUniqueName(typeSpec.Name.Name)
-				if uniqueName != typeSpec.Name.Name {
-					// Name was changed, create a new spec with the updated name
-					newSpec := updateTypeSpecName(typeSpec, uniqueName)
-					allTypeSpecs = append(allTypeSpecs, newSpec)
-					usedNames[uniqueName] = true
-				} else if !usedNames[typeSpec.Name.Name] {
-					// Name is unique, use the original spec
-					allTypeSpecs = append(allTypeSpecs, spec)
-					usedNames[typeSpec.Name.Name] = true
-				} else {
-					// Name conflict, generate a unique name
-					uniqueName := generateUniqueName(typeSpec.Name.Name)
-					newSpec := updateTypeSpecName(typeSpec, uniqueName)
-					allTypeSpecs = append(allTypeSpecs, newSpec)
-					usedNames[uniqueName] = true
-				}
+			if processedSpecs[spec] {
+				continue
 			}
+			typeSpec := spec.(*ast.TypeSpec)
+			newSpec := *typeSpec
+			newSpec.Name = ast.NewIdent(nameMap[typeSpec.Name])
+			allTypeSpecs = append(allTypeSpecs, &newSpec)
+			processedSpecs[spec] = true
 		}
-
-		// Handle Funcs
 		for _, decl := range pkgDecls.funcDecls {
 			if funcDecl, ok := decl.(*ast.FuncDecl); ok {
-				uniqueName := generateUniqueName(funcDecl.Name.Name)
-				if uniqueName != funcDecl.Name.Name {
-					// Name was changed, create a new decl with the updated name
-					newDecl := updateFuncDeclName(funcDecl, uniqueName)
-					allFuncDecls = append(allFuncDecls, newDecl)
-					usedNames[uniqueName] = true
-				} else if !usedNames[funcDecl.Name.Name] {
-					// Name is unique, use the original decl
-					allFuncDecls = append(allFuncDecls, decl)
-					usedNames[funcDecl.Name.Name] = true
-				} else {
-					// Name conflict, generate a unique name
-					uniqueName := generateUniqueName(funcDecl.Name.Name)
-					newDecl := updateFuncDeclName(funcDecl, uniqueName)
-					allFuncDecls = append(allFuncDecls, newDecl)
-					usedNames[uniqueName] = true
-				}
+				newDecl := *funcDecl
+				newDecl.Name = ast.NewIdent(nameMap[funcDecl.Name])
+				allFuncDecls = append(allFuncDecls, &newDecl)
 			}
 		}
 	}

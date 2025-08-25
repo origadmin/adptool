@@ -584,8 +584,14 @@ func sanitizePackageName(name string) string {
 // Collect method to use the new alias manager
 func (c *Collector) Collect(packages []*PackageInfo) error {
 	aliasMgr := newAliasManager()
+	processedPaths := make(map[string]bool) // Keep track of processed package paths
 
 	for _, pkg := range packages {
+		// If we have already processed this package path, skip it.
+		if processedPaths[pkg.ImportPath] {
+			continue
+		}
+
 		// Generate or use the specified alias
 		importAlias := aliasMgr.generateAlias(pkg.ImportPath, pkg.ImportAlias)
 
@@ -603,6 +609,9 @@ func (c *Collector) Collect(packages []*PackageInfo) error {
 		if sourcePkg == nil {
 			continue
 		}
+
+		// Mark this path as processed.
+		processedPaths[pkg.ImportPath] = true
 
 		c.collectImports(sourcePkg)
 		c.collectTypeDeclarations(sourcePkg, pkg.ImportAlias)
