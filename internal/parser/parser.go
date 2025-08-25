@@ -4,9 +4,6 @@ import (
 	goast "go/ast"
 	gotoken "go/token"
 	"log/slog"
-	// Assuming these are the actual types from the config package
-	// For now, using the placeholder types defined in context.go
-	// "github.com/origadmin/adptool/internal/config"
 
 	"github.com/origadmin/adptool/internal/config"
 	"github.com/origadmin/adptool/internal/interfaces"
@@ -114,6 +111,7 @@ func ParseDirective(parentCtx *Context, ruleType interfaces.RuleType, directive 
 }
 
 // parseFile parses a Go source file and returns the built configuration.
+// It now ONLY processes directives and does NOT inspect the file's own imports.
 func (p *parser) parseFile(file *goast.File, fset *gotoken.FileSet) (*config.Config, error) {
 	// Set the package name from the Go file's package declaration
 	if file.Name != nil {

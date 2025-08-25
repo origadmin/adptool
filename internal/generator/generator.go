@@ -30,7 +30,7 @@ func (g *Generator) Generate(packages []*PackageInfo) error {
 	}
 
 	// Pass the pathToAlias map from the collector to the builder.
-	g.builder.Build(g.collector.importSpecs, g.collector.allPackageDecls, g.collector.definedTypes, g.collector.pathToAlias)
+	g.builder.Build(g.collector.importSpecs, g.collector.allPackageDecls, nil, g.collector.pathToAlias)
 
 	return g.builder.Write()
 }

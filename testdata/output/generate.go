@@ -14,3 +14,4 @@ import (
 //go:adapter:package github.com/origadmin/adptool/testdata/duplicate/pkg1
 //go:adapter:package github.com/origadmin/adptool/testdata/duplicate/pkg2
 //go:adapter:package github.com/origadmin/adptool/testdata/duplicate/pkg3
+//go:adapter:package log/slog
