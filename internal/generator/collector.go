@@ -60,6 +60,10 @@ func (c *Collector) loadPackage(importPath string) (*packages.Package, error) {
 func (c *Collector) collectImports(sourcePkg *packages.Package) {
 	for _, file := range sourcePkg.Syntax {
 		for _, importSpec := range file.Imports {
+			// 如果是空导入 (import _ "path")，则跳过
+			if importSpec.Name != nil && importSpec.Name.Name == "_" {
+				continue
+			}
 			importPath := strings.Trim(importSpec.Path.Value, "\"")
 			if _, exists := c.importSpecs[importPath]; !exists {
 				c.importSpecs[importPath] = importSpec
