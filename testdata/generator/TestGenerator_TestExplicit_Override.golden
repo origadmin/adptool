@@ -1,3 +1,4 @@
+// Package explicittest contains generated code by adptool.
 package explicittest
 
 import (
@@ -5,8 +6,8 @@ import (
 )
 
 const (
-	MaxRetries       = source.MaxRetries
 	ExportedConstant = source.ExportedConstant
+	MaxRetries       = source.MaxRetries
 )
 
 var (
@@ -16,14 +17,15 @@ var (
 
 type (
 	CommonStruct      = source.CommonStruct
-	MyCustomStruct    = source.MyStruct
-	ExportedType      = source.ExportedType
 	ExportedInterface = source.ExportedInterface
+	ExportedType      = source.ExportedType
+	MyCustomStruct    = source.MyStruct
 )
 
 func CommonFunction() string {
 	return source.CommonFunction()
 }
+
 func ExportedFunction() {
 	source.ExportedFunction()
 }

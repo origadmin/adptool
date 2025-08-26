@@ -1,12 +1,15 @@
+// Package regextest contains generated code by adptool.
 package regextest
 
 import (
+	"context"
+
 	source2 "github.com/origadmin/adptool/testdata/sourcepkg2"
 )
 
 const (
-	MaxRetries     = source2.MaxRetries
 	DefaultTimeout = source2.DefaultTimeout
+	MaxRetries     = source2.MaxRetries
 	Version        = source2.Version
 )
 
@@ -27,6 +30,11 @@ type (
 func CommonFunction() string {
 	return source2.CommonFunction()
 }
+
+func Execute(ctx context.Context, api source2.ComplexInterface, input *source2.InputData) (*source2.OutputData, error) {
+	return source2.Execute(ctx, api, input)
+}
+
 func NewWorker(name string) *source2.Worker {
 	return source2.NewWorker(name)
 }
