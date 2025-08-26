@@ -34,7 +34,7 @@ func runGoldenTest(t *testing.T, cfg *config.Config) {
 
 	// Create a new Generator, redirecting output to an in-memory buffer
 	outputBuffer := &bytes.Buffer{}
-	generator := NewGenerator(compiledCfg.PackageName, "", compiler.NewReplacer(compiledCfg))
+	generator := NewGenerator(compiledCfg.PackageName, "", compiler.NewReplacer(compiledCfg), "")
 	generator.builder.writer = outputBuffer
 
 	// Generate the code
