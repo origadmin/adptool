@@ -1,4 +1,4 @@
-package testdata
+package parser
 
 // Packages configuration
 //go:adapter:package github.com/my/package/v1

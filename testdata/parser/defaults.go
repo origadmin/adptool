@@ -1,4 +1,4 @@
-package testdata
+package parser
 
 // Defaults configuration
 //go:adapter:default:mode:strategy replace

@@ -1,4 +1,4 @@
-package testdata
+package parser
 
 //go:adapter:default:mode:strategy invalid_strategy // Invalid strategy value
 //go:adapter:package:import  // Missing import path

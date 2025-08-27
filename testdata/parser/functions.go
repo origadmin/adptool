@@ -1,4 +1,4 @@
-package testdata
+package parser
 
 // Test global function directives
 //go:adapter:function MyGlobalFunc

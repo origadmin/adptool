@@ -1,4 +1,4 @@
-package testdata
+package parser
 
 // Test global variable directives
 //go:adapter:variable MyGlobalVar

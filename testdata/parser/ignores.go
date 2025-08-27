@@ -1,4 +1,4 @@
-package testdata
+package parser
 
 // Test global ignore directives
 //go:adapter:ignore pattern1

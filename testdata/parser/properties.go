@@ -1,4 +1,4 @@
-package testdata
+package parser
 
 // Property configuration
 //go:adapter:property GlobalVar1 globalValue1

@@ -112,6 +112,9 @@ func parseRuleSetDirective(rs *config.RuleSet, directive *Directive) error {
 		if !directive.HasSub() {
 			return NewParserErrorWithContext(directive, "transform directive requires a sub-command")
 		}
+		if rs.Transforms == nil {
+			rs.Transforms = &config.Transform{}
+		}
 		sub := directive.Sub()
 		if sub.ShouldUnmarshal() {
 			err := json.Unmarshal([]byte(directive.Argument), rs.Transforms)

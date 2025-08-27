@@ -73,6 +73,12 @@ func (r *RootConfig) ParseDirective(directive *Directive) error {
 	case "packages", "types", "functions", "variables", "constants":
 		return NewParserErrorWithContext(directive, "directive '%s' starts a new scope and should not be parsed by RootConfig.ParseDirective",
 			directive.BaseCmd)
+	//case "package_name":
+	//	if directive.Argument == "" {
+	//		return fmt.Errorf("package_name directive requires an argument (the package name)")
+	//	}
+	//	r.Config.PackageName = directive.Argument
+	//	return nil
 	default:
 		return NewParserErrorWithContext(directive, "unrecognized directive '%s' for RootConfig", directive.BaseCmd)
 	}

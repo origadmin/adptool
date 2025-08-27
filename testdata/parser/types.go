@@ -1,4 +1,4 @@
-package testdata
+package parser
 
 // --- Type Directives ---
 

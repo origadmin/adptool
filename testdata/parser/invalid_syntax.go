@@ -1,3 +1,3 @@
-package testdata
+package parser
 
 //go:adapter:invalid
