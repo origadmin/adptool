@@ -1,0 +1,53 @@
+package_name: my_package
+ignores:
+  - file1.go
+  - dir1/file2.go
+defaults:
+  mode:
+    strategy: replace
+    prefix: append
+    suffix: prepend
+    explicit: merge
+    regex: merge
+    ignores: merge
+props:
+  - name: GlobalVar1
+    value: globalValue1
+  - name: GlobalVar2
+    value: globalValue2
+packages:
+  - import: github.com/my/package/v1
+    alias: mypkg
+    path: ./vendor/my/package/v1
+    props:
+      - name: PkgVar
+        value: PkgValue
+types:
+  - name: MyStruct
+    kind: struct
+    pattern: wrap
+    disabled: true
+    methods:
+      - name: DoSomething
+        prefix: Pre
+        suffix: Post
+    fields:
+      - name: MyField
+        transforms:
+          before: (.*)
+          after: New$1
+functions:
+  - name: MyFunc
+    disabled: false
+    regex:
+      - pattern: Old(.*)
+        replace: New$1
+variables:
+  - name: MyVar
+    explicit:
+      - from: MyVar
+        to: NewVar
+constants:
+  - name: MyConst
+    ignores:
+      - IgnoredConst

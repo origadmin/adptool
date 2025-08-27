@@ -1,0 +1,15 @@
+rename:
+  PackageName: NewPackageName
+  TypeName: NewTypeName
+  FunctionName: NewFunctionName
+  VariableName: NewVariableName
+  ConstantName: NewConstantName
+  FieldName: NewFieldName
+
+include:
+  - IncludedFunction
+  - IncludedVariable
+
+exclude:
+  - ExcludedType
+  - ExcludedFunction
