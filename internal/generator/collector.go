@@ -49,10 +49,13 @@ func (c *Collector) loadPackage(importPath string) (*packages.Package, error) {
 	}
 	pkgs, err := packages.Load(loadCfg, importPath)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to load package %s: %w", importPath, err)
 	}
 	if len(pkgs) == 0 {
 		return nil, nil // Package not found
+	}
+	if len(pkgs[0].Errors) > 0 {
+		return nil, fmt.Errorf("errors while loading package %s: %v", importPath, pkgs[0].Errors)
 	}
 	return pkgs[0], nil
 }
@@ -360,30 +363,19 @@ func newAliasManager() *aliasManager {
 	}
 }
 
-func (m *aliasManager) generateAlias(importPath, preferredAlias string) string {
-	// 1. Use preferred alias if provided and available
-	if preferredAlias != "" {
-		if existingPath, exists := m.usedAliases[preferredAlias]; !exists || existingPath == importPath {
-			m.usedAliases[preferredAlias] = importPath
-			return preferredAlias
-		}
-	}
+func (m *aliasManager) generateAlias(importPath, baseName string) string {
+	// Sanitize the name to make sure it's a valid Go identifier.
+	alias := sanitizePackageName(baseName)
 
-	// 2. Extract base name from import path
-	baseName := path.Base(importPath)
-
-	// 3. Sanitize the name
-	baseName = sanitizePackageName(baseName)
-
-	// 4. Handle conflicts
-	alias := baseName
+	// Handle conflicts by appending a number.
+	finalAlias := alias
 	counter := 1
 	for {
-		if existingPath, exists := m.usedAliases[alias]; !exists || existingPath == importPath {
-			m.usedAliases[alias] = importPath
-			return alias
+		if existingPath, exists := m.usedAliases[finalAlias]; !exists || existingPath == importPath {
+			m.usedAliases[finalAlias] = importPath
+			return finalAlias
 		}
-		alias = baseName + strconv.Itoa(counter)
+		finalAlias = alias + strconv.Itoa(counter)
 		counter++
 	}
 }
@@ -466,8 +458,27 @@ func (c *Collector) Collect(packages []*PackageInfo) error {
 			continue
 		}
 
-		// Generate or use the specified alias
-		importAlias := aliasMgr.generateAlias(pkg.ImportPath, pkg.ImportAlias)
+		sourcePkg, err := c.loadPackage(pkg.ImportPath)
+		if err != nil {
+			return err
+		}
+		if sourcePkg == nil {
+			slog.Warn("package not found, skipping", "path", pkg.ImportPath)
+			continue
+		}
+
+		// Determine the base name for the alias, in order of priority:
+		// 1. Alias from config.
+		// 2. Actual package name from source.
+		// 3. Base of the import path.
+		var baseName string
+		if pkg.ImportAlias != "" {
+			baseName = pkg.ImportAlias
+		} else {
+			baseName = sourcePkg.Name
+		}
+
+		importAlias := aliasMgr.generateAlias(pkg.ImportPath, baseName)
 
 		c.pathToAlias[pkg.ImportPath] = importAlias
 		c.importSpecs[pkg.ImportPath] = &ast.ImportSpec{
@@ -475,14 +486,6 @@ func (c *Collector) Collect(packages []*PackageInfo) error {
 			Name: &ast.Ident{Name: importAlias},
 		}
 		pkg.ImportAlias = importAlias
-
-		sourcePkg, err := c.loadPackage(pkg.ImportPath)
-		if err != nil {
-			return err
-		}
-		if sourcePkg == nil {
-			continue
-		}
 
 		// Mark this path as processed.
 		processedPaths[pkg.ImportPath] = true

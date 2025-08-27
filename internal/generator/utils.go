@@ -156,55 +156,35 @@ func containsInvalidTypes(info *types.Info, currentPkg *types.Package, f *ast.Fu
 
 	ast.Inspect(f, func(n ast.Node) bool {
 		if isInvalid {
-			return false
+			return false // Stop walking if an invalid type has been found
 		}
 		ident, ok := n.(*ast.Ident)
 		if !ok {
-			return true
-		}
-		if isBuiltinType(ident.Name) {
-			return true
-		}
-		obj := info.ObjectOf(ident)
-		if obj == nil {
-			return true
+			return true // Not an identifier, continue walking
 		}
 
-		tn, ok := obj.(*types.TypeName)
-		if !ok {
-			return true // Not a type name
-		}
+		// We only need to check identifiers that resolve to a type name from a package.
+		// Everything else (built-ins, generic params like `T`, vars) is considered valid.
+		if obj := info.ObjectOf(ident); obj != nil {
+			if tn, ok := obj.(*types.TypeName); ok && tn.Pkg() != nil {
+				// This is a named type from an importable package.
 
-		pkg := tn.Pkg()
-		if pkg == nil {
-			return true // Should be a built-in or generic
-		}
+				// Rule 1: Check for internal packages.
+				if strings.Contains(tn.Pkg().Path(), "/internal/") || strings.HasSuffix(tn.Pkg().Path(), "/internal") {
+					slog.Debug("Skipping function because it uses an internal type", "type", tn.Name(), "package", tn.Pkg().Path())
+					isInvalid = true
+					return false // Stop walking
+				}
 
-		// Rule 1: An exported function cannot have unexported types in its signature.
-		if !tn.Exported() {
-			slog.Debug("Skipping function because it uses an unexported type", "type", tn.Name(), "package", pkg.Path())
-			isInvalid = true
-			return false
-		}
-
-		// Rule 2: Check for internal packages from other modules.
-		if idx := strings.Index(pkg.Path(), "/internal/"); idx != -1 {
-			root := pkg.Path()[:idx]
-			if !strings.HasPrefix(currentPkg.Path(), root) {
-				slog.Debug("Skipping function because it uses an internal type from another module", "type", tn.Name(), "package", pkg.Path())
-				isInvalid = true
-				return false
-			}
-		} else if strings.HasSuffix(pkg.Path(), "/internal") {
-			root := strings.TrimSuffix(pkg.Path(), "/internal")
-			if !strings.HasPrefix(currentPkg.Path(), root) || currentPkg.Path() == root {
-				slog.Debug("Skipping function because it uses an internal type from another module", "type", tn.Name(), "package", pkg.Path())
-				isInvalid = true
-				return false
+				// Rule 2: Check for unexported types.
+				if !tn.Exported() {
+					slog.Debug("Skipping function because it uses an unexported type", "type", tn.Name(), "package", tn.Pkg().Path())
+					isInvalid = true
+					return false // Stop walking
+				}
 			}
 		}
-
-		return true
+		return true // Continue walking
 	})
 	return isInvalid
 }

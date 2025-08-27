@@ -1,0 +1,79 @@
+// Package generictest contains generated code by adptool.
+package generictest
+
+import (
+	"context"
+	"time"
+
+	source3 "github.com/origadmin/adptool/testdata/sourcepkg3"
+)
+
+const (
+	DefaultTimeout = source3.DefaultTimeout
+	MaxRetries     = source3.MaxRetries
+	PriorityHigh   = source3.PriorityHigh
+	PriorityLow    = source3.PriorityLow
+	PriorityMedium = source3.PriorityMedium
+	StatusFailed   = source3.StatusFailed
+	StatusPending  = source3.StatusPending
+	StatusRunning  = source3.StatusRunning
+	StatusSuccess  = source3.StatusSuccess
+	StatusUnknown  = source3.StatusUnknown
+	Version        = source3.Version
+)
+
+var (
+	ConfigValue   = source3.ConfigValue
+	DefaultWorker = source3.DefaultWorker
+	Processors    = source3.Processors
+	StatsCounter  = source3.StatsCounter
+)
+
+type (
+	MyCommonStruct                                 = source3.CommonStruct
+	MyComplexGenericInterface[T any, K comparable] = source3.ComplexGenericInterface[T, K]
+	MyEmbeddedInterface                            = source3.EmbeddedInterface
+	MyGenericWorker[T any]                         = source3.GenericWorker[T]
+	MyHandlerFunc[T any]                           = source3.HandlerFunc[T]
+	MyInputData[T any]                             = source3.InputData[T]
+	MyIntAlias                                     = source3.IntAlias
+	MyOutputData                                   = source3.OutputData
+	MyPriority                                     = source3.Priority
+	MyProcessConfig                                = source3.ProcessConfig
+	MyProcessFunc                                  = source3.ProcessFunc
+	MyProcessOption                                = source3.ProcessOption
+	MyStatus                                       = source3.Status
+	MyStatusAlias                                  = source3.StatusAlias
+	MyTimeAlias                                    = source3.TimeAlias
+	MyWorker                                       = source3.Worker
+	MyWorkerConfig                                 = source3.WorkerConfig
+	MyWorkerOption                                 = source3.WorkerOption
+)
+
+func CommonFunction() string {
+	return source3.CommonFunction()
+}
+
+func Execute(ctx context.Context, api source3.ComplexGenericInterface[string, int], input *source3.InputData[string], timeout time.Duration) (*source3.OutputData, error) {
+	return source3.Execute(ctx, api, input, timeout)
+}
+
+func ExecuteParallel(ctx context.Context, apis []source3.ComplexGenericInterface[string, int], input *source3.InputData[string]) ([]*source3.OutputData, error) {
+	return source3.ExecuteParallel(ctx, apis, input)
+}
+
+func Filter[T any](ts []T, fn func(T) bool) []T {
+	return source3.Filter[T](ts, fn)
+}
+
+func Map[T, U any](ts []T, fn func(T) U) []U {
+	return source3.Map[T, U](ts, fn)
+}
+
+func NewGenericWorker[T any](name string, data T, processor func(T) error) *source3.GenericWorker[T] {
+	return source3.NewGenericWorker[T](name, data, processor)
+}
+
+func NewWorker(name string, options ...source3.WorkerOption) *source3.Worker {
+	return source3.NewWorker(name, options...)
+}

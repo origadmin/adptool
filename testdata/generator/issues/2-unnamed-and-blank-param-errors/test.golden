@@ -1,20 +1,18 @@
+// Package test contains generated code by adptool.
 package test
 
 import (
-	source "github.com/origadmin/adptool/testdata/generator/issues/2-unnamed-and-blank-param-errors"
+	source "github.com/origadmin/adptool/testdata/generator/issues/2-unnamed-and-blank-param-errors/source"
 )
 
-// Case 2a: For purely unnamed parameters.
 func UnnamedParamsTest(p0 int, p1 *source.CustomType) {
 	source.UnnamedParamsTest(p0, p1)
 }
 
-// Case 2b: For blank identifier `_`.
 func BlankParamTest(a string, p0 bool, p1 *source.CustomType) string {
 	return source.BlankParamTest(a, p0, p1)
 }
 
-// Case 2c: To test for potential name collisions.
 func CollisionTest(p0 string, p1 int) string {
 	return source.CollisionTest(p0, p1)
 }

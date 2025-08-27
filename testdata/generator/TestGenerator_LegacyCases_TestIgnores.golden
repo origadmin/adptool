@@ -1,0 +1,79 @@
+// Package ignoretest contains generated code by adptool.
+package ignoretest
+
+import (
+	"context"
+	"time"
+
+	source3 "github.com/origadmin/adptool/testdata/sourcepkg3"
+)
+
+const (
+	DefaultTimeout = source3.DefaultTimeout
+	MaxRetries     = source3.MaxRetries
+	PriorityHigh   = source3.PriorityHigh
+	PriorityLow    = source3.PriorityLow
+	PriorityMedium = source3.PriorityMedium
+	StatusFailed   = source3.StatusFailed
+	StatusPending  = source3.StatusPending
+	StatusRunning  = source3.StatusRunning
+	StatusSuccess  = source3.StatusSuccess
+	StatusUnknown  = source3.StatusUnknown
+	Version        = source3.Version
+)
+
+var (
+	ConfigValue   = source3.ConfigValue
+	DefaultWorker = source3.DefaultWorker
+	Processors    = source3.Processors
+	StatsCounter  = source3.StatsCounter
+)
+
+type (
+	CommonStruct                                 = source3.CommonStruct
+	ComplexGenericInterface[T any, K comparable] = source3.ComplexGenericInterface[T, K]
+	EmbeddedInterface                            = source3.EmbeddedInterface
+	GenericWorker[T any]                         = source3.GenericWorker[T]
+	HandlerFunc[T any]                           = source3.HandlerFunc[T]
+	InputData[T any]                             = source3.InputData[T]
+	IntAlias                                     = source3.IntAlias
+	OutputData                                   = source3.OutputData
+	Priority                                     = source3.Priority
+	ProcessConfig                                = source3.ProcessConfig
+	ProcessFunc                                  = source3.ProcessFunc
+	ProcessOption                                = source3.ProcessOption
+	Status                                       = source3.Status
+	StatusAlias                                  = source3.StatusAlias
+	TimeAlias                                    = source3.TimeAlias
+	Worker                                       = source3.Worker
+	WorkerConfig                                 = source3.WorkerConfig
+	WorkerOption                                 = source3.WorkerOption
+)
+
+func CommonFunction() string {
+	return source3.CommonFunction()
+}
+
+func Execute(ctx context.Context, api source3.ComplexGenericInterface[string, int], input *source3.InputData[string], timeout time.Duration) (*source3.OutputData, error) {
+	return source3.Execute(ctx, api, input, timeout)
+}
+
+func ExecuteParallel(ctx context.Context, apis []source3.ComplexGenericInterface[string, int], input *source3.InputData[string]) ([]*source3.OutputData, error) {
+	return source3.ExecuteParallel(ctx, apis, input)
+}
+
+func Filter[T any](ts []T, fn func(T) bool) []T {
+	return source3.Filter[T](ts, fn)
+}
+
+func Map[T, U any](ts []T, fn func(T) U) []U {
+	return source3.Map[T, U](ts, fn)
+}
+
+func NewGenericWorker[T any](name string, data T, processor func(T) error) *source3.GenericWorker[T] {
+	return source3.NewGenericWorker[T](name, data, processor)
+}
+
+func NewWorker(name string, options ...source3.WorkerOption) *source3.Worker {
+	return source3.NewWorker(name, options...)
+}
