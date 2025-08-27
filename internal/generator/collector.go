@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"go/ast"
 	"go/token"
+	"go/types"
 	"log/slog"
 	"path"
 	"strconv"
@@ -142,7 +143,7 @@ func (c *Collector) collectOtherDeclarations(sourcePkg *packages.Package, import
 		for _, decl := range file.Decls {
 			switch d := decl.(type) {
 			case *ast.FuncDecl:
-				c.collectFunctionDeclaration(d, importPath, importAlias)
+				c.collectFunctionDeclaration(d, sourcePkg, importPath, importAlias)
 			case *ast.GenDecl:
 				switch d.Tok {
 				case token.CONST:
@@ -155,19 +156,59 @@ func (c *Collector) collectOtherDeclarations(sourcePkg *packages.Package, import
 	}
 }
 
-func (c *Collector) collectFunctionDeclaration(funcDecl *ast.FuncDecl, importPath, importAlias string) {
+func (c *Collector) collectFunctionDeclaration(funcDecl *ast.FuncDecl, sourcePkg *packages.Package, importPath, importAlias string) {
 	if funcDecl.Recv == nil && funcDecl.Name.IsExported() {
-		if hasUnexportedTypes(funcDecl.Type) {
-			slog.Debug("Skipping function because it uses unexported types", "func", "Collector.collectFunctionDeclaration", "function", funcDecl.Name.Name)
+		if containsInvalidTypes(sourcePkg.TypesInfo, sourcePkg.Types, funcDecl.Type) {
+			slog.Debug("Skipping function because it uses unexported or internal types", "func", "Collector.collectFunctionDeclaration", "function", funcDecl.Name.Name)
 			return
 		}
 		originalName := funcDecl.Name.Name
 
 		var args []ast.Expr
 		if funcDecl.Type.Params != nil {
+			// Collect all existing parameter names to avoid collisions.
+			existingNames := make(map[string]bool)
 			for _, param := range funcDecl.Type.Params.List {
 				for _, name := range param.Names {
-					args = append(args, name)
+					if name.Name != "_" {
+						existingNames[name.Name] = true
+					}
+				}
+			}
+
+			unnamedParamCounter := 0
+			// generateUniqueName creates a unique parameter name that doesn't conflict with existing ones.
+			generateUniqueName := func() string {
+				for {
+					newName := fmt.Sprintf("p%d", unnamedParamCounter)
+					unnamedParamCounter++
+					if !existingNames[newName] {
+						// Add to existing names to prevent future collisions in the same function.
+						existingNames[newName] = true
+						return newName
+					}
+				}
+			}
+
+			for _, param := range funcDecl.Type.Params.List {
+				if len(param.Names) == 0 {
+					// This is an unnamed parameter, generate a unique name.
+					newName := generateUniqueName()
+					newIdent := ast.NewIdent(newName)
+					param.Names = []*ast.Ident{newIdent}
+					args = append(args, newIdent)
+				} else {
+					for i, name := range param.Names {
+						if name.Name == "_" {
+							// Parameter name is _, generate a unique name.
+							newName := generateUniqueName()
+							newIdent := ast.NewIdent(newName)
+							param.Names[i] = newIdent
+							args = append(args, newIdent)
+						} else {
+							args = append(args, name)
+						}
+					}
 				}
 			}
 		}
