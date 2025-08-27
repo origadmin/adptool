@@ -3,10 +3,20 @@ package bugfixestest
 
 import source "github.com/origadmin/adptool/testdata/bugfixes"
 
+type CustomType = source.CustomType
+
+func BlankParamTest(a string, p0 bool, p1 *source.CustomType) string {
+	return source.BlankParamTest(a, p0, p1)
+}
+
+func CollisionTest(p0 string, p1 int) string {
+	return source.CollisionTest(p0, p1)
+}
+
 func GenericFuncWithComparable[T comparable](p1 T) T {
 	return source.GenericFuncWithComparable[T](p1)
 }
 
-func ParamsTest(string, p1 int, p0 bool) (string, bool) {
-	return source.ParamsTest(string, p1, p0)
+func UnnamedParamsTest(p0 int, p1 *source.CustomType) {
+	source.UnnamedParamsTest(p0, p1)
 }

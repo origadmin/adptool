@@ -24,7 +24,7 @@ remote_id:
 ### Description
 
 `adptool` had two related issues when processing function parameters:
-1.  When a function parameter had a type but no name (e.g., `func(log.Logger)`), the generated function call would omit this parameter.
+1.  When a function parameter had a type but no name (e.g., `func(int)`), the generated function call would omit this parameter.
 2.  When a function parameter used the blank identifier `_` as its name (e.g., `_ context.Context`), the generated function call would also use `_`, which is a syntax error in Go.
 
 ### Solution
@@ -41,10 +41,10 @@ This robust approach ensures that all generated function signatures and calls ar
 
 ### Verification Steps
 
-1.  Create a complex function signature as input, including unnamed parameters, `_` parameters, and normally named parameters (e.g., `p0`).
-2.  Run `adptool` to generate the adapter code.
-3.  Inspect the generated `.adapter.go` file to confirm:
-    -   All original unnamed and `_` parameters have been assigned new, non-conflicting, valid names.
-    -   The generated function call correctly uses these new names.
-    -   The original `p0` parameter name remains unaffected.
-4.  Confirm that the generated code compiles successfully with `go build`.
+To ensure robust and accurate testing, the original, invalid test case was discarded. It was replaced with a series of separate, valid Go functions in `testdata/bugfixes/source.go`, with each function targeting a specific scenario:
+
+1.  **`UnnamedParamsTest(int, *CustomType)`**: This function is valid Go syntax and tests the generator's ability to handle purely unnamed parameters.
+2.  **`BlankParamTest(a string, _ bool, _ *CustomType)`**: This function tests the correct handling of the blank identifier `_` mixed with named parameters.
+3.  **`CollisionTest(p0 string, p1 int)`**: This function explicitly includes `p0` and `p1` in its signature to verify that the generator's name-generation logic correctly avoids collisions.
+
+The `TestBugFixes` test case runs the generator on these functions and compares the output to a golden file containing the correct, expected code for each isolated case. This guarantees the fixes are both correct and independently verified.
