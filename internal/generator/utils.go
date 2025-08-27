@@ -2,7 +2,9 @@ package generator
 
 import (
 	"go/ast"
+	"go/types"
 	"log/slog"
+	"strings"
 )
 
 // isBuiltinType checks if a type name is a built-in Go type that should not be qualified.
@@ -11,6 +13,7 @@ func isBuiltinType(name string) bool {
 		"any":        true,
 		"bool":       true,
 		"byte":       true,
+		"comparable": true,
 		"complex64":  true,
 		"complex128": true,
 		"error":      true,
@@ -51,11 +54,6 @@ func qualifyType(expr ast.Expr, pkgAlias string, definedTypes map[string]bool, t
 			slog.Debug("Using built-in type", "func", "qualifyType", "type", t.Name)
 			return t
 		}
-
-		// Skip empty package aliases (like for local package)
-		//if pkgAlias == "" {
-		//	return t
-		//}
 
 		slog.Debug("Qualifying identifier with package", "func", "qualifyType", "identifier", t.Name, "package", pkgAlias)
 		return &ast.SelectorExpr{
@@ -149,46 +147,64 @@ func getIdentName(expr ast.Expr) string {
 	return ""
 }
 
-func hasUnexportedTypes(f *ast.FuncType) bool {
-	if f.Params != nil {
-		for _, p := range f.Params.List {
-			if containsUnexported(p.Type) {
-				return true
-			}
-		}
+// containsInvalidTypes checks if a function signature contains unexported or internal types.
+func containsInvalidTypes(info *types.Info, currentPkg *types.Package, f *ast.FuncType) bool {
+	if f == nil {
+		return false
 	}
-	if f.Results != nil {
-		for _, r := range f.Results.List {
-			if containsUnexported(r.Type) {
-				return true
-			}
-		}
-	}
-	return false
-}
+	var isInvalid bool
 
-func containsUnexported(expr ast.Expr) bool {
-	var unexported bool
-	ast.Inspect(expr, func(n ast.Node) bool {
-		switch v := n.(type) {
-		// Case 1: A selector like `pkg.Type`. We only care if `Type` is exported.
-		// The package name `pkg` can be lowercase.
-		case *ast.SelectorExpr:
-			if !ast.IsExported(v.Sel.Name) {
-				unexported = true
-			}
-			// We've handled this selector, don't inspect its children (the `pkg` and `Type` idents).
+	ast.Inspect(f, func(n ast.Node) bool {
+		if isInvalid {
 			return false
-
-		// Case 2: A simple identifier. This refers to a type in the same package.
-		// It must be exported unless it's a built-in.
-		case *ast.Ident:
-			if !isBuiltinType(v.Name) && !ast.IsExported(v.Name) {
-				unexported = true
-			}
-			return true // Continue, as this ident might be part of a larger expression
 		}
-		return true // Continue inspection for other nodes
+		ident, ok := n.(*ast.Ident)
+		if !ok {
+			return true
+		}
+		if isBuiltinType(ident.Name) {
+			return true
+		}
+		obj := info.ObjectOf(ident)
+		if obj == nil {
+			return true
+		}
+
+		tn, ok := obj.(*types.TypeName)
+		if !ok {
+			return true // Not a type name
+		}
+
+		pkg := tn.Pkg()
+		if pkg == nil {
+			return true // Should be a built-in or generic
+		}
+
+		// Rule 1: An exported function cannot have unexported types in its signature.
+		if !tn.Exported() {
+			slog.Debug("Skipping function because it uses an unexported type", "type", tn.Name(), "package", pkg.Path())
+			isInvalid = true
+			return false
+		}
+
+		// Rule 2: Check for internal packages from other modules.
+		if idx := strings.Index(pkg.Path(), "/internal/"); idx != -1 {
+			root := pkg.Path()[:idx]
+			if !strings.HasPrefix(currentPkg.Path(), root) {
+				slog.Debug("Skipping function because it uses an internal type from another module", "type", tn.Name(), "package", pkg.Path())
+				isInvalid = true
+				return false
+			}
+		} else if strings.HasSuffix(pkg.Path(), "/internal") {
+			root := strings.TrimSuffix(pkg.Path(), "/internal")
+			if !strings.HasPrefix(currentPkg.Path(), root) || currentPkg.Path() == root {
+				slog.Debug("Skipping function because it uses an internal type from another module", "type", tn.Name(), "package", pkg.Path())
+				isInvalid = true
+				return false
+			}
+		}
+
+		return true
 	})
-	return unexported
+	return isInvalid
 }
