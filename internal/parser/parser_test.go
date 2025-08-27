@@ -20,7 +20,7 @@ func getModuleRoot() string {
 }
 
 func TestParseDefaults(t *testing.T) {
-	filePath := filepath.Join(getModuleRoot(), "testdata", "parser_test_defaults.go")
+	filePath := filepath.Join(getModuleRoot(), "testdata", "parser", "parser_test_defaults.go")
 	file, fset, err := loadGoFile(filePath)
 	if err != nil {
 		t.Fatalf("Failed to load Go file %s: %v", filePath, err)
@@ -47,7 +47,7 @@ func TestParseDefaults(t *testing.T) {
 }
 
 func TestParseProps(t *testing.T) {
-	filePath := filepath.Join(getModuleRoot(), "testdata", "parser_test_properties.go")
+	filePath := filepath.Join(getModuleRoot(), "testdata", "parser", "parser_test_properties.go")
 	file, fset, err := loadGoFile(filePath)
 	if err != nil {
 		t.Fatalf("Failed to load Go file %s: %v", filePath, err)
@@ -74,7 +74,7 @@ func TestParseProps(t *testing.T) {
 }
 
 func TestParsePackages(t *testing.T) {
-	filePath := filepath.Join(getModuleRoot(), "testdata", "parser_test_packages.go")
+	filePath := filepath.Join(getModuleRoot(), "testdata", "parser", "parser_test_packages.go")
 	file, fset, err := loadGoFile(filePath)
 	if err != nil {
 		t.Fatalf("Failed to load Go file %s: %v", filePath, err)
@@ -162,7 +162,7 @@ func TestParsePackages(t *testing.T) {
 }
 
 func TestParseTypes(t *testing.T) {
-	filePath := filepath.Join(getModuleRoot(), "testdata", "parser_test_types.go")
+	filePath := filepath.Join(getModuleRoot(), "testdata", "parser", "parser_test_types.go")
 	file, fset, err := loadGoFile(filePath)
 	if err != nil {
 		t.Fatalf("Failed to load Go file %s: %v", filePath, err)
@@ -281,7 +281,7 @@ func TestParseTypes(t *testing.T) {
 }
 
 func TestParseFunctions(t *testing.T) {
-	filePath := filepath.Join(getModuleRoot(), "testdata", "parser_test_functions.go")
+	filePath := filepath.Join(getModuleRoot(), "testdata", "parser", "parser_test_functions.go")
 	file, fset, err := loadGoFile(filePath)
 	if err != nil {
 		t.Fatalf("Failed to load Go file %s: %v", filePath, err)
@@ -315,15 +315,118 @@ func TestParseFunctions(t *testing.T) {
 	}
 }
 
+func TestParseAllConfigDirectives(t *testing.T) {
+	filePath := filepath.Join(getModuleRoot(), "testdata", "parser", "parser_test_all_config.go")
+	file, fset, err := loadGoFile(filePath)
+	if err != nil {
+		t.Fatalf("Failed to load Go file %s: %v", filePath, err)
+	}
+
+	initialCfg := config.New()
+	parsedCfg, err := ParseFileDirectives(initialCfg, file, fset)
+	if err != nil {
+		t.Fatalf("Failed to parse directives: %v", parseErrorLog(err))
+	}
+
+	expectedCfg := &config.Config{
+		PackageName: "my_package",
+		Ignores:     []string{"file1.go", "dir1/file2.go"},
+		Defaults: &config.Defaults{
+			Mode: &config.Mode{
+				Strategy: "replace",
+				Prefix:   "append",
+				Suffix:   "prepend",
+				Explicit: "merge",
+				Regex:    "merge",
+				Ignores:  "merge",
+			},
+		},
+		Props: []*config.PropsEntry{
+			{Name: "GlobalVar1", Value: "globalValue1"},
+			{Name: "GlobalVar2", Value: "globalValue2"},
+		},
+		Packages: []*config.Package{
+			{
+				Import: "github.com/my/package/v1",
+				Alias:  "mypkg",
+				Path:   "./vendor/my/package/v1",
+				Props: []*config.PropsEntry{
+					{Name: "PkgVar", Value: "PkgValue"},
+				},
+			},
+		},
+		Types: []*config.TypeRule{
+			{
+				Name:     "MyStruct",
+				Kind:     "struct",
+				Pattern:  "wrap",
+				Disabled: true,
+				Methods: []*config.MemberRule{
+					{
+						Name: "DoSomething",
+						RuleSet: config.RuleSet{
+							Prefix: "Pre",
+							Suffix: "Post",
+						},
+					},
+				},
+				Fields: []*config.MemberRule{
+					{
+						Name: "MyField",
+						RuleSet: config.RuleSet{
+							Transforms: &config.Transform{
+								Before: "(.*)",
+								After:  "New$1",
+							},
+						},
+					},
+				},
+			},
+		},
+		Functions: []*config.FuncRule{
+			{
+				Name:     "MyFunc",
+				Disabled: false,
+				RuleSet: config.RuleSet{
+					Regex: []*config.RegexRule{
+						{Pattern: "Old(.*)", Replace: "New$1"},
+					},
+				},
+			},
+		},
+		Variables: []*config.VarRule{
+			{
+				Name: "MyVar",
+				RuleSet: config.RuleSet{
+					Explicit: []*config.ExplicitRule{
+						{From: "MyVar", To: "NewVar"},
+					},
+				},
+			},
+		},
+		Constants: []*config.ConstRule{
+			{
+				Name: "MyConst",
+				RuleSet: config.RuleSet{
+					Ignores: []string{"IgnoredConst"},
+				},
+			},
+		},
+	}
+
+	assert.Equal(t, expectedCfg, parsedCfg, "Parsed config does not match expected config")
+}
+
+
 func TestParseInvalidSyntax(t *testing.T) {
-	filePath := filepath.Join(getModuleRoot(), "testdata", "parser_test_invalid_syntax.go")
+	filePath := filepath.Join(getModuleRoot(), "testdata", "parser", "parser_test_invalid_syntax.go")
 	file, fset, err := loadGoFile(filePath) // Expecting an error from loading an invalid Go file
 	_, err = ParseFileDirectives(config.New(), file, fset)
 	assert.Error(t, err, "Expected an error when loading a file with invalid Go syntax")
 }
 
 func TestParseMalformedDirective(t *testing.T) {
-	filePath := filepath.Join(getModuleRoot(), "testdata", "parser_test_malformed_directive.go")
+	filePath := filepath.Join(getModuleRoot(), "testdata", "parser", "parser_test_malformed_directive.go")
 	file, fset, err := loadGoFile(filePath)
 	if err != nil {
 		t.Fatalf("Failed to load Go file %s: %v", filePath, err)

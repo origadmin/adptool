@@ -4,8 +4,8 @@ package conflicttest
 import (
 	"context"
 
-	source1 "github.com/origadmin/adptool/testdata/sourcepkg"
-	source2 "github.com/origadmin/adptool/testdata/sourcepkg2"
+	source1 "github.com/origadmin/adptool/testdata/pkgs/source1"
+	source2 "github.com/origadmin/adptool/testdata/pkgs/source2"
 )
 
 const (

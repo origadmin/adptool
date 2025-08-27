@@ -2,17 +2,17 @@
 package prefixtest
 
 import (
-	source "github.com/origadmin/adptool/testdata/sourcepkg"
+	source "github.com/origadmin/adptool/testdata/pkgs/source1"
 )
 
 const (
-	ExportedConstant = source.ExportedConstant
-	MaxRetries       = source.MaxRetries
+	MyExportedConstant = source.ExportedConstant
+	MyMaxRetries       = source.MaxRetries
 )
 
 var (
-	ConfigValue      = source.ConfigValue
-	ExportedVariable = source.ExportedVariable
+	MyConfigValue      = source.ConfigValue
+	MyExportedVariable = source.ExportedVariable
 )
 
 type (
@@ -22,10 +22,10 @@ type (
 	MyMyStruct          = source.MyStruct
 )
 
-func CommonFunction() string {
+func MyCommonFunction() string {
 	return source.CommonFunction()
 }
 
-func ExportedFunction() {
+func MyExportedFunction() {
 	source.ExportedFunction()
 }

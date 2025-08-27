@@ -284,12 +284,15 @@ func (b *Builder) writeToWriter(w io.Writer) error {
 	}
 
 	// Print the declarations one by one.
-	for _, decl := range b.aliasFile.Decls {
+	for i, decl := range b.aliasFile.Decls {
 		if err := printer.Fprint(w, b.fset, decl); err != nil {
 			return fmt.Errorf("failed to print declaration: %w", err)
 		}
-		if _, err := w.Write([]byte("\n\n")); err != nil {
-			return err
+		// Add two newlines after each declaration, except for the last one.
+		if i < len(b.aliasFile.Decls)-1 {
+			if _, err := w.Write([]byte("\n\n")); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -367,7 +370,7 @@ func (b *Builder) buildImportDeclaration(importSpecs map[string]*ast.ImportSpec)
 		return iPath < jPath
 	})
 
-	return &ast.GenDecl{Tok: token.IMPORT, Specs: finalImportSpecs}
+	return &ast.GenDecl{Tok: token.IMPORT, Lparen: 1, Specs: finalImportSpecs}
 }
 
 // pendingSymbol holds information about a symbol that needs to be generated.

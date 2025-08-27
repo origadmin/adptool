@@ -239,3 +239,111 @@ func TestLoadConfigFile(t *testing.T) {
 		})
 	}
 }
+
+func TestLoadAllFieldsConfigFile(t *testing.T) {
+	// The config file to test, which contains all possible fields.
+	configFilePath := filepath.Join(getAdptoolModuleRoot(), "testdata", "parser", "config.yaml")
+
+	// The expected configuration that should be loaded from the YAML file.
+	expectedCfg := &config.Config{
+		PackageName: "my_package",
+		Ignores:     []string{"file1.go", "dir1/file2.go"},
+		Defaults: &config.Defaults{
+			Mode: &config.Mode{
+				Strategy: "replace",
+				Prefix:   "append",
+				Suffix:   "prepend",
+				Explicit: "merge",
+				Regex:    "merge",
+				Ignores:  "merge",
+			},
+		},
+		Props: []*config.PropsEntry{
+			{Name: "GlobalVar1", Value: "globalValue1"},
+			{Name: "GlobalVar2", Value: "globalValue2"},
+		},
+		Packages: []*config.Package{
+			{
+				Import: "github.com/my/package/v1",
+				Alias:  "mypkg",
+				Path:   "./vendor/my/package/v1",
+				Props: []*config.PropsEntry{
+					{Name: "PkgVar", Value: "PkgValue"},
+				},
+				Types:     nil,
+				Functions: nil,
+				Variables: nil,
+				Constants: nil,
+			},
+		},
+		Types: []*config.TypeRule{
+			{
+				Name:     "MyStruct",
+				Kind:     "struct",
+				Pattern:  "wrap",
+				Disabled: true,
+				Methods: []*config.MemberRule{
+					{
+						Name: "DoSomething",
+						RuleSet: config.RuleSet{
+							Prefix: "Pre",
+							Suffix: "Post",
+						},
+					},
+				},
+				Fields: []*config.MemberRule{
+					{
+						Name: "MyField",
+						RuleSet: config.RuleSet{
+							Transforms: &config.Transform{
+								Before: "(.*)",
+								After:  "New$1",
+							},
+						},
+					},
+				},
+			},
+		},
+		Functions: []*config.FuncRule{
+			{
+				Name:     "MyFunc",
+				Disabled: false,
+				RuleSet: config.RuleSet{
+					Regex: []*config.RegexRule{
+						{Pattern: "Old(.*)", Replace: "New$1"},
+					},
+				},
+			},
+		},
+		Variables: []*config.VarRule{
+			{
+				Name: "MyVar",
+				RuleSet: config.RuleSet{
+					Explicit: []*config.ExplicitRule{
+						{From: "MyVar", To: "NewVar"},
+					},
+				},
+			},
+		},
+		Constants: []*config.ConstRule{
+			{
+				Name: "MyConst",
+				RuleSet: config.RuleSet{
+					Ignores: []string{"IgnoredConst"},
+				},
+			},
+		},
+	}
+
+	// Load the configuration from the specified file.
+	loadedCfg, err := LoadConfigFile(configFilePath)
+	if err != nil {
+		t.Fatalf("Failed to load config file '%s': %v", configFilePath, err)
+	}
+
+	// Viper might unmarshal empty collections as nil, while our expected struct might have empty slices.
+	// To ensure a fair comparison, we'll use cmp.Diff which can handle this gracefully.
+	if diff := cmp.Diff(expectedCfg, loadedCfg); diff != "" {
+		t.Errorf("Loaded config mismatch (-want +got):\n%s", diff)
+	}
+}

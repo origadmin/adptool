@@ -5,7 +5,6 @@ import (
 	"go/ast"
 	"go/token"
 	"log/slog"
-	"path"
 	"strconv"
 	"strings"
 	"unicode"

@@ -2,39 +2,30 @@
 package regextest
 
 import (
-	"context"
-
-	source2 "github.com/origadmin/adptool/testdata/sourcepkg2"
+	source "github.com/origadmin/adptool/testdata/pkgs/source1"
 )
 
 const (
-	DefaultTimeout = source2.DefaultTimeout
-	MaxRetries     = source2.MaxRetries
-	Version        = source2.Version
+	ExportedConstant = source.ExportedConstant
+	MaxRetries       = source.MaxRetries
 )
 
 var (
-	ConfigValue   = source2.ConfigValue
-	DefaultWorker = source2.DefaultWorker
-	StatsCounter  = source2.StatsCounter
+	ConfigValue      = source.ConfigValue
+	ExportedVariable = source.ExportedVariable
 )
 
 type (
-	CommonStruct     = source2.CommonStruct
-	ComplexInterface = source2.ComplexInterface
-	IOInput          = source2.InputData
-	IOOutput         = source2.OutputData
-	Worker           = source2.Worker
+	CommonStruct      = source.CommonStruct
+	ExportedInterface = source.ExportedInterface
+	MyStruct          = source.MyStruct
+	MyType            = source.ExportedType
 )
 
 func CommonFunction() string {
-	return source2.CommonFunction()
+	return source.CommonFunction()
 }
 
-func Execute(ctx context.Context, api source2.ComplexInterface, input *source2.InputData) (*source2.OutputData, error) {
-	return source2.Execute(ctx, api, input)
-}
-
-func NewWorker(name string) *source2.Worker {
-	return source2.NewWorker(name)
+func ExportedFunction() {
+	source.ExportedFunction()
 }

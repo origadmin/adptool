@@ -1,0 +1,15 @@
+// Package nonstandardtest contains generated code by adptool.
+package nonstandardtest
+
+import (
+	sourcePkg4 "github.com/origadmin/adptool/testdata/pkgs/source-pkg4"
+	sourcepkg4 "github.com/origadmin/adptool/testdata/pkgs/source.pkg4"
+)
+
+func HyphenPkg() string {
+	return sourcePkg4.HyphenPkg()
+}
+
+func DotPkg() string {
+	return sourcepkg4.DotPkg()
+}

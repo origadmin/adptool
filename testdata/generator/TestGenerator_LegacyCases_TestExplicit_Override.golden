@@ -1,8 +1,8 @@
-// Package explicittest contains generated code by adptool.
-package explicittest
+// Package overridetest contains generated code by adptool.
+package overridetest
 
 import (
-	source "github.com/origadmin/adptool/testdata/sourcepkg"
+	source "github.com/origadmin/adptool/testdata/pkgs/source1"
 )
 
 const (
@@ -16,10 +16,10 @@ var (
 )
 
 type (
-	CommonStruct      = source.CommonStruct
-	ExportedInterface = source.ExportedInterface
-	ExportedType      = source.ExportedType
-	MyCustomStruct    = source.MyStruct
+	CustomType          = source.ExportedType
+	MyCommonStruct      = source.CommonStruct
+	MyExportedInterface = source.ExportedInterface
+	MyMyStruct          = source.MyStruct
 )
 
 func CommonFunction() string {
