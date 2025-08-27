@@ -1,73 +1,69 @@
-# Local-First Issue Management Workflow
+# Git-Commit Driven Issue Workflow (Final)
 
-This document describes an issue management process designed for solo developers who prioritize efficiency. It centers around local files and Git, ensuring you can stay within your IDE and terminal for the vast majority of the time, while remaining fully compatible with future team collaboration and GitHub Issues integration.
+This document describes a robust, local-first issue management workflow. It leverages Git and a smart script to provide a highly efficient, fault-tolerant development process.
 
-## Core Concepts
-
-- **Every Issue is a File**: Each issue (be it a bug, feature request, or documentation task) is managed as a separate Markdown file, ensuring clarity and independence.
-- **Git-Driven**: The creation, status changes, and closing of all issues are tracked through Git commits, providing a clear and traceable history.
-- **Local-First**: The entire process is designed to maximize local operational efficiency and avoid frequent context switching to a browser.
-- **Future-Proof**: The local workflow can be synchronized with GitHub Issues at any time via a script, allowing for seamless expansion to a team-based collaboration model.
+**The Guiding Principle**: GitHub is the single source of truth for an issue's *state* (open/closed). Local files are for content creation and context. We use specific keywords in our Git commit messages to link our work directly to either a remote GitHub Issue or a local issue file.
 
 ## The Workflow
 
-### 1. Creating an Issue
+### Step 1: Create a Local Issue File
 
-When you find a new problem or have a new idea, copy the template file in the `.issues` directory and name it using the format `ID-short-description.md`.
-
-```bash
-# Example: Create a bug issue for the "user login module"
-cp .issues/.template.md .issues/5-user-login-module-bug.md
-```
-
-Next, open this new file in your IDE, modify the metadata at the top (like `status`, `labels`, etc.), and fill in the detailed description.
-
-### 2. Starting Work on an Issue
-
-Create a dedicated Git branch for the issue. The branch name should correspond to the issue file to allow for easy tracking.
+As always, start by creating a local issue file from the template. This is your single point of entry.
 
 ```bash
-# Recommended branch name format: issue/ID
-git checkout -b issue/5
+cp .issues/.template.md .issues/10-new-critical-bug.md
 ```
 
-Now you can make all related code changes on this branch.
+### Step 2: Choose Your Path
 
-### 3. Testing and Verification
+You have two options, depending on whether you are online or offline.
 
-Before declaring an issue resolved, verification is mandatory. This is a critical step for ensuring software quality.
+**Path A: The Online Workflow (Recommended)**
 
-1.  **Write Tests**: For bug fixes, one or more unit tests should be written to reproduce the bug and then prove that your fix is effective.
-2.  **Perform Verification**: In the corresponding issue file, fill out the `### Verification Steps` section, detailing how to confirm the fix is effective. This serves not only as a record for yourself but also as a clear guide for future collaborators.
-
-### 4. Completing and Closing an Issue
-
-After the code has been verified, follow these steps to wrap up:
-
-1.  **Update the Issue File**: Open the corresponding issue file and change the `status` field to `resolved`.
-2.  **Commit All Changes**: Commit your code changes, test files, and the issue file status change together.
-
+1.  **Initial Sync**: Run the script immediately to create the issue on GitHub.
     ```bash
-    # Add all code, test, and issue file changes
-    git add .
-
-    # Write a clear commit message
-    git commit -m "fix: resolve bug in user login module\n\nResolve issue #5"
+    bash scripts/sync_issues.sh
+    ```
+    The script will create the issue and populate the `remote_id` (e.g., `127`).
+2.  **Branch and Fix**: Create your branch (`git checkout -b issue/127`) and do your work.
+3.  **Commit with GitHub Keyword**: Commit your changes using GitHub's native closing keyword.
+    ```bash
+    git commit -m "fix: Resolve critical bug\n\nCloses #127"
     ```
 
-3.  **Merge the Branch**: Merge the feature branch back into the main branch.
+**Path B: The Offline Workflow (The Safety Net)**
 
+1.  **Branch and Fix**: You are offline or prefer not to sync yet. Create a branch (`git checkout -b issue/10-critical-bug`) and do your work.
+2.  **Commit with Local Keyword**: When you commit, use the special `Resolves-Local` keyword, referencing the **exact filename**.
     ```bash
-    git checkout main
-    git merge issue/5
+    git commit -m "fix: Resolve critical bug\n\nResolves-Local: 10-new-critical-bug.md"
     ```
 
-4.  **(Optional) Clean Up**: Delete the merged issue branch.
+### Step 3: Merge and Push
 
-    ```bash
-    git branch -d issue/5
-    ```
+This step is the same for both paths.
 
-### (Optional) Syncing with GitHub Issues
+```bash
+git checkout main
+git merge <your-branch-name>
+git push origin main
+```
 
-When you want to push your local work records to GitHub or collaborate with others, you can use an automation script to synchronize them. For detailed instructions, please refer to the `README.md` file in the project's `scripts/` directory.
+### Step 4: The Final Sync
+
+At any point after pushing, run the sync script.
+
+```bash
+bash scripts/sync_issues.sh
+```
+
+**What the script does:**
+- If you followed **Path A**, it does nothing, because your issue file already has a `remote_id`.
+- If you followed **Path B**, the script will:
+  1. Discover your local file has no `remote_id`.
+  2. Create a new issue on GitHub (e.g., #128).
+  3. Update your local file with `remote_id: 128`.
+  4. **Intelligently search** your `main` branch history for a commit containing `Resolves-Local: 10-new-critical-bug.md`.
+  5. Find the commit and **automatically close** the newly created GitHub Issue #128, leaving a comment linking to the commit that fixed it.
+
+This workflow provides maximum flexibility. It rewards following the standard online process while providing a powerful, automated safety net for offline work, ensuring that the remote state on GitHub always eventually matches the reality of your codebase.

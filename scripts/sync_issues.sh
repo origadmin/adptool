@@ -1,25 +1,18 @@
 #!/bin/bash
 
 # A script to synchronize local markdown issues with a remote GitHub repository.
-#
-# This script performs the following actions:
-# 1. Creates a new GitHub issue for any local .md file in the .issues/ directory
-#    that does not yet have a `remote_id`.
-# 2. Closes a GitHub issue if the corresponding local .md file's status is
-#    'resolved' or 'wont-fix'.
+# It creates new issues and can retroactively close issues if their closing
+# commit was merged before the issue was created on GitHub.
 
 set -e # Exit immediately if a command exits with a non-zero status.
 
 # --- Configuration ---
-# Directory where local issues are stored.
 ISSUES_DIR=".issues"
-# The GitHub repository in `owner/repo` format.
-# The script attempts to automatically determine this from your git remote.
-# If it fails, you can manually set it here, e.g., REPO="your-user/your-repo"
+# Set your main branch name here. It's used to check if a fix has been merged.
+MAIN_BRANCH="main"
 REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null || echo "")
 
 # --- Pre-flight Checks ---
-# Check if required tools are installed.
 if ! command -v gh &> /dev/null; then
     echo "Error: GitHub CLI 'gh' is not installed. Please install it from https://cli.github.com/"
     exit 1
@@ -30,40 +23,27 @@ if ! command -v yq &> /dev/null; then
 fi
 if [ -z "$REPO" ]; then
     echo "Error: Could not determine GitHub repository. Are you in a git repository with a remote?"
-    echo "You can set the REPO variable manually in the script."
     exit 1
 fi
 
-echo "Syncing issues with repository: $REPO"
-echo "Looking for issues in: $ISSUES_DIR/"
+echo "Syncing local issues with repository: $REPO"
 
 # --- Main Loop ---
-# Loop through all markdown files in the issues directory.
 find "$ISSUES_DIR" -name "*.md" -not -name "README.md" -not -name ".template.md" | while read -r file; do
-    echo "---"
-    echo "Processing file: $file"
-
-    # Use yq to read metadata. Note the '-N' flag for numeric remote_id.
     REMOTE_ID=$(yq -N '.remote_id' "$file")
-    STATUS=$(yq '.status' "$file")
-    LABELS=$(yq '.labels | join(",")' "$file")
 
-    # --- Sync Logic ---
+    # Process only files that have not yet been synced.
     if [ -z "$REMOTE_ID" ] || [ "$REMOTE_ID" == "null" ]; then
-        # Case 1: No remote_id. Create a new issue on GitHub.
-        echo "Status: Local issue, no remote_id found. Creating new GitHub issue..."
+        echo "---"
+        echo "Processing local-only file: $file"
 
-        # Extract title from filename (e.g., '5-user-login-bug.md' -> 'Issue 5: user login bug')
         FILENAME=$(basename "$file" .md)
-        TITLE="Issue #$FILENAME"
-
-        # Extract body from the file, excluding the YAML front matter.
+        TITLE="Issue: $FILENAME"
+        LABELS=$(yq '.labels | join(",")' "$file")
         BODY=$(yq 'select(document_index == 1)' "$file")
 
-        # Create the issue and capture the URL of the new issue.
+        echo "Creating new GitHub issue..."
         NEW_ISSUE_URL=$(gh issue create --repo "$REPO" --title "$TITLE" --body "$BODY" --label "$LABELS")
-
-        # Extract the issue number from the URL.
         ISSUE_NUMBER=$(echo "$NEW_ISSUE_URL" | awk -F'/' '{print $NF}')
 
         if [ -z "$ISSUE_NUMBER" ]; then
@@ -72,28 +52,26 @@ find "$ISSUES_DIR" -name "*.md" -not -name "README.md" -not -name ".template.md"
         fi
 
         echo "Successfully created GitHub Issue #$ISSUE_NUMBER"
-
-        # Write the new issue number back to the local file.
         yq -i ".remote_id = $ISSUE_NUMBER" "$file"
         echo "Updated $file with remote_id: $ISSUE_NUMBER"
 
-    else
-        # Case 2: remote_id exists. Check if the issue needs to be closed.
-        echo "Status: Found remote_id #$REMOTE_ID. Checking status..."
+        # --- AUTOMATIC RETROACTIVE CLOSING LOGIC ---
+        echo "Checking if a closing commit for this file already exists on the main branch..."
+        
+        # Define the keyword we are looking for in commit messages.
+        # It must reference the exact filename.
+        SEARCH_KEYWORD="Resolves-Local: $FILENAME.md"
 
-        if [ "$STATUS" == "resolved" ] || [ "$STATUS" == "wont-fix" ]; then
-            # Check the state of the remote issue before trying to close it.
-            REMOTE_STATE=$(gh issue view "$REMOTE_ID" --repo "$REPO" --json state -q .state)
-
-            if [ "$REMOTE_STATE" == "OPEN" ]; then
-                echo "Local status is '$STATUS', closing GitHub Issue #$REMOTE_ID..."
-                gh issue close "$REMOTE_ID" --repo "$REPO" --comment "Closing issue as per local file status: '$STATUS'."
-                echo "Successfully closed GitHub Issue #$REMOTE_ID."
-            else
-                echo "GitHub Issue #$REMOTE_ID is already closed. No action needed."
-            fi
+        # Search for a commit on the main branch containing the keyword.
+        # The `|| true` prevents the script from exiting if no commit is found.
+        COMMIT_HASH=$(git log "$MAIN_BRANCH" --grep="$SEARCH_KEYWORD" -n 1 --format=%H || true)
+        
+        if [ -n "$COMMIT_HASH" ]; then
+            echo "Found closing commit $COMMIT_HASH on the main branch."
+            echo "Automatically closing newly created GitHub Issue #$ISSUE_NUMBER."
+            gh issue close "$ISSUE_NUMBER" --repo "$REPO" --comment "Automatically closed by sync script. Resolved by commit $COMMIT_HASH."
         else
-            echo "Local status is '$STATUS'. No action needed."
+            echo "No existing closing commit found. The new issue will remain open."
         fi
     fi
 done
