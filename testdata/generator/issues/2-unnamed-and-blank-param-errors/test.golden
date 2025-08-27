@@ -5,9 +5,7 @@ import (
 	source "github.com/origadmin/adptool/testdata/generator/issues/2-unnamed-and-blank-param-errors/source"
 )
 
-func UnnamedParamsTest(p0 int, p1 *source.CustomType) {
-	source.UnnamedParamsTest(p0, p1)
-}
+type CustomType = source.CustomType
 
 func BlankParamTest(a string, p0 bool, p1 *source.CustomType) string {
 	return source.BlankParamTest(a, p0, p1)
@@ -15,4 +13,8 @@ func BlankParamTest(a string, p0 bool, p1 *source.CustomType) string {
 
 func CollisionTest(p0 string, p1 int) string {
 	return source.CollisionTest(p0, p1)
+}
+
+func UnnamedParamsTest(p0 int, p1 *source.CustomType) {
+	source.UnnamedParamsTest(p0, p1)
 }
