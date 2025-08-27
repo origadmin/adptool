@@ -136,4 +136,16 @@ func TestGenerator(t *testing.T) {
 		}
 		runGoldenTest(t, cfg)
 	})
+
+	// Test case for all bug fixes combined
+	t.Run("TestBugFixes", func(t *testing.T) {
+		cfg := &config.Config{
+			PackageName: "bugfixestest",
+			Packages: []*config.Package{{
+				Import: "github.com/origadmin/adptool/testdata/bugfixes",
+				Alias:  "source",
+			}},
+		}
+		runGoldenTest(t, cfg)
+	})
 }

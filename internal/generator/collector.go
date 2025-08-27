@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"go/ast"
 	"go/token"
-	"go/types"
 	"log/slog"
 	"path"
 	"strconv"

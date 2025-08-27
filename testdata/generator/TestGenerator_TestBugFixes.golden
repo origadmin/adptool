@@ -1,0 +1,12 @@
+// Package bugfixestest contains generated code by adptool.
+package bugfixestest
+
+import source "github.com/origadmin/adptool/testdata/bugfixes"
+
+func GenericFuncWithComparable[T comparable](p1 T) T {
+	return source.GenericFuncWithComparable[T](p1)
+}
+
+func ParamsTest(string, p1 int, p0 bool) (string, bool) {
+	return source.ParamsTest(string, p1, p0)
+}
