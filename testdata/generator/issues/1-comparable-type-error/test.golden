@@ -1,0 +1,12 @@
+package test
+
+import (
+	source "github.com/origadmin/adptool/testdata/generator/issues/1-comparable-type-error"
+)
+
+// This test case is for issue #1.
+// It ensures that the `comparable` built-in type is handled correctly
+// and not qualified with a package name.
+func GenericFuncWithComparable[T comparable](p1 T) T {
+	return source.GenericFuncWithComparable[T](p1)
+}

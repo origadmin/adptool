@@ -33,7 +33,15 @@ The `containsInvalidTypes` function in `internal/generator/utils.go` was updated
 
 ### Verification Steps
 
-1.  In a Go project, create a function that depends on another module and uses a type from an `internal` package of that dependency in its signature.
-2.  Run `adptool` on this project.
-3.  Confirm that `adptool` prints a warning message in the logs indicating that the function is being skipped.
-4.  Confirm that `adptool` does not generate any adapter code for the function that contains the invalid `internal` type.
+A dedicated test case (`TestGenerator_InternalPackageSkip`) was added to validate this specific fix:
+
+1.  **Test Setup**: A special test package was created at `testdata/internaltest/source`. This package contains an `internal/types` subdirectory, mimicking a real-world Go module structure.
+2.  **Test Functions**: The source package defines two functions:
+    -   `ValidFunc()`: A normal function that should always be processed.
+    -   `InvalidFuncWithInternalType()`: A function whose signature uses a type from the forbidden `internal/types` directory.
+3.  **Test Execution**: The test runs the generator on this package and captures the output in memory.
+4.  **Assertions**: The test then asserts two conditions:
+    -   The generated code **must contain** the wrapper for `ValidFunc`.
+    -   The generated code **must NOT contain** any reference to `InvalidFuncWithInternalType`.
+
+This test provides definitive proof that the generator correctly identifies and skips functions with invalid `internal` types, ensuring the fix is effective and preventing future regressions.

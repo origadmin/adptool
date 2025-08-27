@@ -1,0 +1,13 @@
+package test
+
+import (
+	source "github.com/origadmin/adptool/testdata/generator/issues/4-internal-package-import-error/source"
+)
+
+// This is a valid function that should be generated.
+func ValidFunc(s string) string {
+	return source.ValidFunc(s)
+}
+
+// NOTE: The absence of `InvalidFuncWithInternalType` in this file is intentional
+// and is the primary assertion of this test case.

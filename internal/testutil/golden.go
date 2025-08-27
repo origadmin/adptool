@@ -12,11 +12,23 @@ import (
 	"github.com/pmezard/go-difflib/difflib"
 )
 
-// CompareWithGolden compares generated content with a golden file.
+// CompareWithGolden compares generated content with a golden file derived from the test name.
 // It handles goimports formatting, diffing, and updating the golden file.
 // testdataDir should be the path to the directory containing the golden files.
 // updateFlag should be the value of the -update command-line flag.
 func CompareWithGolden(t *testing.T, testdataDir string, updateFlag bool, gotBytes []byte) {
+	t.Helper()
+
+	// Determine the golden file path from the test name.
+	goldenFile := filepath.Join(testdataDir, strings.ReplaceAll(t.Name(), "/", "_")+ ".golden")
+
+	// The actual comparison logic is delegated to CompareWithGoldenFile.
+	CompareWithGoldenFile(t, goldenFile, updateFlag, gotBytes)
+}
+
+// CompareWithGoldenFile compares generated content with a specific golden file path.
+// This is the core implementation that handles formatting, diffing, and updating.
+func CompareWithGoldenFile(t *testing.T, goldenFilePath string, updateFlag bool, gotBytes []byte) {
 	t.Helper()
 
 	// Create a temporary file to run goimports on.
@@ -44,22 +56,19 @@ func CompareWithGolden(t *testing.T, testdataDir string, updateFlag bool, gotByt
 		t.Fatalf("failed to read formatted temp file: %v", err)
 	}
 
-	// Determine the golden file path from the test name.
-	goldenFile := filepath.Join(testdataDir, strings.ReplaceAll(t.Name(), "/", "_")+ ".golden")
-
 	// If the -update flag is set, write the formatted content to the golden file.
 	if updateFlag {
-		if err := os.MkdirAll(filepath.Dir(goldenFile), 0755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(goldenFilePath), 0755); err != nil {
 			t.Fatalf("failed to create directory for golden file: %v", err)
 		}
-		if err := ioutil.WriteFile(goldenFile, formattedBytes, 0644); err != nil {
+		if err := ioutil.WriteFile(goldenFilePath, formattedBytes, 0644); err != nil {
 			t.Fatalf("failed to update golden file: %v", err)
 		}
 		return
 	}
 
 	// Read the golden file.
-	wantBytes, err := ioutil.ReadFile(goldenFile)
+	wantBytes, err := ioutil.ReadFile(goldenFilePath)
 	if err != nil {
 		t.Fatalf("failed to read golden file: %v", err)
 	}
@@ -69,7 +78,7 @@ func CompareWithGolden(t *testing.T, testdataDir string, updateFlag bool, gotByt
 		diff := difflib.UnifiedDiff{
 			A:        difflib.SplitLines(string(wantBytes)),
 			B:        difflib.SplitLines(string(formattedBytes)),
-			FromFile: "golden:" + goldenFile,
+			FromFile: "golden:" + goldenFilePath,
 			ToFile:   "got",
 			Context:  3,
 		}

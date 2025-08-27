@@ -3,6 +3,7 @@ package generator
 import (
 	"bytes"
 	"flag"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -15,40 +16,91 @@ import (
 
 var update = flag.Bool("update", false, "update golden files")
 
-// runGoldenTest is a helper function to run a generator test case with a given config.
-func runGoldenTest(t *testing.T, cfg *config.Config) {
-	t.Helper()
+// TestIssues is a data-driven test that automatically discovers and runs
+// regression tests for specific, documented issues.
+// It works by scanning the `testdata/generator/issues` directory.
+func TestIssues(t *testing.T) {
+	issuesDir := filepath.Join("..", "..", "testdata", "generator", "issues")
 
-	// Compile the configuration
-	compiledCfg, err := compiler.Compile(cfg)
+	dirs, err := filepath.Glob(filepath.Join(issuesDir, "*"))
 	require.NoError(t, err)
 
-	// Convert CompiledPackage to PackageInfo
-	var packageInfos []*PackageInfo
-	for _, pkg := range compiledCfg.Packages {
-		packageInfos = append(packageInfos, &PackageInfo{
-			ImportPath:  pkg.ImportPath,
-			ImportAlias: pkg.ImportAlias,
+	for _, dir := range dirs {
+		info, err := os.Stat(dir)
+		require.NoError(t, err)
+
+		if !info.IsDir() {
+			continue
+		}
+
+		testCaseName := filepath.Base(dir)
+
+		// Dynamically create a sub-test for each issue directory.
+		t.Run(testCaseName, func(t *testing.T) {
+			importPath := "github.com/origadmin/adptool/testdata/generator/issues/" + testCaseName + "/source"
+			goldenFilePath := filepath.Join(dir, "test.golden")
+
+			cfg := &config.Config{
+				PackageName: "test",
+				Packages: []*config.Package{{
+					Import: importPath,
+					Alias:  "source",
+				}},
+			}
+
+			compiledCfg, err := compiler.Compile(cfg)
+			require.NoError(t, err)
+
+			var packageInfos []*PackageInfo
+			for _, pkg := range compiledCfg.Packages {
+				packageInfos = append(packageInfos, &PackageInfo{
+					ImportPath:  pkg.ImportPath,
+					ImportAlias: pkg.ImportAlias,
+				})
+			}
+
+			outputBuffer := &bytes.Buffer{}
+			generator := NewGenerator(compiledCfg.PackageName, "", compiler.NewReplacer(compiledCfg), "")
+			generator.builder.writer = outputBuffer
+
+			err = generator.Generate(packageInfos)
+			require.NoError(t, err)
+
+			testutil.CompareWithGoldenFile(t, goldenFilePath, *update, outputBuffer.Bytes())
 		})
 	}
-
-	// Create a new Generator, redirecting output to an in-memory buffer
-	outputBuffer := &bytes.Buffer{}
-	generator := NewGenerator(compiledCfg.PackageName, "", compiler.NewReplacer(compiledCfg), "")
-	generator.builder.writer = outputBuffer
-
-	// Generate the code
-	err = generator.Generate(packageInfos)
-	require.NoError(t, err)
-
-	// Compare the generated code with the golden file
-	testdataPath := filepath.Join("..", "..", "testdata", "generator")
-	testutil.CompareWithGolden(t, testdataPath, *update, outputBuffer.Bytes())
 }
 
-// TestGenerator holds all granular test cases for the generator.
-func TestGenerator(t *testing.T) {
-	// Test case for simple prefix renaming
+// TestGenerator_LegacyCases contains the original test suite for basic generator functionality.
+// This ensures that existing, fundamental tests are preserved.
+func TestGenerator_LegacyCases(t *testing.T) {
+	// runLegacyGoldenTest is a helper specific to the legacy test structure.
+	runLegacyGoldenTest := func(t *testing.T, cfg *config.Config) {
+		t.Helper()
+
+		compiledCfg, err := compiler.Compile(cfg)
+		require.NoError(t, err)
+
+		var packageInfos []*PackageInfo
+		for _, pkg := range compiledCfg.Packages {
+			packageInfos = append(packageInfos, &PackageInfo{
+				ImportPath:  pkg.ImportPath,
+				ImportAlias: pkg.ImportAlias,
+			})
+		}
+
+		outputBuffer := &bytes.Buffer{}
+		generator := NewGenerator(compiledCfg.PackageName, "", compiler.NewReplacer(compiledCfg), "")
+		generator.builder.writer = outputBuffer
+
+		err = generator.Generate(packageInfos)
+		require.NoError(t, err)
+
+		// The legacy helper determines the golden file path from the test name.
+		testdataPath := filepath.Join("..", "..", "testdata", "generator")
+		testutil.CompareWithGolden(t, testdataPath, *update, outputBuffer.Bytes())
+	}
+
 	t.Run("TestPrefix_Simple", func(t *testing.T) {
 		cfg := &config.Config{
 			PackageName: "prefixtest",
@@ -58,10 +110,9 @@ func TestGenerator(t *testing.T) {
 				Types:  []*config.TypeRule{{Name: "*", RuleSet: config.RuleSet{Prefix: "My"}}},
 			}},
 		}
-		runGoldenTest(t, cfg)
+		runLegacyGoldenTest(t, cfg)
 	})
 
-	// Test case for explicit renaming with override mode
 	t.Run("TestExplicit_Override", func(t *testing.T) {
 		cfg := &config.Config{
 			PackageName: "explicittest",
@@ -77,10 +128,9 @@ func TestGenerator(t *testing.T) {
 				}},
 			}},
 		}
-		runGoldenTest(t, cfg)
+		runLegacyGoldenTest(t, cfg)
 	})
 
-	// Test case for regex renaming
 	t.Run("TestRegex_Simple", func(t *testing.T) {
 		cfg := &config.Config{
 			PackageName: "regextest",
@@ -96,10 +146,9 @@ func TestGenerator(t *testing.T) {
 				}},
 			}},
 		}
-		runGoldenTest(t, cfg)
+		runLegacyGoldenTest(t, cfg)
 	})
 
-	// Test case for ignoring specific identifiers
 	t.Run("TestIgnores", func(t *testing.T) {
 		cfg := &config.Config{
 			PackageName: "ignoretest",
@@ -109,10 +158,9 @@ func TestGenerator(t *testing.T) {
 				Types:  []*config.TypeRule{{Name: "*", RuleSet: config.RuleSet{Ignores: []string{"WorkerConfig", "unexportedStruct"}}}},
 			}},
 		}
-		runGoldenTest(t, cfg)
+		runLegacyGoldenTest(t, cfg)
 	})
 
-	// Test case for naming conflicts between constants
 	t.Run("TestConflict_Constants", func(t *testing.T) {
 		cfg := &config.Config{
 			PackageName: "conflicttest",
@@ -121,10 +169,9 @@ func TestGenerator(t *testing.T) {
 				{Import: "github.com/origadmin/adptool/testdata/sourcepkg2", Alias: "source2"},
 			},
 		}
-		runGoldenTest(t, cfg)
+		runLegacyGoldenTest(t, cfg)
 	})
 
-	// Test case for handling generic types
 	t.Run("TestGenerics_Simple", func(t *testing.T) {
 		cfg := &config.Config{
 			PackageName: "generictest",
@@ -134,18 +181,6 @@ func TestGenerator(t *testing.T) {
 				Types:  []*config.TypeRule{{Name: "*", RuleSet: config.RuleSet{Prefix: "My"}}},
 			}},
 		}
-		runGoldenTest(t, cfg)
-	})
-
-	// Test case for all bug fixes combined
-	t.Run("TestBugFixes", func(t *testing.T) {
-		cfg := &config.Config{
-			PackageName: "bugfixestest",
-			Packages: []*config.Package{{
-				Import: "github.com/origadmin/adptool/testdata/bugfixes",
-				Alias:  "source",
-			}},
-		}
-		runGoldenTest(t, cfg)
+		runLegacyGoldenTest(t, cfg)
 	})
 }
